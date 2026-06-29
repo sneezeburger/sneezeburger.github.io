@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Spinning Donut Screensaver</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// --- Configuration ---
+const R1 = 1.0;   // tube radius
+const R2 = 2.0;   // torus center radius
+const K2 = 5.0;   // viewer distance
+const CHARS = '.,-~:;=!*#$@';
+const MAX_STARS = 300;
+
+let A = 0, B = 0;
+let hueShift = 0;
+let frame = 0;
+let stars = [];
+let prevCols = 0, prevRows = 0;
+
+// --- Terminal-style grid sizing ---
+const CHAR_W = 10;
+const CHAR_H = 18;
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- HSL to RGB ---
+function hslToRgb(h, s, l) {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const hp = h / 60;
+  const x = c * (1 - Math.abs(hp % 2 - 1));
+  let r1 = 0, g1 = 0, b1 = 0;
+  if      (hp < 1) { r1 = c; g1 = x; }
+  else if (hp < 2) { r1 = x; g1 = c; }
+  else if (hp < 3) { g1 = c; b1 = x; }
+  else if (hp < 4) { g1 = x; b1 = c; }
+  else if (hp < 5) { r1 = x; b1 = c; }
+  else             { r1 = c; b1 = x; }
+  const m = l - c / 2;
+  return [
+    Math.round((r1 + m) * 255),
+    Math.round((g1 + m) * 255),
+    Math.round((b1 + m) * 255)
+  ];
+}
+
+// --- Starfield ---
+function generateStars(cols, rows) {
+  stars = [];
+  for (let i = 0; i < MAX_STARS; i++) {
+    stars.push({
+      x: Math.floor(Math.random() * cols),
+      y: Math.floor(Math.random() * rows),
+      brightness: Math.random() * 3 | 0,  // 0-2
+      phase: Math.random() * 60 | 0
+    });
+  }
+}
+
+// --- Main render loop ---
+function render() {
+  const width = canvas.width;
+  const height = canvas.height;
+  const cols = Math.floor(width / CHAR_W);
+  const rows = Math.floor(height / CHAR_H);
+
+  if (cols !== prevCols || rows !== prevRows) {
+    generateStars(cols, rows);
+    prevCols = cols;
+    prevRows = rows;
+  }
+
+  const totalCells = cols * rows;
+  const aspect = cols / rows / 2;
+  const K1 = rows * K2 * 3 / (8 * (R1 + R2));
+
+  const thetaStep = Math.max(0.02, 7 / rows);
+  const phiStep = Math.max(0.007, 3 / cols);
+
+  // Buffers
+  const charBuf = new Uint8Array(totalCells);        // index into CHARS
+  const rBuf = new Int16Array(totalCells);
+  const gBuf = new Int16Array(totalCells);
+  const bBuf = new Int16Array(totalCells);
+  const zBuf = new Float32Array(totalCells);
+  const isDonut = new Uint8Array(totalCells);         // 1 if donut pixel
+
+  // Draw starfield into buffers
+  const starChars = [0, 0, 0]; // all map to '.' (index 0)
+  for (const s of stars) {
+    if (s.x >= cols || s.y >= rows) continue;
+    const idx = s.y * cols + s.x;
+    const phase = (frame + s.phase) % 60;
+    const twinkle = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(phase * 0.1047));
+    let gray = Math.round(twinkle * (40 + s.brightness * 50));
+    if (gray > 180) gray = 180;
+    charBuf[idx] = s.brightness; // use brightness as char index for variety
+    rBuf[idx] = gray;
+    gBuf[idx] = gray;
+    bBuf[idx] = Math.min(255, Math.round(gray * 1.15));
+  }
+
+  // Render torus
+  const cosA = Math.cos(A), sinA = Math.sin(A);
+  const cosB = Math.cos(B), sinB = Math.sin(B);
+
+  for (let theta = 0; theta < 6.28; theta += thetaStep) {
+    const cosTheta = Math.cos(theta), sinTheta = Math.sin(theta);
+
+    for (let phi = 0; phi < 6.28; phi += phiStep) {
+      const cosPhi = Math.cos(phi), sinPhi = Math.sin(phi);
+
+      const cx = R2 + R1 * cosTheta;
+      const x = cx * (cosB * cosPhi + sinA * sinB * sinPhi) - R1 * cosA * sinB * sinTheta;
+      const y = cx * (sinB * cosPhi - sinA * cosB * sinPhi) + R1 * cosA * cosB * sinTheta;
+      const z = K2 + cosA * cx * sinPhi + R1 * sinA * sinTheta;
+      const ooz = 1 / z;
+
+      const xp = Math.floor(cols / 2 + K1 * ooz * x * aspect);
+      const yp = Math.floor(rows / 2 - K1 * ooz * y * 0.5);
+
+      const L = cosPhi * cosTheta * sinB - cosA * cosTheta * sinPhi
+              - sinA * sinTheta + cosB * (cosA * sinTheta - cosTheta * sinA * sinPhi);
+
+      if (xp >= 0 && xp < cols && yp >= 0 && yp < rows) {
+        const idx = yp * cols + xp;
+        if (ooz > zBuf[idx]) {
+          zBuf[idx] = ooz;
+          let lum = Math.floor(L * 8);
+          lum = lum > 0 ? (lum < 12 ? lum : 11) : 0;
+          charBuf[idx] = lum;
+          isDonut[idx] = 1;
+
+          const hue = (hueShift + phi * 30) % 360;
+          const lightness = 0.08 + (L > 0 ? L : 0) * 0.55;
+          const saturation = 0.75 + (L > 0 ? L * 0.25 : 0);
+          const [r, g, b] = hslToRgb(hue, saturation, lightness);
+          rBuf[idx] = Math.max(0, Math.min(255, r));
+          gBuf[idx] = Math.max(0, Math.min(255, g));
+          bBuf[idx] = Math.max(0, Math.min(255, b));
+        }
+      }
+    }
+  }
+
+  // Paint to canvas
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, width, height);
+  ctx.textBaseline = 'top';
+
+  // Center the grid
+  const offsetX = (width - cols * CHAR_W) / 2;
+  const offsetY = (height - rows * CHAR_H) / 2;
+
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      const idx = j * cols + i;
+      const ch = CHARS[charBuf[idx]];
+      if (!isDonut[idx] && rBuf[idx] === 0 && gBuf[idx] === 0 && bBuf[idx] === 0) continue;
+
+      const r = rBuf[idx], g = gBuf[idx], b = bBuf[idx];
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.font = `${CHAR_H}px monospace`;
+      ctx.fillText(ch, offsetX + i * CHAR_W, offsetY + j * CHAR_H);
+    }
+  }
+
+  A += 0.04;
+  B += 0.02;
+  hueShift += 0.8;
+  if (hueShift >= 360) hueShift -= 360;
+  frame++;
+
+  requestAnimationFrame(render);
+}
+
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

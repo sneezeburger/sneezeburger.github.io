@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Spinning Donut Screensaver (DOM)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  #grid {
+    font-family: monospace;
+    line-height: 1;
+    white-space: pre;
+    user-select: none;
+  }
+  #grid span {
+    display: inline;
+    transition: none;
+  }
+</style>
+</head>
+<body>
+<div id="grid"></div>
+<script>
+const grid = document.getElementById('grid');
+
+const R1 = 1.0;
+const R2 = 2.0;
+const K2 = 5.0;
+const CHARS = '.,-~:;=!*#$@';
+const MAX_STARS = 300;
+
+let A = 0, B = 0;
+let hueShift = 0;
+let frame = 0;
+let stars = [];
+let prevCols = 0, prevRows = 0;
+let spans = [];   // flat array of <span> elements, one per cell
+let rowDivs = []; // one <br> per row boundary
+
+function hslToRgb(h, s, l) {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const hp = h / 60;
+  const x = c * (1 - Math.abs(hp % 2 - 1));
+  let r1 = 0, g1 = 0, b1 = 0;
+  if      (hp < 1) { r1 = c; g1 = x; }
+  else if (hp < 2) { r1 = x; g1 = c; }
+  else if (hp < 3) { g1 = c; b1 = x; }
+  else if (hp < 4) { g1 = x; b1 = c; }
+  else if (hp < 5) { r1 = x; b1 = c; }
+  else             { r1 = c; b1 = x; }
+  const m = l - c / 2;
+  return [
+    Math.round((r1 + m) * 255),
+    Math.round((g1 + m) * 255),
+    Math.round((b1 + m) * 255)
+  ];
+}
+
+function generateStars(cols, rows) {
+  stars = [];
+  for (let i = 0; i < MAX_STARS; i++) {
+    stars.push({
+      x: Math.floor(Math.random() * cols),
+      y: Math.floor(Math.random() * rows),
+      brightness: Math.random() * 3 | 0,
+      phase: Math.random() * 60 | 0
+    });
+  }
+}
+
+// Measure a monospace character to determine grid dimensions
+function measureChar() {
+  const probe = document.createElement('span');
+  probe.style.fontFamily = 'monospace';
+  probe.style.position = 'absolute';
+  probe.style.visibility = 'hidden';
+  probe.style.whiteSpace = 'pre';
+  probe.textContent = 'M';
+  document.body.appendChild(probe);
+  const rect = probe.getBoundingClientRect();
+  document.body.removeChild(probe);
+  return { w: rect.width, h: rect.height };
+}
+
+function buildGrid(cols, rows) {
+  // Build the entire DOM in one fragment
+  const frag = document.createDocumentFragment();
+  spans = [];
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      const span = document.createElement('span');
+      span.textContent = ' ';
+      frag.appendChild(span);
+      spans.push(span);
+    }
+    if (j < rows - 1) {
+      frag.appendChild(document.createTextNode('\n'));
+    }
+  }
+  grid.innerHTML = '';
+  grid.appendChild(frag);
+
+  // Set font size to match measured character
+  const charSize = measureChar();
+  grid.style.fontSize = `${charSize.h}px`;
+}
+
+function render() {
+  const charSize = measureChar();
+  const cols = Math.floor(window.innerWidth / charSize.w);
+  const rows = Math.floor(window.innerHeight / charSize.h);
+
+  if (cols !== prevCols || rows !== prevRows) {
+    buildGrid(cols, rows);
+    generateStars(cols, rows);
+    prevCols = cols;
+    prevRows = rows;
+  }
+
+  const totalCells = cols * rows;
+  const aspect = cols / rows / 2;
+  const K1 = rows * K2 * 3 / (8 * (R1 + R2));
+
+  const thetaStep = Math.max(0.02, 7 / rows);
+  const phiStep = Math.max(0.007, 3 / cols);
+
+  // Per-cell output data
+  const outChar = new Uint8Array(totalCells);  // index into CHARS
+  const outR = new Int16Array(totalCells);
+  const outG = new Int16Array(totalCells);
+  const outB = new Int16Array(totalCells);
+  const zBuf = new Float32Array(totalCells);
+  const active = new Uint8Array(totalCells);   // has visible content
+
+  // Starfield
+  for (const s of stars) {
+    if (s.x >= cols || s.y >= rows) continue;
+    const idx = s.y * cols + s.x;
+    const phase = (frame + s.phase) % 60;
+    const twinkle = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(phase * 0.1047));
+    let gray = Math.round(twinkle * (40 + s.brightness * 50));
+    if (gray > 180) gray = 180;
+    outChar[idx] = s.brightness;
+    outR[idx] = gray;
+    outG[idx] = gray;
+    outB[idx] = Math.min(255, Math.round(gray * 1.15));
+    active[idx] = 1;
+  }
+
+  // Torus
+  const cosA = Math.cos(A), sinA = Math.sin(A);
+  const cosB = Math.cos(B), sinB = Math.sin(B);
+
+  for (let theta = 0; theta < 6.28; theta += thetaStep) {
+    const cosTheta = Math.cos(theta), sinTheta = Math.sin(theta);
+    for (let phi = 0; phi < 6.28; phi += phiStep) {
+      const cosPhi = Math.cos(phi), sinPhi = Math.sin(phi);
+      const cx = R2 + R1 * cosTheta;
+      const x = cx * (cosB * cosPhi + sinA * sinB * sinPhi) - R1 * cosA * sinB * sinTheta;
+      const y = cx * (sinB * cosPhi - sinA * cosB * sinPhi) + R1 * cosA * cosB * sinTheta;
+      const z = K2 + cosA * cx * sinPhi + R1 * sinA * sinTheta;
+      const ooz = 1 / z;
+
+      const xp = Math.floor(cols / 2 + K1 * ooz * x * aspect);
+      const yp = Math.floor(rows / 2 - K1 * ooz * y * 0.5);
+
+      const L = cosPhi * cosTheta * sinB - cosA * cosTheta * sinPhi
+              - sinA * sinTheta + cosB * (cosA * sinTheta - cosTheta * sinA * sinPhi);
+
+      if (xp >= 0 && xp < cols && yp >= 0 && yp < rows) {
+        const idx = yp * cols + xp;
+        if (ooz > zBuf[idx]) {
+          zBuf[idx] = ooz;
+          let lum = Math.floor(L * 8);
+          lum = lum > 0 ? (lum < 12 ? lum : 11) : 0;
+          outChar[idx] = lum;
+          active[idx] = 1;
+
+          const hue = (hueShift + phi * 30) % 360;
+          const lightness = 0.08 + (L > 0 ? L : 0) * 0.55;
+          const saturation = 0.75 + (L > 0 ? L * 0.25 : 0);
+          const [r, g, b] = hslToRgb(hue, saturation, lightness);
+          outR[idx] = Math.max(0, Math.min(255, r));
+          outG[idx] = Math.max(0, Math.min(255, g));
+          outB[idx] = Math.max(0, Math.min(255, b));
+        }
+      }
+    }
+  }
+
+  // Update DOM spans
+  for (let i = 0; i < totalCells; i++) {
+    const span = spans[i];
+    if (active[i]) {
+      const ch = CHARS[outChar[i]];
+      const color = `rgb(${outR[i]},${outG[i]},${outB[i]})`;
+      if (span.textContent !== ch) span.textContent = ch;
+      if (span._color !== color) {
+        span.style.color = color;
+        span._color = color;
+      }
+    } else {
+      if (span.textContent !== ' ') {
+        span.textContent = ' ';
+        span.style.color = '';
+        span._color = '';
+      }
+    }
+  }
+
+  A += 0.04;
+  B += 0.02;
+  hueShift += 0.8;
+  if (hueShift >= 360) hueShift -= 360;
+  frame++;
+
+  requestAnimationFrame(render);
+}
+
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
