@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Stereoscopic Cosmos</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; overflow: hidden; cursor: crosshair; }
+canvas { display: block; }
+#info {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  color: rgba(255,255,255,0.6); font: 14px monospace; text-align: center;
+  pointer-events: none; z-index: 10;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="info">cross your eyes to see 3D · move mouse to orbit · scroll to adjust separation</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+let W, H, halfW;
+let mouseX = 0.5, mouseY = 0.5;
+let separation = 12;
+let time = 0;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  halfW = W / 2;
+}
+resize();
+window.addEventListener('resize', resize);
+
+document.addEventListener('mousemove', e => {
+  mouseX = e.clientX / W;
+  mouseY = e.clientY / H;
+});
+
+document.addEventListener('wheel', e => {
+  separation = Math.max(2, Math.min(30, separation + e.deltaY * 0.02));
+});
+
+// 3D geometry - a swirling constellation of particles
+const NUM_PARTICLES = 2000;
+const NUM_RINGS = 5;
+const particles = [];
+
+for (let i = 0; i < NUM_PARTICLES; i++) {
+  const ring = Math.floor(Math.random() * NUM_RINGS);
+  const radius = 150 + ring * 80 + Math.random() * 40;
+  const angle = Math.random() * Math.PI * 2;
+  const ySpread = (Math.random() - 0.5) * 100;
+  const speed = (0.2 + Math.random() * 0.3) * (ring % 2 === 0 ? 1 : -1);
+  const size = 1 + Math.random() * 2.5;
+  const hue = (ring * 60 + Math.random() * 30) % 360;
+  particles.push({ radius, angle, y: ySpread, speed, size, hue, ring, brightness: 0.5 + Math.random() * 0.5 });
+}
+
+// Floating geometric shapes
+const shapes = [];
+for (let i = 0; i < 12; i++) {
+  shapes.push({
+    x: (Math.random() - 0.5) * 600,
+    y: (Math.random() - 0.5) * 400,
+    z: (Math.random() - 0.5) * 600,
+    rotSpeed: 0.5 + Math.random() * 2,
+    scale: 20 + Math.random() * 40,
+    hue: Math.random() * 360,
+    sides: 3 + Math.floor(Math.random() * 5),
+    phase: Math.random() * Math.PI * 2
+  });
+}
+
+function rotateY(x, z, angle) {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return [x * cos - z * sin, x * sin + z * cos];
+}
+
+function rotateX(y, z, angle) {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return [y * cos - z * sin, y * sin + z * cos];
+}
+
+function project(x, y, z, eyeOffset) {
+  const fov = 600;
+  const viewDist = 800;
+  x += eyeOffset;
+  const scale = fov / (viewDist + z);
+  return {
+    sx: x * scale,
+    sy: y * scale,
+    scale: scale,
+    behind: z < -viewDist + 50
+  };
+}
+
+function drawScene(offsetX, eyeOffset, clipX, clipW) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(clipX, 0, clipW, H);
+  ctx.clip();
+  
+  const centerX = clipX + clipW / 2;
+  const centerY = H / 2;
+  
+  const camRotY = (mouseX - 0.5) * Math.PI * 0.8;
+  const camRotX = (mouseY - 0.5) * Math.PI * 0.4;
+
+  // Draw connecting lines between nearby particles (depth-sorted)
+  const projected = [];
+  
+  for (const p of particles) {
+    const a = p.angle + time * p.speed * 0.01;
+    let x = Math.cos(a) * p.radius;
+    let z = Math.sin(a) * p.radius;
+    let y = p.y + Math.sin(time * 0.02 + p.angle * 3) * 20;
+
+    [x, z] = rotateY(x, z, camRotY);
+    [y, z] = rotateX(y, z, camRotX);
+
+    const proj = project(x, y, z, eyeOffset);
+    if (!proj.behind) {
+      projected.push({ ...proj, x: proj.sx + centerX, y: proj.sy + centerY, hue: p.hue, size: p.size, brightness: p.brightness, depth: z });
+    }
+  }
+
+  // Sort by depth
+  projected.sort((a, b) => a.depth - b.depth);
+
+  // Draw glow background
+  const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, clipW * 0.6);
+  gradient.addColorStop(0, 'rgba(20, 0, 40, 0.3)');
+  gradient.addColorStop(0.5, 'rgba(5, 0, 20, 0.1)');
+  gradient.addColorStop(1, 'transparent');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(clipX, 0, clipW, H);
+
+  // Draw shapes
+  for (const shape of shapes) {
+    let x = shape.x + Math.sin(time * 0.005 + shape.phase) * 50;
+    let y = shape.y + Math.cos(time * 0.007 + shape.phase) * 30;
+    let z = shape.z + Math.sin(time * 0.003 + shape.phase * 2) * 100;
+
+    [x, z] = rotateY(x, z, camRotY);
+    [y, z] = rotateX(y, z, camRotX);
+
+    const proj = project(x, y, z, eyeOffset);
+    if (proj.behind) continue;
+
+    const sx = proj.sx + centerX;
+    const sy = proj.sy + centerY;
+    const s = shape.scale * proj.scale;
+    const rot = time * 0.01 * shape.rotSpeed;
+
+    ctx.strokeStyle = `hsla(${(shape.hue + time * 0.5) % 360}, 80%, 60%, ${Math.min(0.7, proj.scale * 0.8)})`;
+    ctx.lineWidth = Math.max(0.5, proj.scale * 1.5);
+    ctx.beginPath();
+    for (let i = 0; i <= shape.sides; i++) {
+      const a = (i / shape.sides) * Math.PI * 2 + rot;
+      const px = sx + Math.cos(a) * s;
+      const py = sy + Math.sin(a) * s;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.stroke();
+
+    // Inner shape rotated opposite
+    ctx.strokeStyle = `hsla(${(shape.hue + 180 + time * 0.5) % 360}, 70%, 50%, ${Math.min(0.4, proj.scale * 0.5)})`;
+    ctx.lineWidth = Math.max(0.3, proj.scale);
+    ctx.beginPath();
+    for (let i = 0; i <= shape.sides; i++) {
+      const a = (i / shape.sides) * Math.PI * 2 - rot * 1.5;
+      const px = sx + Math.cos(a) * s * 0.5;
+      const py = sy + Math.sin(a) * s * 0.5;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  // Draw particles
+  for (const p of projected) {
+    const alpha = Math.min(1, p.scale * 1.2) * p.brightness;
+    const r = Math.max(0.5, p.size * p.scale * 1.5);
+    
+    // Glow
+    const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3);
+    glow.addColorStop(0, `hsla(${p.hue}, 90%, 70%, ${alpha * 0.8})`);
+    glow.addColorStop(0.4, `hsla(${p.hue}, 80%, 50%, ${alpha * 0.3})`);
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.fillRect(p.x - r * 3, p.y - r * 3, r * 6, r * 6);
+    
+    // Core
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r * 0.5, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${p.hue}, 60%, 95%, ${alpha})`;
+    ctx.fill();
+  }
+
+  // Center nebula glow
+  const pulse = 0.7 + Math.sin(time * 0.02) * 0.3;
+  const nebula = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 120 * pulse);
+  nebula.addColorStop(0, `hsla(${(time * 0.3) % 360}, 80%, 60%, 0.15)`);
+  nebula.addColorStop(0.5, `hsla(${(time * 0.3 + 60) % 360}, 70%, 40%, 0.05)`);
+  nebula.addColorStop(1, 'transparent');
+  ctx.fillStyle = nebula;
+  ctx.fillRect(clipX, 0, clipW, H);
+
+  ctx.restore();
+}
+
+function drawDivider() {
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 8]);
+  ctx.beginPath();
+  ctx.moveTo(halfW, 0);
+  ctx.lineTo(halfW, H);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function animate() {
+  time++;
+  
+  // Fade trail effect
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Left eye
+  drawScene(0, -separation, 0, halfW);
+  // Right eye  
+  drawScene(0, separation, halfW, halfW);
+  
+  drawDivider();
+  
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>

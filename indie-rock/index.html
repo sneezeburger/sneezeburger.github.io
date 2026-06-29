@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Indie Rock Visualizer</title>
+<style>
+* { margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0f; }
+canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+/*
+ * Indie Rock Visualizer
+ * A dreamy lo-fi screensaver with spinning vinyl records, oscillating guitar
+ * waveforms, drifting particles like dust in a record shop, and a warm
+ * color palette inspired by vintage gig posters.
+ */
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Warm indie palette
+const palette = [
+  '#e8985e', '#d46a4e', '#c44d56', '#8b3a62',
+  '#5c4b8a', '#3a6b8c', '#6ba38e', '#d4c87a',
+  '#f2d98b', '#e07b5d'
+];
+
+// --- Vinyl Records ---
+class Vinyl {
+  constructor() {
+    this.reset();
+  }
+  reset() {
+    this.x = Math.random() * W;
+    this.y = Math.random() * H;
+    this.r = 40 + Math.random() * 80;
+    this.speed = (0.3 + Math.random() * 0.7) * (Math.random() < 0.5 ? 1 : -1);
+    this.angle = Math.random() * Math.PI * 2;
+    this.drift = { x: (Math.random() - 0.5) * 0.3, y: (Math.random() - 0.5) * 0.15 };
+    this.alpha = 0.15 + Math.random() * 0.25;
+    this.grooves = 3 + Math.floor(Math.random() * 5);
+  }
+  update(t) {
+    this.angle += this.speed * 0.02;
+    this.x += this.drift.x;
+    this.y += this.drift.y;
+    if (this.x < -this.r * 2 || this.x > W + this.r * 2 ||
+        this.y < -this.r * 2 || this.y > H + this.r * 2) {
+      this.reset();
+    }
+  }
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.angle);
+    ctx.globalAlpha = this.alpha;
+
+    // Outer disc
+    ctx.beginPath();
+    ctx.arc(0, 0, this.r, 0, Math.PI * 2);
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fill();
+
+    // Grooves
+    for (let i = 1; i <= this.grooves; i++) {
+      const gr = (this.r * 0.3) + (this.r * 0.6) * (i / this.grooves);
+      ctx.beginPath();
+      ctx.arc(0, 0, gr, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
+
+    // Label
+    ctx.beginPath();
+    ctx.arc(0, 0, this.r * 0.25, 0, Math.PI * 2);
+    const col = palette[Math.floor(this.x + this.y) % palette.length];
+    ctx.fillStyle = col;
+    ctx.fill();
+
+    // Center hole
+    ctx.beginPath();
+    ctx.arc(0, 0, 2, 0, Math.PI * 2);
+    ctx.fillStyle = '#0a0a0f';
+    ctx.fill();
+
+    // Shine highlight
+    ctx.beginPath();
+    ctx.arc(this.r * 0.1, -this.r * 0.1, this.r * 0.7, 0, Math.PI * 2);
+    const shine = ctx.createRadialGradient(this.r * 0.1, -this.r * 0.1, 0, this.r * 0.1, -this.r * 0.1, this.r * 0.7);
+    shine.addColorStop(0, 'rgba(255,255,255,0.06)');
+    shine.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = shine;
+    ctx.fill();
+
+    ctx.restore();
+  }
+}
+
+// --- Waveform (guitar oscillation) ---
+class Waveform {
+  constructor(y, color, amp, freq, phase, speed) {
+    this.baseY = y;
+    this.color = color;
+    this.amp = amp;
+    this.freq = freq;
+    this.phase = phase;
+    this.speed = speed;
+    this.alpha = 0.3 + Math.random() * 0.3;
+  }
+  draw(t) {
+    ctx.save();
+    ctx.globalAlpha = this.alpha;
+    ctx.beginPath();
+    const p = this.phase + t * this.speed;
+    for (let x = 0; x <= W; x += 3) {
+      const normalX = x / W;
+      // Layered sine for organic feel
+      const y = this.baseY +
+        Math.sin(normalX * this.freq + p) * this.amp +
+        Math.sin(normalX * this.freq * 2.3 + p * 1.7) * this.amp * 0.3 +
+        Math.sin(normalX * this.freq * 0.7 + p * 0.5) * this.amp * 0.5;
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = this.color;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = this.color;
+    ctx.shadowBlur = 12;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// --- Dust Particles ---
+class Dust {
+  constructor() {
+    this.reset();
+  }
+  reset() {
+    this.x = Math.random() * W;
+    this.y = Math.random() * H;
+    this.size = 0.5 + Math.random() * 2;
+    this.alpha = 0.1 + Math.random() * 0.4;
+    this.vx = (Math.random() - 0.5) * 0.4;
+    this.vy = -0.1 - Math.random() * 0.3;
+    this.life = 0;
+    this.maxLife = 300 + Math.random() * 500;
+  }
+  update() {
+    this.x += this.vx + Math.sin(this.life * 0.01) * 0.2;
+    this.y += this.vy;
+    this.life++;
+    if (this.life > this.maxLife || this.y < -10 || this.x < -10 || this.x > W + 10) {
+      this.reset();
+      this.y = H + 10;
+    }
+  }
+  draw() {
+    const fade = 1 - (this.life / this.maxLife);
+    ctx.save();
+    ctx.globalAlpha = this.alpha * fade;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fillStyle = '#f2d98b';
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// --- Band Name Generator (drifting text) ---
+const bandNames = [
+  'The Midnight Wolves', 'Pale Honey', 'Broken Social Scene',
+  'Cigarettes After Marx', 'Velvet Submarine', 'Echo & the Bunnymen',
+  'Arcade Fires', 'Modest Mice', 'The National Park',
+  'Bon Hiver', 'Fleet Foxhounds', 'Beach Fossil',
+  'Wild Nothingness', 'Real Estate Agent', 'Tame Imposter',
+  'Neutral Milk Motel', 'Death Cab for Cuties', 'Built to Spill Tea',
+  'Yo La Tengo Fish', 'Weezer Board', 'Pavement Cracks'
+];
+
+class FloatingText {
+  constructor() {
+    this.reset();
+  }
+  reset() {
+    this.text = bandNames[Math.floor(Math.random() * bandNames.length)];
+    this.x = -300;
+    this.y = 80 + Math.random() * (H - 160);
+    this.speed = 0.3 + Math.random() * 0.6;
+    this.alpha = 0;
+    this.targetAlpha = 0.06 + Math.random() * 0.1;
+    this.size = 20 + Math.random() * 40;
+    this.font = Math.random() < 0.5 ? 'serif' : 'monospace';
+    this.color = palette[Math.floor(Math.random() * palette.length)];
+    this.rotation = (Math.random() - 0.5) * 0.15;
+  }
+  update() {
+    this.x += this.speed;
+    if (this.x < W * 0.3) {
+      this.alpha = Math.min(this.alpha + 0.002, this.targetAlpha);
+    } else if (this.x > W * 0.7) {
+      this.alpha = Math.max(this.alpha - 0.002, 0);
+    }
+    if (this.x > W + 400) this.reset();
+  }
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rotation);
+    ctx.globalAlpha = this.alpha;
+    ctx.font = `${this.size}px ${this.font}`;
+    ctx.fillStyle = this.color;
+    ctx.fillText(this.text, 0, 0);
+    ctx.restore();
+  }
+}
+
+// --- EQ Bars (subtle background element) ---
+function drawEQ(t) {
+  const barCount = 32;
+  const barWidth = W / barCount;
+  ctx.save();
+  ctx.globalAlpha = 0.04;
+  for (let i = 0; i < barCount; i++) {
+    const h = (Math.sin(i * 0.5 + t * 0.8) * 0.5 + 0.5) *
+              (Math.sin(i * 0.3 + t * 1.3) * 0.5 + 0.5) * H * 0.4;
+    const col = palette[i % palette.length];
+    ctx.fillStyle = col;
+    ctx.fillRect(i * barWidth, H - h, barWidth - 2, h);
+  }
+  ctx.restore();
+}
+
+// --- Initialize ---
+const vinyls = Array.from({ length: 6 }, () => new Vinyl());
+const waveforms = [
+  new Waveform(H * 0.3, '#e8985e', 30, 12, 0, 0.7),
+  new Waveform(H * 0.5, '#8b3a62', 25, 8, 2, -0.5),
+  new Waveform(H * 0.7, '#3a6b8c', 35, 15, 4, 0.9),
+  new Waveform(H * 0.4, '#6ba38e', 20, 10, 1, -0.6),
+];
+const dust = Array.from({ length: 120 }, () => new Dust());
+const texts = Array.from({ length: 3 }, () => {
+  const ft = new FloatingText();
+  ft.x = Math.random() * W; // stagger initial positions
+  return ft;
+});
+
+// --- Render loop ---
+let frame = 0;
+function render() {
+  frame++;
+  const t = frame * 0.016;
+
+  // Fade trail for ghostly effect
+  ctx.fillStyle = 'rgba(10, 10, 15, 0.12)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle vignette
+  const vignette = ctx.createRadialGradient(W / 2, H / 2, W * 0.2, W / 2, H / 2, W * 0.8);
+  vignette.addColorStop(0, 'rgba(10,10,15,0)');
+  vignette.addColorStop(1, 'rgba(10,10,15,0.4)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, W, H);
+
+  // Background EQ
+  drawEQ(t);
+
+  // Floating band names
+  texts.forEach(ft => { ft.update(); ft.draw(); });
+
+  // Vinyl records
+  vinyls.forEach(v => { v.update(t); v.draw(); });
+
+  // Waveforms
+  waveforms.forEach(w => w.draw(t));
+
+  // Dust
+  dust.forEach(d => { d.update(); d.draw(); });
+
+  // Occasional film grain
+  if (Math.random() < 0.3) {
+    ctx.save();
+    ctx.globalAlpha = 0.02;
+    for (let i = 0; i < 50; i++) {
+      const gx = Math.random() * W;
+      const gy = Math.random() * H;
+      ctx.fillStyle = Math.random() < 0.5 ? '#fff' : '#000';
+      ctx.fillRect(gx, gy, 1, 1);
+    }
+    ctx.restore();
+  }
+
+  requestAnimationFrame(render);
+}
+
+// Handle resize for waveforms
+window.addEventListener('resize', () => {
+  waveforms[0].baseY = H * 0.3;
+  waveforms[1].baseY = H * 0.5;
+  waveforms[2].baseY = H * 0.7;
+  waveforms[3].baseY = H * 0.4;
+});
+
+render();
+</script>
+</body>
+</html>
