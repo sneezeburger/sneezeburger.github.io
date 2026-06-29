@@ -1,1 +1,1507 @@
-OH MY GOD
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Voronoi Flow</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; background: #060610; cursor: crosshair; touch-action: none; }
+  canvas { display: block; }
+  #ui {
+    position: fixed; top: 12px; left: 12px;
+    color: rgba(0,255,255,0.45); font: 12px 'Courier New', monospace;
+    pointer-events: none; z-index: 10;
+    text-shadow: 0 0 4px rgba(0,255,255,0.15);
+  }
+  #help {
+    position: fixed; top: 12px; right: 12px;
+    background: rgba(6,6,16,0.92); border: 1px solid rgba(0,255,255,0.25);
+    border-radius: 6px; padding: 14px 18px;
+    color: rgba(0,255,255,0.7); font: 13px 'Courier New', monospace;
+    line-height: 1.7; z-index: 10;
+    box-shadow: 0 0 12px rgba(0,255,255,0.06);
+    transition: opacity 0.5s;
+  }
+  #help.hidden { opacity: 0; pointer-events: none; }
+  #help h2 { color: rgba(255,0,255,0.7); margin: 0 0 8px; font-size: 15px; }
+  .k { display: inline-block; background: rgba(0,255,255,0.08); border: 1px solid rgba(0,255,255,0.2);
+       border-radius: 3px; padding: 1px 5px; margin: 0 2px; font-size: 12px; }
+  #panel {
+    position: fixed; left: 12px; top: 12px; bottom: 12px; width: 264px;
+    background: rgba(6,6,16,0.94); border: 1px solid rgba(0,255,255,0.2);
+    border-radius: 6px; padding: 10px 14px; z-index: 20;
+    font: 11px 'Courier New', monospace; user-select: none;
+    transition: opacity 0.4s, transform 0.4s;
+    box-shadow: 0 0 10px rgba(0,255,255,0.05);
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+  #panel.hidden { opacity: 0; pointer-events: none; transform: translateX(-10px); }
+  .panel-hdr {
+    display: flex; justify-content: space-between; align-items: center;
+    color: rgba(255,0,255,0.6); font-size: 12px; margin-bottom: 6px;
+    flex-shrink: 0;
+  }
+  .panel-close { cursor: pointer; color: #444; font-size: 14px; }
+  .panel-close:hover { color: rgba(255,0,255,0.7); }
+  .sl-category {
+    color: rgba(255,0,255,0.4); font-size: 9px; text-transform: uppercase;
+    letter-spacing: 1.5px; margin: 8px 0 4px; padding-bottom: 3px;
+    border-bottom: 1px solid rgba(255,0,255,0.1); flex-shrink: 0;
+  }
+  .sl-category:first-of-type { margin-top: 2px; }
+  .sl-row { display: flex; align-items: center; min-height: 18px; cursor: ew-resize; flex: 1; }
+  .sl-row.active .sl-label { color: rgba(0,255,255,0.9); }
+  .sl-row.active .sl-fill { background: rgba(0,255,255,0.6); }
+  .sl-label { width: 80px; color: rgba(0,255,255,0.45); font-size: 10px; flex-shrink: 0; }
+  .sl-track {
+    flex: 1; height: 4px; background: rgba(0,255,255,0.06);
+    border-radius: 2px; position: relative; margin: 0 6px;
+  }
+  .sl-fill {
+    height: 100%; border-radius: 2px; position: relative;
+    background: rgba(0,255,255,0.3); transition: width 0.04s;
+  }
+  .sl-fill::after {
+    content: ''; position: absolute; right: -4px; top: -3px;
+    width: 8px; height: 8px; background: rgba(0,255,255,0.7); border-radius: 50%;
+    box-shadow: 0 0 5px rgba(0,255,255,0.3); opacity: 0.8;
+  }
+  .sl-val { width: 48px; text-align: right; font-size: 9px; color: rgba(0,255,255,0.35); flex-shrink: 0; }
+  .sl-row:hover .sl-label { color: rgba(0,255,255,0.7); }
+  #panel-btn {
+    position: fixed; left: 14px; bottom: 14px; width: 26px; height: 26px;
+    background: rgba(6,6,16,0.75); border: 1px solid rgba(0,255,255,0.2);
+    border-radius: 50%; color: rgba(0,255,255,0.4); font-size: 14px;
+    cursor: pointer; z-index: 15; display: flex; align-items: center;
+    justify-content: center; transition: color 0.3s;
+  }
+  #panel-btn:hover { color: rgba(0,255,255,0.7); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui"><span id="fps-display"></span></div>
+<div id="help">
+  <h2>✦ VORONOI FLOW ✦</h2>
+  <div>Touch to attract · drag to pull</div>
+  <div>Hover for warmth · release to breathe</div>
+  <div style="margin-top:6px">
+    <span class="k">H</span> Help
+    <span class="k">SPACE</span> Pause<br>
+    <span class="k">R</span> Regenerate
+    <span class="k">C</span> Colors<br>
+    <span class="k">P</span> Parameters
+    <span class="k">F</span> Fullscreen<br>
+    <span class="k">[ ]</span> ±1 cell
+    <span class="k">+ -</span> ±10 cells
+  </div>
+</div>
+<div id="panel" class="hidden"><div class="panel-hdr"><span>⚙ PARAMETERS</span><span class="panel-close" id="panel-x">✕</span></div></div>
+<div id="panel-btn">⚙</div>
+<script>
+// ═══════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════
+
+const C = {
+  count: 60,
+  spring: 0.003,
+  damping: 0.965,
+  pullRadius: 280,
+  pullForce: 0.6,
+  hoverWarmth: 0.4,
+  drift: 0.08,
+  neighborK: 6,
+  relaxIter: 3,
+  circleRatio: 0.22,
+  warmthDecay: 0.015,
+  edgeBrightness: 0.7,
+  fillOpacity: 0.06,
+  glowWidth: 3,
+  mergeDuration: 0.9,
+  splitDuration: 1.2,
+  mergeOrbital: 0.015,
+  popIntensity: 0.7,
+  prismIntensity: 0.5,
+  jitter: 0,
+  autoMitosis: 0,
+};
+
+const STORAGE_KEY = 'voronoi-params';
+
+function saveParams() {
+  try {
+    const data = JSON.stringify({ ...C, si });
+    // Try localStorage first, fall back to document.cookie
+    try {
+      localStorage.setItem(STORAGE_KEY, data);
+    } catch (e) {
+      document.cookie = STORAGE_KEY + '=' + encodeURIComponent(data) + ';max-age=31536000;path=/';
+    }
+  } catch (e) {}
+}
+
+function loadParams() {
+  try {
+    let raw = null;
+    // Try localStorage first
+    try { raw = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+    // Fall back to cookie
+    if (!raw) {
+      const match = document.cookie.match(new RegExp('(?:^|; )' + STORAGE_KEY + '=([^;]*)'));
+      if (match) raw = decodeURIComponent(match[1]);
+    }
+    if (raw) {
+      const saved = JSON.parse(raw);
+      for (const k of Object.keys(C)) {
+        if (k in saved && typeof saved[k] === 'number') C[k] = saved[k];
+      }
+      if (typeof saved.si === 'number') si = saved.si;
+    }
+  } catch (e) {}
+}
+
+// ═══════════════════════════════════════════════
+// COLOR SCHEMES
+// ═══════════════════════════════════════════════
+
+const schemes = [
+  { name: 'Cyan Pulse',  c1: [0,220,255],  c2: [180,0,255],  warm: [255,180,80] },
+  { name: 'Aurora',      c1: [0,255,120],  c2: [80,0,255],   warm: [255,220,100] },
+  { name: 'Sunset',      c1: [255,100,0],  c2: [0,100,255],  warm: [255,255,200] },
+  { name: 'Ultraviolet', c1: [160,0,255],  c2: [0,255,160],  warm: [255,120,200] },
+  { name: 'Infrared',    c1: [255,0,80],   c2: [0,200,255],  warm: [255,255,160] }
+];
+let si = 0;
+
+// ═══════════════════════════════════════════════
+// CANVAS
+// ═══════════════════════════════════════════════
+
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+let W, H, paused = false;
+
+function resize() {
+  const dpr = devicePixelRatio || 1;
+  W = innerWidth; H = innerHeight;
+  cvs.width = W * dpr; cvs.height = H * dpr;
+  cvs.style.width = W + 'px'; cvs.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// ═══════════════════════════════════════════════
+// MATH
+// ═══════════════════════════════════════════════
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function lerp3(a, b, t) { return [lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)]; }
+function rgba(c, a) { return `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`; }
+function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+// ═══════════════════════════════════════════════
+// SEEDS
+// ═══════════════════════════════════════════════
+
+let seeds = [];
+let nbrs = [];
+
+function generate() {
+  seeds = [];
+  for (let i = 0; i < C.count; i++) {
+    seeds.push(makeSeed(
+      40 + Math.random() * (W - 80),
+      40 + Math.random() * (H - 80)
+    ));
+  }
+
+  // Lloyd relaxation
+  for (let it = 0; it < C.relaxIter; it++) {
+    const cells = voronoi();
+    for (let i = 0; i < seeds.length; i++) {
+      const c = centroid(cells[i]);
+      if (c) { seeds[i].x = clamp(c.x, 5, W-5); seeds[i].y = clamp(c.y, 5, H-5); }
+    }
+  }
+
+  // Freeze rest + assign drift orbits
+  for (const s of seeds) {
+    s.rx = s.x; s.ry = s.y;
+    s.driftAngle = Math.random() * Math.PI * 2;
+    s.driftRadius = 3 + Math.random() * 8;
+    s.driftSpeed = 0.0003 + Math.random() * 0.0006;
+  }
+
+  // Neighbors
+  nbrs = seeds.map((s, i) => findNeighbors(i));
+  recolor();
+}
+
+function makeSeed(x, y) {
+  return {
+    x, y, vx: 0, vy: 0, rx: x, ry: y,
+    col: [0,0,0], warmth: 0,
+    driftAngle: 0, driftRadius: 5, driftSpeed: 0.0004
+  };
+}
+
+function findNeighbors(i) {
+  const s = seeds[i];
+  return seeds
+    .map((o, j) => ({ j, d: i === j ? 1e9 : Math.hypot(o.rx - s.rx, o.ry - s.ry) }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, C.neighborK)
+    .map(x => x.j);
+}
+
+function recolor() {
+  const sc = schemes[si];
+  for (const s of seeds) {
+    const t = (s.rx / W + s.ry / H) * 0.5;
+    s.col = lerp3(sc.c1, sc.c2, t);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// VORONOI — half-plane clipping
+// ═══════════════════════════════════════════════
+
+function clipPoly(poly, mx, my, nx, ny) {
+  const out = [];
+  const len = poly.length;
+  if (len < 2) return out;
+  for (let i = 0; i < len; i++) {
+    const a = poly[i], b = poly[(i + 1) % len];
+    const da = (a.x - mx) * nx + (a.y - my) * ny;
+    const db = (b.x - mx) * nx + (b.y - my) * ny;
+    if (da <= 0) {
+      out.push(a);
+      if (db > 0) { const t = da / (da - db); out.push({ x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) }); }
+    } else if (db <= 0) {
+      const t = da / (da - db); out.push({ x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) });
+    }
+  }
+  return out;
+}
+
+function voronoi() {
+  const pad = 50;
+  const cells = new Array(seeds.length);
+  for (let i = 0; i < seeds.length; i++) {
+    const s = seeds[i];
+    let poly = [
+      { x: -pad, y: -pad }, { x: W + pad, y: -pad },
+      { x: W + pad, y: H + pad }, { x: -pad, y: H + pad }
+    ];
+    for (let j = 0; j < seeds.length; j++) {
+      if (i === j) continue;
+      if (poly.length < 3) break;
+      const o = seeds[j];
+      poly = clipPoly(poly, (s.x + o.x) * 0.5, (s.y + o.y) * 0.5, o.x - s.x, o.y - s.y);
+    }
+    cells[i] = poly;
+  }
+  return cells;
+}
+
+function centroid(v) {
+  if (!v || v.length < 3) return null;
+  let cx = 0, cy = 0, a = 0;
+  for (let i = 0; i < v.length; i++) {
+    const p = v[i], q = v[(i + 1) % v.length];
+    const f = p.x * q.y - q.x * p.y;
+    cx += (p.x + q.x) * f; cy += (p.y + q.y) * f; a += f;
+  }
+  a *= 0.5;
+  return Math.abs(a) < 0.01 ? null : { x: cx / (6 * a), y: cy / (6 * a) };
+}
+
+function polyArea(v) {
+  if (!v || v.length < 3) return 0;
+  let a = 0;
+  for (let i = 0; i < v.length; i++) {
+    const p = v[i], q = v[(i + 1) % v.length];
+    a += p.x * q.y - q.x * p.y;
+  }
+  return Math.abs(a) * 0.5;
+}
+
+function minVertDist(v, cx, cy) {
+  let m = 1e9;
+  for (const p of v) { const d = Math.hypot(p.x - cx, p.y - cy); if (d < m) m = d; }
+  return m;
+}
+
+// ═══════════════════════════════════════════════
+// POINTER
+// ═══════════════════════════════════════════════
+
+const ptr = { x: 0, y: 0, down: false, over: false };
+
+cvs.addEventListener('mouseenter', () => { ptr.over = true; });
+cvs.addEventListener('mouseleave', () => { ptr.over = false; ptr.down = false; });
+cvs.addEventListener('mousedown', e => { ptr.down = true; ptr.x = e.clientX; ptr.y = e.clientY; });
+cvs.addEventListener('mouseup', () => { ptr.down = false; });
+cvs.addEventListener('mousemove', e => { ptr.x = e.clientX; ptr.y = e.clientY; ptr.over = true; });
+
+cvs.addEventListener('touchstart', e => {
+  e.preventDefault(); ptr.down = ptr.over = true;
+  ptr.x = e.touches[0].clientX; ptr.y = e.touches[0].clientY;
+}, { passive: false });
+cvs.addEventListener('touchmove', e => {
+  e.preventDefault();
+  ptr.x = e.touches[0].clientX; ptr.y = e.touches[0].clientY;
+}, { passive: false });
+cvs.addEventListener('touchend', e => {
+  e.preventDefault(); ptr.down = ptr.over = false;
+}, { passive: false });
+cvs.addEventListener('touchcancel', () => { ptr.down = ptr.over = false; });
+
+// ═══════════════════════════════════════════════
+// PHYSICS — slow attraction + gentle drift
+// ═══════════════════════════════════════════════
+
+let frameTime = 0;
+
+function physics(t) {
+  frameTime = t;
+
+  for (let i = 0; i < seeds.length; i++) {
+    const s = seeds[i];
+
+    // Gentle circular drift around rest position
+    const da = s.driftAngle + s.driftSpeed * t;
+    const driftTargetX = s.rx + Math.cos(da) * s.driftRadius * C.drift;
+    const driftTargetY = s.ry + Math.sin(da) * s.driftRadius * C.drift;
+
+    // Spring toward drift target
+    let fx = (driftTargetX - s.x) * C.spring;
+    let fy = (driftTargetY - s.y) * C.spring;
+
+    // Pointer: ATTRACTION — pull toward finger
+    if (ptr.over) {
+      const dx = ptr.x - s.x;
+      const dy = ptr.y - s.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+
+      if (d < C.pullRadius && d > 1) {
+        const proximity = 1 - d / C.pullRadius;
+        const smooth = proximity * proximity; // quadratic falloff — gentle edges
+
+        if (ptr.down) {
+          // Active pull: cells drift toward finger
+          const pull = C.pullForce * smooth / (d + 30);
+          fx += dx * pull;
+          fy += dy * pull;
+          // Warm this cell
+          s.warmth = Math.min(1, s.warmth + smooth * 0.06);
+        } else {
+          // Hover: gentle warmth, very subtle pull
+          const pull = C.pullForce * 0.08 * smooth / (d + 50);
+          fx += dx * pull;
+          fy += dy * pull;
+          s.warmth = Math.min(1, s.warmth + smooth * C.hoverWarmth * 0.01);
+        }
+      }
+    }
+
+    // Warmth decays slowly
+    s.warmth = Math.max(0, s.warmth - C.warmthDecay * 0.016);
+
+    // Neighbor warmth conduction — warm cells gently warm neighbors
+    for (const j of nbrs[i]) {
+      if (j >= seeds.length) continue;
+      const n = seeds[j];
+      const wdiff = s.warmth - n.warmth;
+      // Slight warmth flow
+      s.warmth -= wdiff * 0.003;
+    }
+    s.warmth = clamp(s.warmth, 0, 1);
+
+    // Random jitter — brownian-motion-style kicks
+    if (C.jitter > 0) {
+      fx += (Math.random() - 0.5) * C.jitter * 0.5;
+      fy += (Math.random() - 0.5) * C.jitter * 0.5;
+    }
+
+    // Integrate
+    s.vx = (s.vx + fx) * C.damping;
+    s.vy = (s.vy + fy) * C.damping;
+    s.x = clamp(s.x + s.vx, 2, W - 2);
+    s.y = clamp(s.y + s.vy, 2, H - 2);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// RENDER — warmth-driven color and brightness
+// ═══════════════════════════════════════════════
+
+function render(cells) {
+  ctx.fillStyle = '#060610';
+  ctx.fillRect(0, 0, W, H);
+
+  const sc = schemes[si];
+
+  // Build set of splitting sibling pairs (index pairs)
+  const splitPairs = new Map(); // seedIndex → siblingIndex
+  for (const s of splitAnims) {
+    const iA = seeds.indexOf(s.seedA);
+    const iB = seeds.indexOf(s.seedB);
+    if (iA >= 0 && iB >= 0) {
+      splitPairs.set(iA, iB);
+      splitPairs.set(iB, iA);
+    }
+  }
+
+  // Helper: check if an edge segment is shared with sibling cell
+  function isSharedEdge(x1, y1, x2, y2, sibPoly) {
+    const eps = 0.5;
+    for (let j = 0; j < sibPoly.length; j++) {
+      const a = sibPoly[j], b = sibPoly[(j + 1) % sibPoly.length];
+      // Match in either direction
+      if ((Math.abs(a.x - x1) < eps && Math.abs(a.y - y1) < eps &&
+           Math.abs(b.x - x2) < eps && Math.abs(b.y - y2) < eps) ||
+          (Math.abs(a.x - x2) < eps && Math.abs(a.y - y2) < eps &&
+           Math.abs(b.x - x1) < eps && Math.abs(b.y - y1) < eps)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Pass 1 — cell fills: very faint, warmer near touch
+  for (let i = 0; i < cells.length; i++) {
+    const p = cells[i];
+    if (p.length < 3) continue;
+    const s = seeds[i];
+    const w = s.warmth;
+
+    const fillCol = lerp3(s.col, sc.warm, w * 0.5);
+    const fillAlpha = C.fillOpacity * 0.33 + w * C.fillOpacity;
+
+    ctx.fillStyle = rgba(fillCol, fillAlpha);
+    ctx.beginPath();
+    ctx.moveTo(p[0].x, p[0].y);
+    for (let j = 1; j < p.length; j++) ctx.lineTo(p[j].x, p[j].y);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Pass 2 — soft glow edges
+  ctx.lineWidth = C.glowWidth;
+  for (let i = 0; i < cells.length; i++) {
+    const p = cells[i];
+    if (p.length < 3) continue;
+    const s = seeds[i];
+    const w = s.warmth;
+    const edgeCol = lerp3(s.col, sc.warm, w * 0.6);
+    ctx.strokeStyle = rgba(edgeCol, 0.06 + w * 0.08);
+    const sibIdx = splitPairs.get(i);
+    if (sibIdx !== undefined) {
+      const sibPoly = cells[sibIdx];
+      ctx.beginPath();
+      for (let j = 0; j < p.length; j++) {
+        const a = p[j], b = p[(j + 1) % p.length];
+        if (!isSharedEdge(a.x, a.y, b.x, b.y, sibPoly)) {
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+        }
+      }
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(p[0].x, p[0].y);
+      for (let j = 1; j < p.length; j++) ctx.lineTo(p[j].x, p[j].y);
+      ctx.closePath();
+      ctx.stroke();
+    }
+  }
+
+  // Pass 3 — crisp edges
+  ctx.lineWidth = 1;
+  for (let i = 0; i < cells.length; i++) {
+    const p = cells[i];
+    if (p.length < 3) continue;
+    const s = seeds[i];
+    const w = s.warmth;
+    const edgeCol = lerp3(s.col, sc.warm, w * 0.7);
+    const alpha = (C.edgeBrightness * 0.35) + w * 0.35;
+    ctx.strokeStyle = rgba(edgeCol, alpha);
+    const sibIdx = splitPairs.get(i);
+    if (sibIdx !== undefined) {
+      const sibPoly = cells[sibIdx];
+      ctx.beginPath();
+      for (let j = 0; j < p.length; j++) {
+        const a = p[j], b = p[(j + 1) % p.length];
+        if (!isSharedEdge(a.x, a.y, b.x, b.y, sibPoly)) {
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+        }
+      }
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(p[0].x, p[0].y);
+      for (let j = 1; j < p.length; j++) ctx.lineTo(p[j].x, p[j].y);
+      ctx.closePath();
+      ctx.stroke();
+    }
+  }
+
+  // Pass 3.5 — prismatic caustics: refracting light through cell edges
+  if (C.prismIntensity > 0.01) {
+    const now = performance.now() * 0.001;
+    // Virtual light source orbits slowly
+    const lAngle = now * 0.15;
+    const lx = W * 0.5 + Math.cos(lAngle) * W * 0.7;
+    const ly = H * 0.5 + Math.sin(lAngle * 0.7) * H * 0.7;
+    const pi = C.prismIntensity;
+
+    // Spectral colors for chromatic dispersion
+    const spectra = [
+      [255, 60, 40],   // red
+      [255, 160, 30],  // orange
+      [255, 255, 60],  // yellow
+      [60, 255, 80],   // green
+      [40, 180, 255],  // cyan
+      [100, 60, 255],  // blue-violet
+    ];
+
+    for (let i = 0; i < cells.length; i++) {
+      const p = cells[i];
+      if (p.length < 3) continue;
+      const c = centroid(p);
+      if (!c) continue;
+
+      // Direction from light to cell centroid
+      const dlx = c.x - lx, dly = c.y - ly;
+      const ldist = Math.sqrt(dlx * dlx + dly * dly);
+      const lnx = ldist > 0.1 ? dlx / ldist : 0;
+      const lny = ldist > 0.1 ? dly / ldist : 0;
+
+      // Distance falloff — closer to light = brighter
+      const maxDist = Math.sqrt(W * W + H * H);
+      const distFade = 1 - Math.min(ldist / maxDist, 1);
+      const brightness = distFade * distFade * pi;
+
+      // Prismatic edge highlights: edges whose normal faces the light get spectral color
+      for (let j = 0; j < p.length; j++) {
+        const a = p[j], b = p[(j + 1) % p.length];
+        const edx = b.x - a.x, edy = b.y - a.y;
+        const elen = Math.sqrt(edx * edx + edy * edy);
+        if (elen < 1) continue;
+
+        // Outward-facing normal (pointing away from centroid)
+        let enx = -edy / elen, eny = edx / elen;
+        const mx = (a.x + b.x) * 0.5 - c.x, my = (a.y + b.y) * 0.5 - c.y;
+        if (enx * mx + eny * my < 0) { enx = -enx; eny = -eny; }
+
+        // How much this edge faces the light (dot with light direction)
+        const facing = -(enx * lnx + eny * lny);
+        if (facing <= 0) continue;
+
+        // Spectral index based on edge angle — different edges refract different wavelengths
+        const edgeAngle = Math.atan2(edy, edx);
+        const specIdx = ((edgeAngle / Math.PI + 1) * 3 + now * 0.3) % spectra.length;
+        const si0 = Math.floor(specIdx) % spectra.length;
+        const si1 = (si0 + 1) % spectra.length;
+        const sf = specIdx - Math.floor(specIdx);
+        const specCol = lerp3(spectra[si0], spectra[si1], sf);
+
+        const alpha = facing * facing * brightness * 0.5;
+        if (alpha < 0.005) continue;
+
+        // Draw prismatic glow on this edge
+        ctx.strokeStyle = rgba(specCol, alpha);
+        ctx.lineWidth = C.glowWidth * 1.5 + facing * 3;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+
+        // Thin bright core
+        ctx.strokeStyle = rgba(lerp3(specCol, [255, 255, 255], 0.5), alpha * 0.7);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+
+      // Caustic pool: focused light inside the cell on the lit side
+      const causticX = c.x - lnx * 15;
+      const causticY = c.y - lny * 15;
+      const cellR = minVertDist(p, c.x, c.y);
+      const causticR = cellR * (0.3 + 0.2 * Math.sin(now * 1.3 + i * 0.7));
+      const ripple = 0.5 + 0.5 * Math.sin(now * 2.1 + i * 1.1);
+      const causticAlpha = brightness * 0.15 * (0.6 + ripple * 0.4);
+
+      if (causticAlpha > 0.005) {
+        // Offset slightly for chromatic aberration — split into R, G, B pools
+        const abOff = causticR * 0.15 * pi;
+        const perpLx = -lny, perpLy = lnx;
+
+        ctx.globalCompositeOperation = 'lighter';
+
+        // Red pool — shifted one way
+        ctx.fillStyle = rgba([255, 80, 60], causticAlpha * 0.6);
+        ctx.beginPath();
+        ctx.arc(causticX + perpLx * abOff, causticY + perpLy * abOff,
+                causticR * (0.9 + ripple * 0.1), 0, Math.PI * 2);
+        ctx.fill();
+
+        // Green pool — center
+        ctx.fillStyle = rgba([80, 255, 100], causticAlpha * 0.5);
+        ctx.beginPath();
+        ctx.arc(causticX, causticY,
+                causticR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Blue pool — shifted the other way
+        ctx.fillStyle = rgba([60, 120, 255], causticAlpha * 0.6);
+        ctx.beginPath();
+        ctx.arc(causticX - perpLx * abOff, causticY - perpLy * abOff,
+                causticR * (0.9 + ripple * 0.1), 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+  }
+
+  // Pass 4 — centroid dots: glow when warm
+  for (let i = 0; i < cells.length; i++) {
+    const p = cells[i];
+    if (p.length < 3) continue;
+    const s = seeds[i];
+    if (s.merging || s.splitting) continue;
+    const c = centroid(p);
+    if (!c) continue;
+    const w = s.warmth;
+    const r = minVertDist(p, c.x, c.y) * C.circleRatio;
+    const dotCol = lerp3(s.col, sc.warm, w * 0.8);
+
+    // Outer glow — soft halo when warm
+    if (w > 0.05) {
+      ctx.fillStyle = rgba(dotCol, w * 0.12);
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, r * (1.5 + w * 2), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Main dot
+    ctx.fillStyle = rgba(dotCol, 0.5 + w * 0.4);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, r * (0.8 + w * 0.4), 0, Math.PI * 2);
+    ctx.fill();
+
+    // Inner bright core
+    ctx.fillStyle = rgba(lerp3(dotCol, [255,255,255], w * 0.3), 0.6 + w * 0.3);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, r * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ═══════════════════════════════════════════════
+// PARAMETER PANEL
+// ═══════════════════════════════════════════════
+
+const sliderDefs = [
+  { category: 'Physics' },
+  { key: 'spring',         label: 'Spring',       min: 0.0005, max: 0.02 },
+  { key: 'damping',        label: 'Damping',      min: 0.9,    max: 0.995 },
+  { key: 'drift',          label: 'Drift',        min: 0,      max: 0.5 },
+  { key: 'jitter',         label: 'Jitter',       min: 0,      max: 0.5 },
+  { key: 'pullRadius',     label: 'Pull Radius',  min: 80,     max: 600,   round: true },
+  { key: 'pullForce',      label: 'Pull Force',   min: 0.1,    max: 2.0 },
+  { key: 'hoverWarmth',    label: 'Hover Warmth',  min: 0,     max: 1.0 },
+  { key: 'warmthDecay',    label: 'Warmth Decay', min: 0.002,  max: 0.08 },
+  { category: 'Visual' },
+  { key: 'edgeBrightness', label: 'Edge Brightness', min: 0.1, max: 1.0 },
+  { key: 'fillOpacity',    label: 'Fill Opacity', min: 0,      max: 0.15 },
+  { key: 'glowWidth',      label: 'Glow Width',   min: 1,      max: 8,     round: true },
+  { key: 'circleRatio',    label: 'Nucleus Ratio', min: 0.05,  max: 0.45 },
+  { key: 'prismIntensity', label: 'Prism Intensity', min: 0,   max: 1.0 },
+  { category: 'Mitosis' },
+  { key: 'mergeDuration',  label: 'Merge Duration', min: 0.4,  max: 2.0 },
+  { key: 'splitDuration',  label: 'Split Duration', min: 0.4,  max: 2.0 },
+  { key: 'mergeOrbital',   label: 'Orbital Force',  min: 0,    max: 0.02 },
+  { key: 'popIntensity',   label: 'Pop Intensity', min: 0,     max: 1.0 },
+  { key: 'autoMitosis',    label: 'Auto Mitosis',  min: 0,     max: 1.0 },
+];
+
+function fmtVal(v) {
+  return v >= 100 ? String(Math.round(v)) :
+         v >= 1   ? v.toFixed(1) :
+         v >= 0.01 ? v.toFixed(3) : v.toFixed(4);
+}
+
+function updateSlider(def) {
+  const row = document.getElementById('sl-' + def.key);
+  if (!row) return;
+  const t = clamp((C[def.key] - def.min) / (def.max - def.min), 0, 1);
+  row.querySelector('.sl-fill').style.width = (t * 100) + '%';
+  row.querySelector('.sl-val').textContent = fmtVal(C[def.key]);
+}
+
+function updateAllSliders() { sliderDefs.forEach(d => { if (d.key) updateSlider(d); }); }
+
+function buildPanel() {
+  const panel = document.getElementById('panel');
+  const btn = document.getElementById('panel-btn');
+
+  for (const def of sliderDefs) {
+    if (def.category) {
+      const cat = document.createElement('div');
+      cat.className = 'sl-category';
+      cat.textContent = def.category;
+      panel.appendChild(cat);
+      continue;
+    }
+    const row = document.createElement('div');
+    row.className = 'sl-row';
+    row.id = 'sl-' + def.key;
+    row.innerHTML =
+      `<span class="sl-label">${def.label}</span>` +
+      `<div class="sl-track"><div class="sl-fill"></div></div>` +
+      `<span class="sl-val"></span>`;
+    panel.appendChild(row);
+  }
+  updateAllSliders();
+
+  let painting = false, activeRow = null;
+
+  function paintAt(cx, cy) {
+    for (const def of sliderDefs) {
+      if (!def.key) continue;
+      const track = document.querySelector('#sl-' + def.key + ' .sl-track');
+      const rect = track.getBoundingClientRect();
+      if (cy >= rect.top - 4 && cy <= rect.bottom + 4) {
+        const t = clamp((cx - rect.left) / rect.width, 0, 1);
+        C[def.key] = def.round
+          ? Math.round(def.min + (def.max - def.min) * t)
+          : def.min + (def.max - def.min) * t;
+        updateSlider(def);
+        if (activeRow && activeRow !== def.key) {
+          const prev = document.getElementById('sl-' + activeRow);
+          if (prev) prev.classList.remove('active');
+        }
+        document.getElementById('sl-' + def.key).classList.add('active');
+        activeRow = def.key;
+        break;
+      }
+    }
+  }
+
+  function stopPaint() {
+    painting = false;
+    if (activeRow) {
+      const el = document.getElementById('sl-' + activeRow);
+      if (el) el.classList.remove('active');
+      activeRow = null;
+    }
+    saveParams();
+  }
+
+  panel.addEventListener('mousedown', e => { painting = true; paintAt(e.clientX, e.clientY); e.preventDefault(); });
+  addEventListener('mousemove', e => { if (painting) paintAt(e.clientX, e.clientY); });
+  addEventListener('mouseup', stopPaint);
+
+  panel.addEventListener('touchstart', e => {
+    painting = true; paintAt(e.touches[0].clientX, e.touches[0].clientY);
+    e.preventDefault(); e.stopPropagation();
+  }, { passive: false });
+  panel.addEventListener('touchmove', e => {
+    if (painting) paintAt(e.touches[0].clientX, e.touches[0].clientY);
+    e.preventDefault(); e.stopPropagation();
+  }, { passive: false });
+  panel.addEventListener('touchend', e => { stopPaint(); e.stopPropagation(); });
+
+  panel.addEventListener('mouseenter', () => { ptr.over = false; });
+  document.getElementById('panel-x').addEventListener('click', togglePanel);
+  btn.addEventListener('click', togglePanel);
+}
+
+function togglePanel() {
+  const panel = document.getElementById('panel');
+  const btn = document.getElementById('panel-btn');
+  panel.classList.toggle('hidden');
+  const open = !panel.classList.contains('hidden');
+  btn.style.display = open ? 'none' : 'flex';
+  if (open) updateAllSliders();
+}
+
+// ═══════════════════════════════════════════════
+// KEYBOARD
+// ═══════════════════════════════════════════════
+
+addEventListener('keydown', e => {
+  switch (e.key.toLowerCase()) {
+    case 'h': document.getElementById('help').classList.toggle('hidden'); break;
+    case ' ': e.preventDefault(); paused = !paused; break;
+    case 'r': generate(); break;
+    case 'c': si = (si + 1) % schemes.length; recolor(); saveParams(); break;
+    case '+': case '=': C.count = Math.min(C.count + 10, 1000); splitCells(10); saveParams(); break;
+    case '-': case '_': C.count = Math.max(C.count - 10, 15); mergeCells(10); saveParams(); break;
+    case ']': C.count = Math.min(C.count + 1, 1000); splitCells(1); saveParams(); break;
+    case '[': C.count = Math.max(C.count - 1, 15); mergeCells(1); saveParams(); break;
+    case 'f':
+      document.fullscreenElement
+        ? document.exitFullscreen()
+        : document.documentElement.requestFullscreen();
+      break;
+    case 'p': togglePanel(); break;
+  }
+});
+
+// ═══════════════════════════════════════════════
+// SPLIT / MERGE — triggered by +/- cell count
+// ═══════════════════════════════════════════════
+
+function splitCells(n) {
+  const cells = voronoi();
+  // Pick n random cells to split (skip cells already splitting/merging)
+  const candidates = [];
+  for (let i = 0; i < seeds.length; i++) {
+    if (!seeds[i].splitting && !seeds[i].merging) candidates.push(i);
+  }
+  // Shuffle and take n
+  for (let i = candidates.length - 1; i > 0; i--) {
+    const j = Math.random() * (i + 1) | 0;
+    const tmp = candidates[i]; candidates[i] = candidates[j]; candidates[j] = tmp;
+  }
+  const picks = candidates.slice(0, n);
+
+  for (const splitIdx of picks) {
+    if (seeds.length >= 1000) break;
+    const parent = seeds[splitIdx];
+    const polyP = cells[splitIdx];
+    const cP = centroid(polyP);
+    const parentR = cP ? minVertDist(polyP, cP.x, cP.y) * C.circleRatio : 8;
+    const startX = parent.x, startY = parent.y;
+
+    const offset = 30 + Math.random() * 20 + parentR * 0.5;
+    const angle = Math.random() * Math.PI * 2;
+    const child = makeSeed(
+      clamp(parent.x + Math.cos(angle) * offset, 5, W - 5),
+      clamp(parent.y + Math.sin(angle) * offset, 5, H - 5)
+    );
+    child.rx = child.x; child.ry = child.y;
+    child.col = [...parent.col];
+    child.warmth = parent.warmth * 0.5;
+    parent.warmth *= 0.5;
+    parent.x = clamp(parent.x - Math.cos(angle) * offset, 5, W - 5);
+    parent.y = clamp(parent.y - Math.sin(angle) * offset, 5, H - 5);
+    parent.rx = parent.x; parent.ry = parent.y;
+
+    // Hide both nuclei during animation
+    parent.splitting = true;
+    child.splitting = true;
+    seeds.push(child);
+
+    // Estimate target radii (each gets ~half the area)
+    const childR = parentR * Math.sqrt(0.5);
+
+    splitAnims.push({
+      // Starting point (parent's original position)
+      sx: startX, sy: startY,
+      // Ghost positions driven by spring physics
+      ax: startX, ay: startY, avx: 0, avy: 0,
+      bx: startX, by: startY, bvx: 0, bvy: 0,
+      // Fixed target destinations
+      tx_a: parent.x, ty_a: parent.y,
+      tx_b: child.x, ty_b: child.y,
+      // References to the two resulting seeds
+      seedA: parent, seedB: child,
+      // Colors
+      colA: [...parent.col], colB: [...child.col],
+      // Radii
+      parentR,
+      targetR: childR,
+      // Animation state
+      t: 0,
+      duration: C.splitDuration + Math.random() * C.splitDuration * 0.4,
+      wobblePhase: Math.random() * Math.PI * 2,
+      wobbleFreq: 2.5 + Math.random() * 2,
+    });
+  }
+  rebuildNeighbors();
+  recolor();
+}
+
+// ═══════════════════════════════════════════════
+// SPLIT ANIMATION
+// ═══════════════════════════════════════════════
+
+let splitAnims = [];
+
+// Resolve any in-flight split animation involving the given seed,
+// returns the current visual position of that seed's ghost
+function resolveSplitFor(seed) {
+  for (let i = splitAnims.length - 1; i >= 0; i--) {
+    const s = splitAnims[i];
+    if (s.seedA === seed) {
+      const pos = { x: s.ax, y: s.ay };
+      s.seedA.x = s.ax; s.seedA.y = s.ay;
+      s.seedA.rx = s.ax; s.seedA.ry = s.ay;
+      s.seedA.splitting = false;
+      s.seedB.x = s.bx; s.seedB.y = s.by;
+      s.seedB.rx = s.bx; s.seedB.ry = s.by;
+      s.seedB.splitting = false;
+      splitAnims.splice(i, 1);
+      return pos;
+    }
+    if (s.seedB === seed) {
+      const pos = { x: s.bx, y: s.by };
+      s.seedA.x = s.ax; s.seedA.y = s.ay;
+      s.seedA.rx = s.ax; s.seedA.ry = s.ay;
+      s.seedA.splitting = false;
+      s.seedB.x = s.bx; s.seedB.y = s.by;
+      s.seedB.rx = s.bx; s.seedB.ry = s.by;
+      s.seedB.splitting = false;
+      splitAnims.splice(i, 1);
+      return pos;
+    }
+  }
+  return { x: seed.x, y: seed.y };
+}
+
+function updateSplitAnims(dt, cells) {
+  for (let i = splitAnims.length - 1; i >= 0; i--) {
+    const s = splitAnims[i];
+    s.t += dt / s.duration;
+
+    if (s.t >= 1) {
+      // Snap seeds to actual centroid positions (pop into place)
+      s.seedA.x = s.tx_a; s.seedA.y = s.ty_a;
+      s.seedA.rx = s.tx_a; s.seedA.ry = s.ty_a;
+      s.seedB.x = s.tx_b; s.seedB.y = s.ty_b;
+      s.seedB.rx = s.tx_b; s.seedB.ry = s.ty_b;
+      s.seedA.splitting = false;
+      s.seedB.splitting = false;
+      s.seedA.warmth = Math.min(1, s.seedA.warmth + 0.2);
+      s.seedB.warmth = Math.min(1, s.seedB.warmth + 0.2);
+      // Spawn a subtle pop at each child nucleus
+      if (C.popIntensity > 0.01) {
+        const popI = C.popIntensity * 0.5;
+        for (const pos of [{x: s.tx_a, y: s.ty_a}, {x: s.tx_b, y: s.ty_b}]) {
+          popEffects.push({
+            x: pos.x, y: pos.y,
+            col: [...s.colA],
+            t: 0,
+            duration: 0.25,
+            maxR: s.targetR * (1.5 + popI * 1.5),
+            intensity: popI,
+          });
+        }
+      }
+      splitAnims.splice(i, 1);
+      continue;
+    }
+
+    // Track live centroids of each child's Voronoi cell
+    const idxA = seeds.indexOf(s.seedA);
+    const idxB = seeds.indexOf(s.seedB);
+    if (idxA >= 0 && cells && cells[idxA] && cells[idxA].length >= 3) {
+      const c = centroid(cells[idxA]);
+      if (c) { s.tx_a = c.x; s.ty_a = c.y; }
+    }
+    if (idxB >= 0 && cells && cells[idxB] && cells[idxB].length >= 3) {
+      const c = centroid(cells[idxB]);
+      if (c) { s.tx_b = c.x; s.ty_b = c.y; }
+    }
+
+    // Slow-start ease: nuclei stretch slowly at first, then accelerate apart
+    const ease = s.t * s.t * (3 - 2 * s.t); // smoothstep
+
+    // Ghosts target 50%→80% of the way to centroid (under tension), pop on completion
+    const tensionFrac = 0.5 + ease * 0.3;
+    const effTxA = s.sx + (s.tx_a - s.sx) * tensionFrac;
+    const effTyA = s.sy + (s.ty_a - s.sy) * tensionFrac;
+    const effTxB = s.sx + (s.tx_b - s.sx) * tensionFrac;
+    const effTyB = s.sy + (s.ty_b - s.sy) * tensionFrac;
+
+    const pull = 0.03 + ease * 0.14;
+
+    const wobbleAmp = (1 - ease) * 10;
+    const wobble = Math.sin(s.wobblePhase + s.t * s.wobbleFreq * Math.PI * 2) * wobbleAmp;
+
+    // Ghost A toward its tension target
+    const dax = effTxA - s.ax, day = effTyA - s.ay;
+    const daDist = Math.sqrt(dax * dax + day * day);
+    const perpAx = daDist > 0.1 ? -day / daDist : 0;
+    const perpAy = daDist > 0.1 ? dax / daDist : 0;
+    s.avx = (s.avx + dax * pull) * 0.88 + perpAx * wobble * 0.05;
+    s.avy = (s.avy + day * pull) * 0.88 + perpAy * wobble * 0.05;
+    s.ax += s.avx;
+    s.ay += s.avy;
+
+    // Ghost B toward its tension target
+    const dbx = effTxB - s.bx, dby = effTyB - s.by;
+    const dbDist = Math.sqrt(dbx * dbx + dby * dby);
+    const perpBx = dbDist > 0.1 ? -dby / dbDist : 0;
+    const perpBy = dbDist > 0.1 ? dbx / dbDist : 0;
+    const wobbleB = Math.sin(s.wobblePhase + Math.PI + s.t * s.wobbleFreq * Math.PI * 2) * wobbleAmp;
+    s.bvx = (s.bvx + dbx * pull) * 0.88 + perpBx * wobbleB * 0.05;
+    s.bvy = (s.bvy + dby * pull) * 0.88 + perpBy * wobbleB * 0.05;
+    s.bx += s.bvx;
+    s.by += s.bvy;
+  }
+}
+
+function renderSplitAnims() {
+  const sc = schemes[si];
+  for (const s of splitAnims) {
+    const ease = s.t * s.t * (3 - 2 * s.t); // smoothstep
+    const alpha = 0.85;
+
+    // Radius: shrink from parent size to child size
+    const r = lerp(s.parentR, s.targetR, ease);
+
+    // Axis between the two ghosts
+    const dx = s.bx - s.ax, dy = s.by - s.ay;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx);
+
+    // Wobble stretch
+    const wobbleAmp = (1 - ease) * 0.2;
+    const wobbleStretch = 1 + Math.sin(s.wobblePhase + s.t * s.wobbleFreq * Math.PI * 2) * wobbleAmp;
+    const wobbleStretchB = 1 + Math.sin(s.wobblePhase + Math.PI + s.t * s.wobbleFreq * Math.PI * 2) * wobbleAmp;
+
+    // Draw gooey tendril between nuclei — stretchy stringy connection
+    if (dist > r * 0.3) {
+      // Tendril fades later for more gooey persistence
+      const tendrilAlpha = Math.pow(1 - ease, 1.5) * 0.75;
+      const col = lerp3(s.colA, s.colB, 0.5);
+      // Base width shrinks as cells separate — pinches thinner in the middle
+      const baseWidth = r * (1 - ease * 0.5);
+      const pinch = Math.max(0.03, 1 - dist / (r * 6)); // how thin the middle gets
+
+      // Perpendicular direction
+      const nx = dist > 0.1 ? -dy / dist : 0;
+      const ny = dist > 0.1 ? dx / dist : 0;
+
+      // Wobble sag at the midpoint — more pronounced
+      const sag = Math.sin(s.wobblePhase + s.t * s.wobbleFreq * Math.PI) * (1 - ease * 0.5) * 18;
+      const midX = (s.ax + s.bx) * 0.5 + nx * sag;
+      const midY = (s.ay + s.by) * 0.5 + ny * sag;
+      const midWidth = baseWidth * pinch;
+
+      // Main gooey body — half A: wide at A, pinched middle, tapers to B
+      ctx.fillStyle = rgba(lerp3(s.colA, sc.warm, 0.3), tendrilAlpha);
+      ctx.beginPath();
+      ctx.moveTo(s.ax + nx * baseWidth, s.ay + ny * baseWidth);
+      ctx.quadraticCurveTo(midX + nx * midWidth, midY + ny * midWidth, s.bx, s.by);
+      ctx.quadraticCurveTo(midX - nx * midWidth, midY - ny * midWidth, s.ax - nx * baseWidth, s.ay - ny * baseWidth);
+      ctx.closePath();
+      ctx.fill();
+
+      // Half B: wide at B, pinched middle, tapers to A
+      ctx.fillStyle = rgba(lerp3(s.colB, sc.warm, 0.3), tendrilAlpha);
+      ctx.beginPath();
+      ctx.moveTo(s.bx + nx * baseWidth, s.by + ny * baseWidth);
+      ctx.quadraticCurveTo(midX + nx * midWidth, midY + ny * midWidth, s.ax, s.ay);
+      ctx.quadraticCurveTo(midX - nx * midWidth, midY - ny * midWidth, s.bx - nx * baseWidth, s.by - ny * baseWidth);
+      ctx.closePath();
+      ctx.fill();
+
+      // Stringy sub-tendrils — thin strands that linger and wobble
+      const strandCount = 3;
+      for (let st = 0; st < strandCount; st++) {
+        const stPhase = s.wobblePhase + st * Math.PI * 0.7;
+        const stSag = Math.sin(stPhase + s.t * s.wobbleFreq * Math.PI * 1.3) * (1 - ease * 0.3) * 14;
+        const stOff = (st - 1) * baseWidth * 0.3;
+        const stAlpha = tendrilAlpha * (0.3 + 0.2 * Math.sin(stPhase + s.t * 3));
+        ctx.strokeStyle = rgba(lerp3(col, [255, 255, 255], 0.3), stAlpha);
+        ctx.lineWidth = Math.max(0.3, (1 - ease) * 1.5);
+        ctx.beginPath();
+        ctx.moveTo(s.ax + nx * stOff, s.ay + ny * stOff);
+        ctx.quadraticCurveTo(
+          midX + nx * (stSag + stOff * 0.3),
+          midY + ny * (stSag + stOff * 0.3),
+          s.bx + nx * stOff, s.by + ny * stOff
+        );
+        ctx.stroke();
+      }
+
+      // Bright glow centerline
+      ctx.strokeStyle = rgba(lerp3(col, [255, 255, 255], 0.5), tendrilAlpha * 0.4);
+      ctx.lineWidth = Math.max(0.5, midWidth * 0.6);
+      ctx.beginPath();
+      ctx.moveTo(s.ax, s.ay);
+      ctx.quadraticCurveTo(midX, midY, s.bx, s.by);
+      ctx.stroke();
+    }
+
+    // Draw nucleus A (stretched along split axis)
+    const stretchA = 1 + ease * 0.3;
+    const colA = lerp3(s.colA, sc.warm, 0.3);
+    drawMergeNucleus(s.ax, s.ay, r, angle, stretchA * wobbleStretch, colA, alpha);
+
+    // Draw nucleus B
+    const colB = lerp3(s.colB, sc.warm, 0.3);
+    drawMergeNucleus(s.bx, s.by, r, angle + Math.PI, wobbleStretchB * stretchA, colB, alpha);
+  }
+}
+
+function mergeCells(n) {
+  const cells = voronoi();
+  const absorbed = new Set();
+  for (let k = 0; k < n && seeds.length - absorbed.size > 15; k++) {
+    // Pick a random non-absorbed seed, merge with its nearest neighbor
+    const candidates = [];
+    for (let i = 0; i < seeds.length; i++) {
+      if (!absorbed.has(i)) candidates.push(i);
+    }
+    if (candidates.length < 2) break;
+
+    // Shuffle candidates and find first one with an available neighbor
+    let mergeI = -1, mergeJ = -1, minDist = Infinity;
+    const startIdx = Math.random() * candidates.length | 0;
+    for (let attempt = 0; attempt < candidates.length; attempt++) {
+      const i = candidates[(startIdx + attempt) % candidates.length];
+      if (!nbrs[i]) continue;
+      // Find nearest non-absorbed neighbor
+      let bestD = Infinity, bestJ = -1;
+      for (const j of nbrs[i]) {
+        if (j >= seeds.length || absorbed.has(j) || j === i) continue;
+        const d = Math.hypot(seeds[i].x - seeds[j].x, seeds[i].y - seeds[j].y);
+        if (d < bestD) { bestD = d; bestJ = j; }
+      }
+      if (bestJ >= 0) {
+        mergeI = i; mergeJ = bestJ; minDist = bestD;
+        break;
+      }
+    }
+    if (mergeI < 0) break;
+    const a = seeds[mergeI], b = seeds[mergeJ];
+    // Resolve any in-flight split animations, get actual visual positions
+    const posA = resolveSplitFor(a);
+    const posB = resolveSplitFor(b);
+    // Capture nucleus radius for the absorbed cell
+    const polyB = cells[mergeJ];
+    const cB = centroid(polyB);
+    const rB = cB ? minVertDist(polyB, cB.x, cB.y) * C.circleRatio : 8;
+
+    if (!a.merging) {
+      // First merge for this survivor — also animate its nucleus
+      const polyA = cells[mergeI];
+      const cA = centroid(polyA);
+      const rA = cA ? minVertDist(polyA, cA.x, cA.y) * C.circleRatio : 8;
+      // Target radius based on combined area
+      const areaA = polyArea(polyA), areaB = polyArea(polyB);
+      const targetR = rA * Math.sqrt((areaA + areaB) / areaA);
+      mergeAnims.push({
+        ax: posA.x, ay: posA.y, avx: 0, avy: 0, acol: [...a.col], ar: rA,
+        bx: posB.x, by: posB.y, bvx: 0, bvy: 0, bcol: [...b.col], br: rB,
+        target: a, targetR,
+        t: 0,
+        duration: C.mergeDuration + Math.random() * C.mergeDuration * 0.4,
+        wobblePhase: Math.random() * Math.PI * 2,
+        wobbleFreq: 1.2 + Math.random() * 0.8,
+        startDist: minDist,
+      });
+    } else {
+      // Survivor already merging — just add another ghost converging to it
+      const targetR = rB * 1.3;
+      mergeAnims.push({
+        ax: null, ay: null, avx: 0, avy: 0, acol: null, ar: 0,
+        bx: posB.x, by: posB.y, bvx: 0, bvy: 0, bcol: [...b.col], br: rB,
+        target: a, targetR,
+        t: 0,
+        duration: C.mergeDuration + Math.random() * C.mergeDuration * 0.4,
+        wobblePhase: Math.random() * Math.PI * 2,
+        wobbleFreq: 1.2 + Math.random() * 0.8,
+        startDist: minDist,
+      });
+    }
+
+    a.rx = (a.rx + b.rx) * 0.5;
+    a.ry = (a.ry + b.ry) * 0.5;
+    a.warmth = Math.min(1, a.warmth + b.warmth * 0.5);
+    a.merging = true;
+
+    // Re-target any in-flight animations that pointed at the absorbed cell
+    for (const anim of mergeAnims) {
+      if (anim.target === b) anim.target = a;
+    }
+
+    absorbed.add(mergeJ);
+  }
+  // Remove absorbed seeds in reverse order to preserve indices
+  const toRemove = [...absorbed].sort((a, b) => b - a);
+  for (const idx of toRemove) {
+    seeds.splice(idx, 1);
+  }
+  rebuildNeighbors();
+  recolor();
+}
+
+// ═══════════════════════════════════════════════
+// MERGE ANIMATION
+// ═══════════════════════════════════════════════
+
+let mergeAnims = [];
+
+function updateMergeAnims(dt, cells) {
+  for (let i = mergeAnims.length - 1; i >= 0; i--) {
+    const m = mergeAnims[i];
+    m.t += dt / m.duration;
+
+    if (m.t >= 1) {
+      mergeAnims.splice(i, 1);
+      const stillMerging = mergeAnims.some(other => other.target === m.target);
+      if (!stillMerging) {
+        m.target.warmth = Math.min(1, m.target.warmth + 0.4);
+        m.target.merging = false;
+        // Spawn pop effect at the centroid
+        if (C.popIntensity > 0.01) {
+          popEffects.push({
+            x: m.cx || m.target.x,
+            y: m.cy || m.target.y,
+            col: [...m.target.col],
+            t: 0,
+            duration: 0.33,
+            maxR: m.targetR * (2 + C.popIntensity * 2),
+            intensity: C.popIntensity,
+          });
+        }
+      }
+      continue;
+    }
+
+    const ease = m.t * m.t * (3 - 2 * m.t);
+    const pull = 0.03;
+
+    // Find the centroid of the survivor's Voronoi cell — this is where the nucleus will appear
+    const ti = seeds.indexOf(m.target);
+    let tx = m.target.x, ty = m.target.y;
+    if (ti >= 0 && cells && cells[ti] && cells[ti].length >= 3) {
+      const c = centroid(cells[ti]);
+      if (c) { tx = c.x; ty = c.y; }
+    }
+    m.cx = tx; m.cy = ty;
+
+    // Wobble perpendicular to the convergence axis (ramps in gently)
+    const wobbleRamp = Math.min(m.t * 4, 1); // soft start over first 25% of animation
+    const wobbleAmp = wobbleRamp * (1 - ease) * Math.min(m.startDist * 0.35, 25);
+    const wobble = Math.sin(m.wobblePhase + m.t * m.wobbleFreq * Math.PI * 2) * wobbleAmp;
+
+    // Orbital strength — gentle early, fades to zero
+    const orbital = (1 - ease) * (1 - ease) * C.mergeOrbital;
+
+    // Update ghost A toward survivor (if present)
+    if (m.ax !== null) {
+      const dax = tx - m.ax, day = ty - m.ay;
+      const daDist = Math.sqrt(dax * dax + day * day);
+      const perpAx = daDist > 0.1 ? -day / daDist : 0;
+      const perpAy = daDist > 0.1 ? dax / daDist : 0;
+      // Tangential orbit + radial pull + wobble
+      m.avx = (m.avx + dax * pull + perpAx * daDist * orbital) * 0.85 + perpAx * wobble * 0.1;
+      m.avy = (m.avy + day * pull + perpAy * daDist * orbital) * 0.85 + perpAy * wobble * 0.1;
+      m.ax += m.avx;
+      m.ay += m.avy;
+    }
+
+    // Update ghost B toward survivor (opposite wobble phase, opposite orbit)
+    const dbx = tx - m.bx, dby = ty - m.by;
+    const dbDist = Math.sqrt(dbx * dbx + dby * dby);
+    const perpBx = dbDist > 0.1 ? -dby / dbDist : 0;
+    const perpBy = dbDist > 0.1 ? dbx / dbDist : 0;
+    const wobbleB = Math.sin(m.wobblePhase + Math.PI + m.t * m.wobbleFreq * Math.PI * 2) * wobbleAmp;
+    m.bvx = (m.bvx + dbx * pull + perpBx * dbDist * orbital) * 0.85 + perpBx * wobbleB * 0.1;
+    m.bvy = (m.bvy + dby * pull + perpBy * dbDist * orbital) * 0.85 + perpBy * wobbleB * 0.1;
+    m.bx += m.bvx;
+    m.by += m.bvy;
+  }
+}
+
+function renderMergeAnims() {
+  const sc = schemes[si];
+  for (const m of mergeAnims) {
+    const ease = m.t * m.t * (3 - 2 * m.t);
+    const alpha = 0.8;
+    const hasA = m.ax !== null;
+
+    // Compute axis for wobble stretch
+    const refX = hasA ? m.ax : (m.cx || m.target.x);
+    const refY = hasA ? m.ay : (m.cy || m.target.y);
+    const dx = m.bx - refX, dy = m.by - refY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx);
+    const wobbleStretch = 1 + Math.sin(m.wobblePhase + m.t * m.wobbleFreq * Math.PI * 2) * 0.6 * (1 - ease);
+
+    // Draw ghost A, growing toward target radius (if present)
+    if (hasA) {
+      const rA = lerp(m.ar, m.targetR * 0.8, ease);
+      const colA = lerp3(m.acol, sc.warm, 0.4 + ease * 0.3);
+      drawMergeNucleus(m.ax, m.ay, rA, angle, wobbleStretch, colA, alpha);
+    }
+
+    // Draw ghost B, growing toward target radius
+    const rB = lerp(m.br, m.targetR * 0.8, ease);
+    const colB = lerp3(m.bcol, sc.warm, 0.4 + ease * 0.3);
+    const wobbleStretchB = 1 + Math.sin(m.wobblePhase + Math.PI + m.t * m.wobbleFreq * Math.PI * 2) * 0.6 * (1 - ease);
+    drawMergeNucleus(m.bx, m.by, rB, angle + Math.PI, wobbleStretchB, colB, alpha);
+
+    // Tendril connecting ghost B to ghost A (or to survivor position)
+    if (dist > 2) {
+      const midX = (refX + m.bx) * 0.5;
+      const midY = (refY + m.by) * 0.5;
+      const sag = Math.sin(m.wobblePhase + m.t * m.wobbleFreq * Math.PI) * (1 - ease) * 10;
+      const perpX = dist > 0.1 ? -dy / dist : 0;
+      const perpY = dist > 0.1 ? dx / dist : 0;
+
+      const colT = hasA ? lerp3(m.acol, m.bcol, 0.5) : m.bcol;
+      ctx.strokeStyle = rgba(lerp3(colT, sc.warm, 0.4), alpha * 0.5);
+      ctx.lineWidth = 1.5 + ease * 2;
+      ctx.beginPath();
+      ctx.moveTo(refX, refY);
+      ctx.quadraticCurveTo(midX + perpX * sag, midY + perpY * sag, m.bx, m.by);
+      ctx.stroke();
+    }
+  }
+}
+
+function drawMergeNucleus(x, y, r, angle, stretch, col, alpha) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.scale(stretch, 1 / stretch);
+
+  // Outer glow (matches pass 4 halo)
+  ctx.fillStyle = rgba(col, alpha * 0.12);
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 1.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Main dot (matches pass 4 main)
+  ctx.fillStyle = rgba(col, alpha * 0.7);
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Bright core (matches pass 4 core)
+  ctx.fillStyle = rgba(lerp3(col, [255, 255, 255], 0.3), alpha * 0.8);
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.35, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function rebuildNeighbors() {
+  nbrs = seeds.map((s, i) => findNeighbors(i));
+}
+
+// ═══════════════════════════════════════════════
+// POP EFFECTS
+// ═══════════════════════════════════════════════
+
+let popEffects = [];
+
+function updatePopEffects(dt) {
+  for (let i = popEffects.length - 1; i >= 0; i--) {
+    popEffects[i].t += dt / popEffects[i].duration;
+    if (popEffects[i].t >= 1) popEffects.splice(i, 1);
+  }
+}
+
+function renderPopEffects() {
+  const sc = schemes[si];
+  for (const p of popEffects) {
+    const t = p.t;
+    const intensity = p.intensity || 0.7;
+    const easeOut = 1 - (1 - t) * (1 - t);
+    const fadeOut = 1 - t;
+    const col = lerp3(p.col, sc.warm, 0.5);
+
+    // Expanding bright flash
+    const flashR = p.maxR * 0.6 * easeOut;
+    const flashAlpha = fadeOut * fadeOut * 0.4 * intensity;
+    ctx.fillStyle = rgba(lerp3(col, [255, 255, 255], 0.6), flashAlpha);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, flashR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ring 1 — fast expanding
+    const r1 = p.maxR * easeOut;
+    const ring1Alpha = fadeOut * 0.5 * intensity;
+    ctx.strokeStyle = rgba(col, ring1Alpha);
+    ctx.lineWidth = Math.max(0.5, (1 - easeOut) * 3);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r1, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Ring 2 — slower, smaller
+    const ease2 = 1 - (1 - t * 0.7) * (1 - t * 0.7);
+    const r2 = p.maxR * 0.6 * ease2;
+    const ring2Alpha = fadeOut * 0.35 * intensity;
+    ctx.strokeStyle = rgba(lerp3(col, [255, 255, 255], 0.3), ring2Alpha);
+    ctx.lineWidth = Math.max(0.5, (1 - ease2) * 2);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r2, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+// ═══════════════════════════════════════════════
+// FRAME LOOP
+// ═══════════════════════════════════════════════
+
+let fc = 0, ft = 0, fps = 0;
+const fpsEl = document.getElementById('fps-display');
+
+function frame(t) {
+  fc++;
+  if (t - ft >= 1000) {
+    fps = Math.round(fc * 1000 / (t - ft));
+    fc = 0; ft = t;
+  }
+  fpsEl.textContent = `${fps} fps · ${seeds.length} cells`;
+
+  if (!paused) {
+    physics(t);
+    let cells = voronoi();
+    updateMergeAnims(1 / 60, cells);
+    updateSplitAnims(1 / 60, cells);
+    updatePopEffects(1 / 60);
+
+    // Auto-mitosis: random chance to split or merge each frame
+    if (C.autoMitosis > 0 && Math.random() < C.autoMitosis * 0.02) {
+      if (Math.random() < 0.5 && seeds.length < 1000) {
+        splitCells(1);
+        cells = voronoi();
+      } else if (seeds.length > 15) {
+        mergeCells(1);
+        cells = voronoi();
+      }
+    }
+
+    render(cells);
+    renderPopEffects();
+    renderMergeAnims();
+    renderSplitAnims();
+  }
+
+  requestAnimationFrame(frame);
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+
+addEventListener('resize', () => { resize(); });
+addEventListener('beforeunload', saveParams);
+resize();
+loadParams();
+generate();
+buildPanel();
+setTimeout(() => document.getElementById('help').classList.add('hidden'), 5000);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
