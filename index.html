@@ -3,34 +3,188 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>sneezeburger</title>
+  <title>toys</title>
   <style>
     body {
       font-family: system-ui, -apple-system, sans-serif;
-      max-width: 600px;
+      max-width: 700px;
       margin: 4rem auto;
       padding: 0 1rem;
       line-height: 1.6;
+      color: #222;
     }
-    a {
-      display: block;
-      margin: 0.5rem 0;
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 1.5rem 0;
+    }
+
+    .filter-btn {
+      background: #eee;
+      border: 1px solid #ccc;
+      border-radius: 1rem;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .filter-btn:hover {
+      background: #ddd;
+    }
+
+    .filter-btn.active {
+      background: #222;
+      color: #fff;
+      border-color: #222;
+    }
+
+    .app-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .app-item {
+      border-bottom: 1px solid #eee;
+      padding: 1rem 0;
+    }
+
+    .app-item:last-child {
+      border-bottom: none;
+    }
+
+    .app-item.hidden {
+      display: none;
+    }
+
+    .app-item a {
+      font-weight: 600;
+      text-decoration: none;
+      color: #0366d6;
+      font-size: 1.1rem;
+    }
+
+    .app-item a:hover {
+      text-decoration: underline;
+    }
+
+    .app-summary {
+      margin: 0.25rem 0 0.4rem;
+      color: #555;
+      font-size: 0.95rem;
+    }
+
+    .app-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .tag {
+      background: #f0f0f0;
+      border-radius: 0.75rem;
+      padding: 0.1rem 0.5rem;
+      font-size: 0.75rem;
+      color: #666;
     }
   </style>
 </head>
 <body>
   <h1>silly projects</h1>
-  <nav>
-    <a href="atc/index.html">atc</a>
-    <a href="desert-ufo/index.html">desert-ufo</a>
-    <a href="fluid/index.html">fluid</a>
-    <a href="indie-rock/index.html">indie-rock</a>
-    <a href="jenga/index.html">jenga</a>
-    <a href="stereoscopy/cosmos/index.html">stereoscopy/cosmos</a>
-    <a href="stereoscopy/intergalactic-conflict/index.html">stereoscopy/intergalactic-conflict</a>
-    <a href="torus/canvas.html">torus/canvas</a>
-    <a href="torus/dom.html">torus/dom</a>
-    <a href="voronoi/index.html">voronoi</a>
-  </nav>
+  <p>a gallery of claudiocy</p>
+
+  <div class="filters"></div>
+
+  <ul class="app-list">
+    <li class="app-item" data-tags="2d">
+      <a href="atc/index.html">atc</a>
+      <p class="app-summary">fake Air Traffic Controller viz</p>
+    </li>
+    <li class="app-item" data-tags="2d">
+      <a href="desert-ufo/index.html">desert-ufo</a>
+      <p class="app-summary">i think the prompt for this was something like "alien ufo fish abduction mesa horse"</p>
+    </li>
+    <li class="app-item" data-tags="interactive 2d">
+      <a href="fluid/index.html">fluid</a>
+      <p class="app-summary">a liquid inky painty sort of thing</p>
+    </li>
+    <li class="app-item" data-tags="2d">
+      <a href="indie-rock/index.html">indie-rock</a>
+      <p class="app-summary">indie rock?</p>
+    </li>
+    <li class="app-item" data-tags="interactive 3d">
+      <a href="jenga/index.html">jenga</a>
+      <p class="app-summary">its that block-pulling game you love, except unplayable</p>
+    </li>
+    <li class="app-item" data-tags="interactive 3d stereoscopic">
+      <a href="stereoscopy/cosmos/index.html">stereoscopy / cosmos</a>
+      <p class="app-summary">cross your eyes!</p>
+    </li>
+    <li class="app-item" data-tags="interactive 3d stereoscopic">
+      <a href="stereoscopy/intergalactic-conflict/index.html">stereoscopy / intergalactic-conflict</a>
+      <p class="app-summary">cross your eyes some more!</p>
+    </li>
+    <li class="app-item" data-tags="2d 3d">
+      <a href="torus/canvas.html">torus / canvas</a>
+      <p class="app-summary">Rotating ASCII torus rendered on canvas.</p>
+    </li>
+    <li class="app-item" data-tags="2d 3d">
+      <a href="torus/dom.html">torus / dom</a>
+      <p class="app-summary">Rotating ASCII torus but manipulating DOM elements instead of using a canvas.</p>
+    </li>
+    <li class="app-item" data-tags="interactive 2d">
+      <a href="voronoi/index.html">voronoi</a>
+      <p class="app-summary">interactive cell thingies</p>
+    </li>
+  </ul>
+
+  <script>
+    const TAG_LABELS = { '2d': '2D', '3d': '3D' };
+    const filtersDiv = document.querySelector('.filters');
+    const items = document.querySelectorAll('.app-item');
+
+    // Collect all unique tags from items
+    const allTags = new Set();
+    items.forEach(item => item.dataset.tags.split(' ').forEach(t => allTags.add(t)));
+
+    // Generate filter buttons
+    function addFilterBtn(filter, label, active) {
+      const btn = document.createElement('button');
+      btn.className = 'filter-btn' + (active ? ' active' : '');
+      btn.dataset.filter = filter;
+      btn.textContent = label;
+      filtersDiv.appendChild(btn);
+    }
+    addFilterBtn('all', 'all', true);
+    allTags.forEach(tag => addFilterBtn(tag, TAG_LABELS[tag] || tag, false));
+
+    // Generate tag badges from data-tags
+    items.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'app-tags';
+      item.dataset.tags.split(' ').forEach(tag => {
+        const span = document.createElement('span');
+        span.className = 'tag';
+        span.textContent = TAG_LABELS[tag] || tag;
+        div.appendChild(span);
+      });
+      item.appendChild(div);
+    });
+
+    // Filter logic
+    filtersDiv.addEventListener('click', e => {
+      const btn = e.target.closest('.filter-btn');
+      if (!btn) return;
+      filtersDiv.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const filter = btn.dataset.filter;
+      items.forEach(item => {
+        item.classList.toggle('hidden', filter !== 'all' && !item.dataset.tags.includes(filter));
+      });
+    });
+  </script>
 </body>
 </html>
