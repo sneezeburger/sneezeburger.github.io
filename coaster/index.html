@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Roller Coaster Simulator</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow: hidden; background: #000; font-family: 'Georgia', serif; }
+#overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.95) 100%);
+  z-index: 100; transition: opacity 1s;
+}
+#overlay.hidden { opacity: 0; pointer-events: none; }
+#overlay h1 {
+  font-size: 4em; color: #f4e4c1; text-shadow: 0 0 20px rgba(255,200,100,0.5);
+  margin-bottom: 20px; letter-spacing: 3px;
+}
+#overlay p { color: #ccc; font-size: 1.2em; margin-bottom: 40px; }
+#rideBtn {
+  padding: 20px 60px; font-size: 1.5em; font-family: 'Georgia', serif;
+  background: linear-gradient(135deg, #8B4513, #D2691E); color: #f4e4c1;
+  border: 3px solid #f4e4c1; border-radius: 8px; cursor: pointer;
+  transition: all 0.3s; text-transform: uppercase; letter-spacing: 2px;
+}
+#rideBtn:hover { background: linear-gradient(135deg, #D2691E, #FF8C00); transform: scale(1.05); }
+#speed {
+  position: fixed; bottom: 20px; left: 20px; color: #fff; font-size: 1.2em;
+  z-index: 50; text-shadow: 0 0 5px #000; opacity: 0; transition: opacity 1s;
+}
+#speed.visible { opacity: 1; }
+canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="overlay">
+  <h1>🎢 Wild Forest Coaster</h1>
+  <p>A thrilling ride through enchanted woods and past a roaring waterfall</p>
+  <button id="rideBtn" onclick="startRide()">🎟️ Ride!</button>
+</div>
+<div id="speed">Speed: <span id="speedVal">0</span> mph</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// === ROLLER COASTER SIMULATOR ===
+let scene, camera, renderer, clock;
+let trackCurve, trackLength;
+let progress = 0, speed = 0, riding = false;
+let audioCtx, windGain, windFilter;
+let shakeIntensity = 0;
+const G = 9.81;
+
+// Track parameters
+const TRACK_SCALE = 1.0;
+const LIFT_HEIGHT = 80;
+const TRACK_WIDTH = 2.5;
+
+function init() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87CEEB);
+  scene.fog = new THREE.FogExp2(0x9BC4E2, 0.003);
+
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+  document.body.appendChild(renderer.domElement);
+
+  clock = new THREE.Clock();
+
+  setupLighting();
+  createSky();
+  createTerrain();
+  createTrack();
+  precomputeBanking();
+  buildTrackGeometry();
+  createSupportStructure();
+  createForest();
+  createWaterfall();
+  createCoasterCar();
+
+  window.addEventListener('resize', onResize);
+  animate();
+}
+
+function setupLighting() {
+  const ambient = new THREE.AmbientLight(0x6688aa, 0.4);
+  scene.add(ambient);
+
+  const hemi = new THREE.HemisphereLight(0x87CEEB, 0x3a7d3a, 0.3);
+  scene.add(hemi);
+
+  const sun = new THREE.DirectionalLight(0xffeedd, 1.2);
+  sun.position.set(100, 150, 80);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -200;
+  sun.shadow.camera.right = 200;
+  sun.shadow.camera.top = 200;
+  sun.shadow.camera.bottom = -200;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 500;
+  sun.shadow.bias = -0.001;
+  scene.add(sun);
+}
+
+function createSky() {
+  // Clouds
+  const cloudGeo = new THREE.SphereGeometry(1, 8, 6);
+  const cloudMat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, flatShading: true });
+
+  for (let i = 0; i < 40; i++) {
+    const cloud = new THREE.Group();
+    const numPuffs = 4 + Math.floor(Math.random() * 5);
+    for (let j = 0; j < numPuffs; j++) {
+      const puff = new THREE.Mesh(cloudGeo, cloudMat);
+      const s = 8 + Math.random() * 15;
+      puff.scale.set(s, s * 0.5, s * 0.7);
+      puff.position.set((j - numPuffs/2) * 8, Math.random() * 3, Math.random() * 5);
+      cloud.add(puff);
+    }
+    cloud.position.set(
+      (Math.random() - 0.5) * 800,
+      120 + Math.random() * 80,
+      (Math.random() - 0.5) * 800
+    );
+    scene.add(cloud);
+  }
+}
+
+function createTerrain() {
+  const size = 800;
+  const segments = 100;
+  const geo = new THREE.PlaneGeometry(size, size, segments, segments);
+  geo.rotateX(-Math.PI / 2);
+
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    let h = Math.sin(x * 0.01) * 3 + Math.cos(z * 0.015) * 2;
+    h += Math.sin(x * 0.03 + z * 0.02) * 1.5;
+    // Depression for waterfall pool
+    const distToPool = Math.sqrt((x - 60) * (x - 60) + (z + 40) * (z + 40));
+    if (distToPool < 25) h -= (25 - distToPool) * 0.3;
+    pos.setY(i, h);
+  }
+  geo.computeVertexNormals();
+
+  // Procedural grass texture
+  const canvas = document.createElement('canvas');
+  canvas.width = 512; canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#3a7d3a';
+  ctx.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 10000; i++) {
+    const gx = Math.random() * 512;
+    const gy = Math.random() * 512;
+    ctx.strokeStyle = `hsl(${100 + Math.random() * 40}, ${50 + Math.random() * 30}%, ${25 + Math.random() * 25}%)`;
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(gx, gy);
+    ctx.lineTo(gx + (Math.random() - 0.5) * 3, gy - Math.random() * 6);
+    ctx.stroke();
+  }
+  const grassTex = new THREE.CanvasTexture(canvas);
+  grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping;
+  grassTex.repeat.set(40, 40);
+
+  const terrainMat = new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.9 });
+  const terrain = new THREE.Mesh(geo, terrainMat);
+  terrain.receiveShadow = true;
+  scene.add(terrain);
+}
+
+function createTrack() {
+  // Track designed with smooth transitions and realistic G-forces.
+  // Key principles: large radii at high-speed sections, gradual pullouts,
+  // clothoid-style loop entry/exit, gentle closing curve.
+  const points = [
+    // Station (flat)
+    new THREE.Vector3(0, 5, 0),
+    new THREE.Vector3(15, 5, 0),
+    new THREE.Vector3(30, 5, 0),
+    // Chain lift ascent — gradual, steady climb
+    new THREE.Vector3(50, 12, -5),
+    new THREE.Vector3(70, 25, -10),
+    new THREE.Vector3(90, 40, -15),
+    new THREE.Vector3(110, 55, -18),
+    new THREE.Vector3(125, 68, -18),
+    new THREE.Vector3(135, LIFT_HEIGHT, -15),
+    // Crest — gentle rollover (large radius)
+    new THREE.Vector3(142, LIFT_HEIGHT + 1, -10),
+    new THREE.Vector3(148, LIFT_HEIGHT - 2, -3),
+    // First drop — long, sweeping pullout with large radius at bottom
+    new THREE.Vector3(155, LIFT_HEIGHT - 10, 8),
+    new THREE.Vector3(158, LIFT_HEIGHT - 25, 22),
+    new THREE.Vector3(155, LIFT_HEIGHT - 45, 40),
+    new THREE.Vector3(145, 20, 60),
+    new THREE.Vector3(130, 10, 78),
+    // Pullout valley — wide radius, gradual transition
+    new THREE.Vector3(110, 6, 90),
+    new THREE.Vector3(90, 5, 98),
+    // Sweeping banked turn — large radius at speed
+    new THREE.Vector3(65, 6, 100),
+    new THREE.Vector3(40, 8, 95),
+    new THREE.Vector3(20, 10, 82),
+    new THREE.Vector3(5, 12, 65),
+    new THREE.Vector3(-5, 14, 48),
+    // Gradual climb into loop approach
+    new THREE.Vector3(-12, 20, 35),
+    new THREE.Vector3(-18, 28, 25),
+    new THREE.Vector3(-24, 36, 16),
+    // Loop-the-loop — clothoid: WIDE radius at bottom (high speed), tight at top (low speed)
+    // Entry — very gradual curve upward, large radius
+    new THREE.Vector3(-30, 42, 10),
+    new THREE.Vector3(-34, 48, 5),
+    new THREE.Vector3(-38, 55, 0),
+    new THREE.Vector3(-42, 62, -4),
+    // Top of loop (~68m, below lift height, tighter radius OK here - low speed)
+    new THREE.Vector3(-43, 67, -6),
+    new THREE.Vector3(-40, 70, -7),
+    new THREE.Vector3(-36, 68, -6),
+    new THREE.Vector3(-33, 63, -4),
+    // Exit — mirror the gradual entry, large radius
+    new THREE.Vector3(-30, 56, -1),
+    new THREE.Vector3(-28, 48, 2),
+    new THREE.Vector3(-28, 40, 6),
+    new THREE.Vector3(-30, 34, 10),
+    // Post-loop — continue exit direction before curving (avoid spline kink)
+    // Gradual pullout: spread descent evenly to avoid sudden flattening
+    new THREE.Vector3(-32, 32, 14),
+    new THREE.Vector3(-35, 30, 22),
+    new THREE.Vector3(-38, 29, 32),
+    new THREE.Vector3(-38, 28, 44),
+    new THREE.Vector3(-34, 27, 54),
+    new THREE.Vector3(-26, 27, 60),
+    // S-curve near waterfall — stay elevated (~25-28m), very large radius turns
+    new THREE.Vector3(-12, 26, 58),
+    new THREE.Vector3(5, 27, 64),
+    new THREE.Vector3(25, 26, 66),
+    new THREE.Vector3(48, 25, 58),
+    new THREE.Vector3(65, 24, 42),
+    new THREE.Vector3(72, 23, 25),
+    // Long straight approach — slight uphill acts as natural brake
+    new THREE.Vector3(72, 23, 10),
+    new THREE.Vector3(68, 24, -5),
+    new THREE.Vector3(60, 25, -18),
+    new THREE.Vector3(48, 25, -28),
+    // Wide gentle curve back toward station, still elevated
+    new THREE.Vector3(34, 24, -32),
+    new THREE.Vector3(20, 22, -30),
+    new THREE.Vector3(10, 18, -22),
+    // Final descent — mostly straight, gentle slope
+    new THREE.Vector3(5, 12, -12),
+    new THREE.Vector3(2, 8, -5),
+    new THREE.Vector3(0, 5, 0),
+  ];
+
+  trackCurve = new THREE.CatmullRomCurve3(points, true, 'catmullrom', 0.5);
+  trackLength = trackCurve.getLength();
+}
+
+function buildTrackGeometry() {
+  const numSegments = 500;
+  const railOffset = TRACK_WIDTH / 2;
+
+  // Rail material
+  const railMat = new THREE.MeshStandardMaterial({ color: 0x888899, metalness: 0.8, roughness: 0.3 });
+
+  // Create rail tubes
+  const leftRailPoints = [];
+  const rightRailPoints = [];
+
+  for (let i = 0; i <= numSegments; i++) {
+    const t = i / numSegments;
+    const pos = trackCurve.getPointAt(t);
+    const tangent = trackCurve.getTangentAt(t);
+    const up = new THREE.Vector3(0, 1, 0);
+    const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
+
+    // Banking
+    const banking = getBanking(t);
+    const bankUp = new THREE.Vector3(0, 1, 0).applyAxisAngle(tangent, banking);
+    const bankRight = new THREE.Vector3().crossVectors(tangent, bankUp).normalize();
+
+    leftRailPoints.push(pos.clone().add(bankRight.clone().multiplyScalar(-railOffset)));
+    rightRailPoints.push(pos.clone().add(bankRight.clone().multiplyScalar(railOffset)));
+  }
+
+  const leftCurve = new THREE.CatmullRomCurve3(leftRailPoints);
+  const rightCurve = new THREE.CatmullRomCurve3(rightRailPoints);
+
+  const railGeo1 = new THREE.TubeGeometry(leftCurve, numSegments, 0.12, 8, true);
+  const railGeo2 = new THREE.TubeGeometry(rightCurve, numSegments, 0.12, 8, true);
+
+  const leftRail = new THREE.Mesh(railGeo1, railMat);
+  const rightRail = new THREE.Mesh(railGeo2, railMat);
+  leftRail.castShadow = rightRail.castShadow = true;
+  scene.add(leftRail);
+  scene.add(rightRail);
+
+  // Cross-ties (wooden sleepers)
+  const woodTex = createWoodTexture();
+  const tieMat = new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.8 });
+
+  const tieGeo = new THREE.BoxGeometry(TRACK_WIDTH + 0.5, 0.15, 0.3);
+  const numTies = 200;
+
+  for (let i = 0; i < numTies; i++) {
+    const t = i / numTies;
+    const pos = trackCurve.getPointAt(t);
+    const tangent = trackCurve.getTangentAt(t);
+    const banking = getBanking(t);
+
+    const tie = new THREE.Mesh(tieGeo, tieMat);
+    tie.position.copy(pos);
+    tie.position.y -= 0.2;
+
+    // Orient tie perpendicular to track
+    const up = new THREE.Vector3(0, 1, 0);
+    const quat = new THREE.Quaternion();
+    const matrix = new THREE.Matrix4();
+    const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
+    matrix.lookAt(new THREE.Vector3(), tangent, up);
+    quat.setFromRotationMatrix(matrix);
+    tie.quaternion.copy(quat);
+    tie.rotateX(Math.PI / 2);
+    tie.rotateY(banking);
+
+    tie.castShadow = true;
+    scene.add(tie);
+  }
+}
+
+function createSupportStructure() {
+  const scaffMat = new THREE.MeshStandardMaterial({ color: 0x666677, metalness: 0.7, roughness: 0.4 });
+  const poleGeo = new THREE.CylinderGeometry(0.15, 0.15, 1, 6);
+
+  const numSupports = 80;
+  for (let i = 0; i < numSupports; i++) {
+    const t = i / numSupports;
+    const pos = trackCurve.getPointAt(t);
+    const height = pos.y - 2; // ground level approx
+
+    if (height > 3) {
+      // Vertical poles
+      const pole = new THREE.Mesh(poleGeo, scaffMat);
+      pole.scale.y = height;
+      pole.position.set(pos.x, pos.y - height / 2 - 0.5, pos.z);
+      pole.castShadow = true;
+      scene.add(pole);
+
+      // Cross bracing for tall supports
+      if (height > 15) {
+        const tangent = trackCurve.getTangentAt(t);
+        const right = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0,1,0)).normalize();
+
+        // Side poles
+        const lPole = new THREE.Mesh(poleGeo, scaffMat);
+        lPole.scale.y = height * 0.9;
+        lPole.position.set(pos.x + right.x * 2, pos.y - height / 2, pos.z + right.z * 2);
+        scene.add(lPole);
+
+        const rPole = new THREE.Mesh(poleGeo, scaffMat);
+        rPole.scale.y = height * 0.9;
+        rPole.position.set(pos.x - right.x * 2, pos.y - height / 2, pos.z - right.z * 2);
+        scene.add(rPole);
+
+        // Horizontal cross members
+        const numCross = Math.floor(height / 12);
+        for (let c = 0; c < numCross; c++) {
+          const cy = pos.y - height + (c + 1) * (height / (numCross + 1));
+          const crossGeo = new THREE.CylinderGeometry(0.08, 0.08, 4, 4);
+          const cross = new THREE.Mesh(crossGeo, scaffMat);
+          cross.rotation.z = Math.PI / 2;
+          cross.position.set(pos.x, cy, pos.z);
+          scene.add(cross);
+        }
+      }
+    }
+  }
+}
+
+let bankingArray = null; // Precomputed smooth banking values
+const BANKING_SAMPLES = 1000;
+
+function precomputeBanking() {
+  // Compute raw lateral curvature at each sample point
+  const raw = new Float32Array(BANKING_SAMPLES);
+  const delta = 0.003;
+
+  for (let i = 0; i < BANKING_SAMPLES; i++) {
+    const t = i / BANKING_SAMPLES;
+    const t1 = (t - delta + 1) % 1;
+    const t2 = (t + delta) % 1;
+
+    const tangent = trackCurve.getTangentAt(t);
+    const tan1 = trackCurve.getTangentAt(t1);
+    const tan2 = trackCurve.getTangentAt(t2);
+
+    // Arc distance between samples for normalization
+    const p1 = trackCurve.getPointAt(t1);
+    const p2 = trackCurve.getPointAt(t2);
+    const arcDist = p1.distanceTo(p2);
+
+    // Lateral curvature (change in tangent direction dotted with right vector)
+    const dTangent = new THREE.Vector3().subVectors(tan2, tan1);
+    const right = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0));
+    const rightLen = right.length();
+    if (rightLen > 0.01) {
+      right.divideScalar(rightLen);
+      const lateralCurv = dTangent.dot(right) / Math.max(arcDist, 0.01);
+      // Ideal bank angle: atan(v²·κ/g) — approximate with moderate speed
+      // Use proportional banking clamped to ±40°
+      raw[i] = Math.max(-0.7, Math.min(0.7, lateralCurv * 3.5));
+    } else {
+      raw[i] = 0;
+    }
+  }
+
+  // Gaussian smooth (circular) to eliminate abrupt roll changes
+  bankingArray = new Float32Array(BANKING_SAMPLES);
+  const kernel = 12; // smoothing radius in samples
+  for (let i = 0; i < BANKING_SAMPLES; i++) {
+    let sum = 0, weight = 0;
+    for (let k = -kernel * 3; k <= kernel * 3; k++) {
+      const j = ((i + k) % BANKING_SAMPLES + BANKING_SAMPLES) % BANKING_SAMPLES;
+      const w = Math.exp(-0.5 * (k / kernel) * (k / kernel));
+      sum += raw[j] * w;
+      weight += w;
+    }
+    bankingArray[i] = sum / weight;
+  }
+}
+
+function getBanking(t) {
+  if (!bankingArray) return 0;
+  // Interpolate from precomputed smoothed array
+  const idx = ((t % 1) + 1) % 1 * BANKING_SAMPLES;
+  const i0 = Math.floor(idx) % BANKING_SAMPLES;
+  const i1 = (i0 + 1) % BANKING_SAMPLES;
+  const frac = idx - Math.floor(idx);
+  return bankingArray[i0] * (1 - frac) + bankingArray[i1] * frac;
+}
+
+function createWoodTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  // Base wood color
+  ctx.fillStyle = '#8B5E3C';
+  ctx.fillRect(0, 0, 256, 256);
+
+  // Wood grain lines
+  for (let i = 0; i < 60; i++) {
+    const y = Math.random() * 256;
+    ctx.strokeStyle = `rgba(${60 + Math.random() * 40}, ${30 + Math.random() * 20}, ${10 + Math.random() * 15}, ${0.3 + Math.random() * 0.3})`;
+    ctx.lineWidth = 0.5 + Math.random() * 2;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    for (let x = 0; x < 256; x += 10) {
+      ctx.lineTo(x, y + Math.sin(x * 0.05) * 3 + (Math.random() - 0.5) * 2);
+    }
+    ctx.stroke();
+  }
+
+  // Knots
+  for (let i = 0; i < 3; i++) {
+    const kx = Math.random() * 256;
+    const ky = Math.random() * 256;
+    const grad = ctx.createRadialGradient(kx, ky, 0, kx, ky, 8 + Math.random() * 6);
+    grad.addColorStop(0, 'rgba(50, 25, 10, 0.8)');
+    grad.addColorStop(1, 'rgba(80, 50, 30, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(kx - 15, ky - 15, 30, 30);
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+let coasterCar;
+function createCoasterCar() {
+  coasterCar = new THREE.Group();
+  const woodTex = createWoodTexture();
+  const woodMat = new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.7 });
+  const metalMat = new THREE.MeshStandardMaterial({ color: 0x444455, metalness: 0.9, roughness: 0.2 });
+  const darkWoodMat = new THREE.MeshStandardMaterial({ map: createWoodTexture(), color: 0x5a3a1a, roughness: 0.8 });
+
+  // Car body
+  const bodyGeo = new THREE.BoxGeometry(2.2, 1.2, 4);
+  const body = new THREE.Mesh(bodyGeo, woodMat);
+  body.position.y = 0.4;
+  coasterCar.add(body);
+
+  // Side panels with detail
+  const panelGeo = new THREE.BoxGeometry(0.1, 0.8, 3.8);
+  const lPanel = new THREE.Mesh(panelGeo, darkWoodMat);
+  lPanel.position.set(-1.1, 0.8, 0);
+  coasterCar.add(lPanel);
+  const rPanel = new THREE.Mesh(panelGeo, darkWoodMat);
+  rPanel.position.set(1.1, 0.8, 0);
+  coasterCar.add(rPanel);
+
+  // Front panel
+  const frontGeo = new THREE.BoxGeometry(2.2, 0.8, 0.1);
+  const front = new THREE.Mesh(frontGeo, darkWoodMat);
+  front.position.set(0, 0.8, -2);
+  coasterCar.add(front);
+
+  // Metal trim
+  const trimGeo = new THREE.BoxGeometry(2.4, 0.08, 4.2);
+  const trim = new THREE.Mesh(trimGeo, metalMat);
+  trim.position.y = 1.2;
+  coasterCar.add(trim);
+
+  // Metal lap bar
+  const barGeo = new THREE.TorusGeometry(0.4, 0.04, 8, 12, Math.PI);
+  const bar = new THREE.Mesh(barGeo, metalMat);
+  bar.position.set(0, 1.0, -0.5);
+  bar.rotation.x = Math.PI / 2;
+  coasterCar.add(bar);
+
+  // Wheels (underneath)
+  const wheelGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.3, 8);
+  const positions = [[-0.8, -0.2, -1.2], [0.8, -0.2, -1.2], [-0.8, -0.2, 1.2], [0.8, -0.2, 1.2]];
+  positions.forEach(p => {
+    const wheel = new THREE.Mesh(wheelGeo, metalMat);
+    wheel.position.set(...p);
+    wheel.rotation.z = Math.PI / 2;
+    coasterCar.add(wheel);
+  });
+
+  // Ornate front decoration
+  const ornamentGeo = new THREE.ConeGeometry(0.3, 0.6, 6);
+  const ornament = new THREE.Mesh(ornamentGeo, metalMat);
+  ornament.position.set(0, 1.4, -2);
+  ornament.rotation.x = -Math.PI / 2;
+  coasterCar.add(ornament);
+
+  coasterCar.castShadow = true;
+  scene.add(coasterCar);
+}
+
+function createForest() {
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3520, roughness: 0.9 });
+
+  for (let i = 0; i < 300; i++) {
+    const x = (Math.random() - 0.5) * 600;
+    const z = (Math.random() - 0.5) * 600;
+
+    // Don't place trees too close to track
+    const trackDist = getMinDistToTrack(x, z);
+    if (trackDist < 8) continue;
+
+    const treeHeight = 8 + Math.random() * 20;
+    const trunkRadius = 0.3 + Math.random() * 0.5;
+
+    const tree = new THREE.Group();
+
+    // Trunk
+    const trunkGeo = new THREE.CylinderGeometry(trunkRadius * 0.6, trunkRadius, treeHeight * 0.5, 8);
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.position.y = treeHeight * 0.25;
+    trunk.castShadow = true;
+    tree.add(trunk);
+
+    // Foliage layers
+    const foliageLayers = 2 + Math.floor(Math.random() * 3);
+    const hue = 90 + Math.random() * 50;
+    const foliageMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(`hsl(${hue}, ${40 + Math.random() * 30}%, ${20 + Math.random() * 20}%)`),
+      roughness: 0.8
+    });
+
+    for (let j = 0; j < foliageLayers; j++) {
+      const layerY = treeHeight * (0.4 + j * 0.18);
+      const layerSize = (treeHeight * 0.3) * (1 - j * 0.2);
+      const foliageGeo = new THREE.SphereGeometry(layerSize, 8, 6);
+      // Squash vertically
+      foliageGeo.scale(1, 0.6, 1);
+      const foliage = new THREE.Mesh(foliageGeo, foliageMat);
+      foliage.position.y = layerY;
+      foliage.castShadow = true;
+      tree.add(foliage);
+    }
+
+    tree.position.set(x, 0, z);
+    scene.add(tree);
+  }
+}
+
+function getMinDistToTrack(x, z) {
+  let minDist = Infinity;
+  for (let t = 0; t < 1; t += 0.02) {
+    const p = trackCurve.getPointAt(t);
+    const dx = p.x - x;
+    const dz = p.z - z;
+    const d = Math.sqrt(dx * dx + dz * dz);
+    if (d < minDist) minDist = d;
+  }
+  return minDist;
+}
+
+let waterfallParticles;
+function createWaterfall() {
+  const cliffX = 15, cliffZ = 50;
+
+  // Cliff face
+  const cliffGeo = new THREE.BoxGeometry(15, 35, 8);
+  const cliffMat = new THREE.MeshStandardMaterial({ color: 0x6b5b4f, roughness: 0.95 });
+  const cliff = new THREE.Mesh(cliffGeo, cliffMat);
+  cliff.position.set(cliffX, 15, cliffZ);
+  cliff.castShadow = true;
+  scene.add(cliff);
+
+  // Cliff top with grass
+  const topGeo = new THREE.BoxGeometry(18, 2, 12);
+  const topMat = new THREE.MeshStandardMaterial({ color: 0x3a7d3a, roughness: 0.9 });
+  const top = new THREE.Mesh(topGeo, topMat);
+  top.position.set(cliffX, 33, cliffZ);
+  scene.add(top);
+
+  // Water particles
+  const particleCount = 800;
+  const particleGeo = new THREE.BufferGeometry();
+  const positions = new Float32Array(particleCount * 3);
+  const velocities = new Float32Array(particleCount * 3);
+
+  for (let i = 0; i < particleCount; i++) {
+    resetWaterfallParticle(positions, velocities, i);
+  }
+
+  particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const particleMat = new THREE.PointsMaterial({
+    color: 0xaaddff, size: 0.5, transparent: true, opacity: 0.7,
+    blending: THREE.AdditiveBlending
+  });
+
+  waterfallParticles = new THREE.Points(particleGeo, particleMat);
+  waterfallParticles.userData = { velocities };
+  scene.add(waterfallParticles);
+
+  // Pool at bottom
+  const poolGeo = new THREE.CircleGeometry(12, 32);
+  poolGeo.rotateX(-Math.PI / 2);
+  const poolMat = new THREE.MeshStandardMaterial({
+    color: 0x2288aa, transparent: true, opacity: 0.8, roughness: 0.1, metalness: 0.1
+  });
+  const pool = new THREE.Mesh(poolGeo, poolMat);
+  pool.position.set(cliffX, 0.5, cliffZ + 5);
+  scene.add(pool);
+
+  // Mist at base
+  const mistGeo = new THREE.BufferGeometry();
+  const mistPos = new Float32Array(200 * 3);
+  for (let i = 0; i < 200; i++) {
+    mistPos[i*3] = cliffX + (Math.random() - 0.5) * 15;
+    mistPos[i*3+1] = Math.random() * 8;
+    mistPos[i*3+2] = cliffZ + 4 + Math.random() * 10;
+  }
+  mistGeo.setAttribute('position', new THREE.BufferAttribute(mistPos, 3));
+  const mistMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2, transparent: true, opacity: 0.3 });
+  const mist = new THREE.Points(mistGeo, mistMat);
+  scene.add(mist);
+}
+
+function resetWaterfallParticle(positions, velocities, i) {
+  const cliffX = 15, cliffZ = 50;
+  positions[i*3] = cliffX + (Math.random() - 0.5) * 8;
+  positions[i*3+1] = 30 + Math.random() * 3;
+  positions[i*3+2] = cliffZ + 4 + Math.random() * 2;
+  velocities[i*3] = (Math.random() - 0.5) * 0.5;
+  velocities[i*3+1] = -Math.random() * 2;
+  velocities[i*3+2] = Math.random() * 1.5;
+}
+
+function updateWaterfall(dt) {
+  if (!waterfallParticles) return;
+  const positions = waterfallParticles.geometry.attributes.position.array;
+  const velocities = waterfallParticles.userData.velocities;
+  const count = positions.length / 3;
+
+  for (let i = 0; i < count; i++) {
+    velocities[i*3+1] -= 9.8 * dt; // gravity
+    positions[i*3] += velocities[i*3] * dt;
+    positions[i*3+1] += velocities[i*3+1] * dt;
+    positions[i*3+2] += velocities[i*3+2] * dt;
+
+    // Reset if below ground or too far
+    if (positions[i*3+1] < 0) {
+      resetWaterfallParticle(positions, velocities, i);
+    }
+  }
+  waterfallParticles.geometry.attributes.position.needsUpdate = true;
+}
+
+function initAudio() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  // Wind noise via filtered noise
+  const bufferSize = 2 * audioCtx.sampleRate;
+  const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const output = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    output[i] = Math.random() * 2 - 1;
+  }
+
+  const windNoise = audioCtx.createBufferSource();
+  windNoise.buffer = noiseBuffer;
+  windNoise.loop = true;
+
+  windFilter = audioCtx.createBiquadFilter();
+  windFilter.type = 'bandpass';
+  windFilter.frequency.value = 400;
+  windFilter.Q.value = 0.5;
+
+  windGain = audioCtx.createGain();
+  windGain.gain.value = 0;
+
+  windNoise.connect(windFilter);
+  windFilter.connect(windGain);
+  windGain.connect(audioCtx.destination);
+  windNoise.start();
+}
+
+function updateAudio() {
+  if (!audioCtx || !windGain) return;
+  const normalizedSpeed = Math.min(speed / 42, 1);
+  windGain.gain.linearRampToValueAtTime(normalizedSpeed * 0.15, audioCtx.currentTime + 0.1);
+  windFilter.frequency.linearRampToValueAtTime(300 + normalizedSpeed * 1500, audioCtx.currentTime + 0.1);
+}
+
+function getTrackHeight(t) {
+  return trackCurve.getPointAt(t).y;
+}
+
+function updateCoaster(dt) {
+  if (!riding) return;
+
+  const currentHeight = getTrackHeight(progress);
+  const tangent = trackCurve.getTangentAt(progress);
+  const slope = tangent.y / tangent.length();
+
+  // Chain lift on the ascent (first 18% of track)
+  if (progress < 0.18 && slope > 0.05) {
+    // Chain lift pulls car up at ~15 mph (6.7 m/s), accelerating gently
+    speed = Math.max(speed, 5);
+    speed = Math.min(speed + dt * 4, 7.5);
+  } else {
+    // Gravity: slightly amplified for excitement
+    const gravityAccel = -G * slope * 1.3;
+    speed += gravityAccel * dt;
+
+    // Light air drag (quadratic-feel): stronger at high speed, negligible at low
+    const dragCoeff = 0.003 + 0.002 * (speed / 40);
+    speed *= (1 - dragCoeff * dt);
+
+    // Brake zone: last 12% of track (approaching station)
+    // Simulates magnetic/friction brakes on real coasters
+    if (progress > 0.88) {
+      const brakeStrength = (progress - 0.88) / 0.12; // ramps from 0 to 1
+      speed *= (1 - brakeStrength * 0.8 * dt);
+      speed -= brakeStrength * 8 * dt; // constant deceleration component
+    }
+
+    // Minimum speed: only dips low at apex of hills
+    speed = Math.max(speed, 2.5);
+    // Cap at ~94 mph
+    speed = Math.min(speed, 42);
+  }
+
+  // Advance along track
+  const dist = speed * dt;
+  progress += dist / trackLength;
+  if (progress >= 1) progress -= 1;
+
+  // Camera shake based on speed (subtle at 30+, noticeable at 35+)
+  shakeIntensity = Math.max(0, (speed - 28) / 14) * 0.06;
+
+  // Update speed display (m/s → mph)
+  document.getElementById('speedVal').textContent = Math.round(speed * 2.237);
+
+  updateAudio();
+}
+
+function updateCamera() {
+  const pos = trackCurve.getPointAt(progress);
+  const lookAhead = (progress + 0.008) % 1;
+  const lookPos = trackCurve.getPointAt(lookAhead);
+  const tangent = trackCurve.getTangentAt(progress);
+
+  // Banking
+  const banking = getBanking(progress);
+
+  // Position camera above track (rider eye level)
+  const up = new THREE.Vector3(0, 1, 0);
+  const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
+  const bankedUp = up.clone().applyAxisAngle(tangent, banking);
+
+  camera.position.copy(pos);
+  camera.position.y += 2.0; // eye height
+  camera.position.add(bankedUp.clone().multiplyScalar(0.3));
+
+  // Look ahead
+  camera.lookAt(lookPos.x, lookPos.y + 2.0, lookPos.z);
+
+  // Apply banking to camera
+  camera.rotateZ(-banking * 0.5);
+
+  // Camera shake
+  if (shakeIntensity > 0) {
+    camera.position.x += (Math.random() - 0.5) * shakeIntensity;
+    camera.position.y += (Math.random() - 0.5) * shakeIntensity * 0.5;
+    camera.position.z += (Math.random() - 0.5) * shakeIntensity;
+  }
+
+  // Update coaster car position (slightly behind camera)
+  if (coasterCar) {
+    const carT = (progress - 0.005 + 1) % 1;
+    const carPos = trackCurve.getPointAt(carT);
+    const carTangent = trackCurve.getTangentAt(carT);
+    coasterCar.position.copy(carPos);
+
+    const carLook = trackCurve.getPointAt((carT + 0.005) % 1);
+    coasterCar.lookAt(carLook);
+  }
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  updateCoaster(dt);
+  updateCamera();
+  updateWaterfall(dt);
+
+  renderer.render(scene, camera);
+}
+
+function startRide() {
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('speed').classList.add('visible');
+
+  initAudio();
+  riding = true;
+  progress = 0;
+  speed = 5;
+}
+
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// Initialize
+init();
+
+// Position camera at start for preview
+camera.position.set(0, 20, 50);
+camera.lookAt(0, 30, 0);
+</script>
+</body>
+</html>
