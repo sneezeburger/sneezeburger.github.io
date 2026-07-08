@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SimAnt — Ant Colony Simulation</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐜</text></svg>">
+</head>
+<body>
+
+<!-- Header Bar -->
+<div id="header">
+  <span class="ant-icon">🐜</span>
+  <h1>SimAnt</h1>
+  <div class="header-controls">
+    <button id="btn-pause">⏸ Pause</button>
+    <span style="color:#888; font-size:12px;">Speed:</span>
+    <button class="speed-btn" id="speed-1">1</button>
+    <button class="speed-btn active" id="speed-2">2</button>
+    <button class="speed-btn" id="speed-3">3</button>
+    <button class="speed-btn" id="speed-4">4</button>
+    <button id="btn-newgame">🔄 New</button>
+  </div>
+</div>
+
+<!-- Main Layout -->
+<div id="main">
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+
+    <!-- Your Colony (Black) -->
+    <div class="panel black-colony">
+      <h3>🖤 Your Colony</h3>
+      <div class="panel-row">
+        <span class="label">Population</span>
+        <span class="value" id="black-pop">0</span>
+      </div>
+      <div class="panel-row">
+        <span class="label">Food Store</span>
+        <span class="value" id="black-food">0</span>
+      </div>
+      <div class="panel-row">
+        <span class="label">Workers</span>
+        <span class="value" id="black-workers">0</span>
+      </div>
+      <div class="panel-row">
+        <span class="label">Soldiers</span>
+        <span class="value" id="black-soldiers">0</span>
+      </div>
+    </div>
+
+    <!-- Enemy Colony (Red) -->
+    <div class="panel red-colony">
+      <h3>❤️ Enemy Colony</h3>
+      <div class="panel-row">
+        <span class="label">Population</span>
+        <span class="value" id="red-pop">0</span>
+      </div>
+      <div class="panel-row">
+        <span class="label">Food Store</span>
+        <span class="value" id="red-food">0</span>
+      </div>
+    </div>
+
+    <!-- Population Balance -->
+    <div class="panel">
+      <h3>⚖️ Balance</h3>
+      <div class="pop-bar">
+        <div class="pop-black" id="pop-bar-black" style="width:50%"></div>
+        <div class="pop-red" id="pop-bar-red" style="width:50%"></div>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:10px; color:#888; margin-top:4px;">
+        <span>Black</span>
+        <span>Red</span>
+      </div>
+    </div>
+
+    <!-- Behavior Allocation -->
+    <div class="panel">
+      <h3>📋 Colony Orders</h3>
+      <div class="slider-row">
+        <label>Forage</label>
+        <input type="range" id="slider-forage" min="0" max="100" value="50">
+        <span class="slider-val" id="val-forage">50</span>
+      </div>
+      <div class="slider-row">
+        <label>Dig</label>
+        <input type="range" id="slider-dig" min="0" max="100" value="20">
+        <span class="slider-val" id="val-dig">20</span>
+      </div>
+      <div class="slider-row">
+        <label>Nurse</label>
+        <input type="range" id="slider-nurse" min="0" max="100" value="20">
+        <span class="slider-val" id="val-nurse">20</span>
+      </div>
+      <div class="slider-row">
+        <label>Fight</label>
+        <input type="range" id="slider-fight" min="0" max="100" value="10">
+        <span class="slider-val" id="val-fight">10</span>
+      </div>
+    </div>
+
+    <!-- View Controls -->
+    <div class="panel">
+      <h3>👁 View</h3>
+      <div class="controls-row">
+        <button id="btn-underground">🌿 Surface</button>
+        <button id="btn-pheromones">🧪 Trails</button>
+        <button id="btn-follow" class="active">📍 Follow</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="panel">
+      <h3>📊 Stats</h3>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-val" id="stat-kills">0</div>
+          <div class="stat-label">Enemies Killed</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="stat-lost">0</div>
+          <div class="stat-label">Ants Lost</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="stat-food">0</div>
+          <div class="stat-label">Food Collected</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="frame-count">0</div>
+          <div class="stat-label">Time</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls Help -->
+    <div class="panel">
+      <h3>🎮 Controls</h3>
+      <div class="help-grid">
+        <span class="key">WASD</span><span class="desc">Move ant</span>
+        <span class="key">SPACE</span><span class="desc">Dig (underground)</span>
+        <span class="key">E</span><span class="desc">Drop food</span>
+        <span class="key">F</span><span class="desc">Attack</span>
+        <span class="key">U</span><span class="desc">Toggle underground</span>
+        <span class="key">V</span><span class="desc">Show pheromone trails</span>
+        <span class="key">C</span><span class="desc">Toggle camera follow</span>
+        <span class="key">P</span><span class="desc">Pause</span>
+        <span class="key">1-4</span><span class="desc">Game speed</span>
+      </div>
+    </div>
+
+    <!-- About -->
+    <div class="panel" style="border-bottom:none;">
+      <h3>ℹ️ About</h3>
+      <p style="font-size:11px; color:#888; line-height:1.5;">
+        A recreation of SimAnt (Maxis, 1991). Control the yellow ant, grow your colony, 
+        and drive out the red ants. Watch out for spiders and the lawn mower!
+      </p>
+    </div>
+  </div>
+
+  <!-- Game Canvas -->
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    <div id="messages"></div>
+  </div>
+
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

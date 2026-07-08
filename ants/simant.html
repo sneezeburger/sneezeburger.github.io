@@ -1,0 +1,2523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SimAnt — Ant Colony Simulation</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐜</text></svg>">
+  <style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #1a1a1a;
+  color: #eee;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+#header {
+  background: linear-gradient(180deg, #3a2a1a 0%, #2a1a0a 100%);
+  border-bottom: 3px solid #5a3a1a;
+  padding: 6px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+#header h1 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 18px;
+  color: #ffcc00;
+  text-shadow: 2px 2px 0px #000;
+  letter-spacing: 2px;
+}
+
+#header .ant-icon {
+  font-size: 22px;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Main layout */
+#main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Sidebar */
+#sidebar {
+  width: 260px;
+  background: #2c2c2c;
+  border-right: 2px solid #444;
+  overflow-y: auto;
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.panel {
+  border-bottom: 1px solid #444;
+  padding: 10px 12px;
+}
+
+.panel h3 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  color: #ffcc00;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.panel-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.panel-row .label {
+  color: #aaa;
+}
+
+.panel-row .value {
+  color: #fff;
+  font-weight: bold;
+  font-family: monospace;
+}
+
+/* Colony colors */
+.black-colony .value { color: #aad; }
+.red-colony .value { color: #f77; }
+
+/* Behavior sliders */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.slider-row label {
+  width: 55px;
+  font-size: 11px;
+  color: #bbb;
+}
+
+.slider-row input[type="range"] {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #444;
+  border-radius: 3px;
+  outline: none;
+}
+
+.slider-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #ffcc00;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid #aa8800;
+}
+
+.slider-row .slider-val {
+  width: 25px;
+  text-align: right;
+  font-family: monospace;
+  font-size: 11px;
+  color: #ffcc00;
+}
+
+/* Controls panel */
+.controls-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+/* Buttons */
+button, .btn {
+  background: #444;
+  color: #eee;
+  border: 1px solid #666;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+
+button:hover, .btn:hover {
+  background: #555;
+}
+
+button.active, .btn.active {
+  background: #5a3a1a;
+  border-color: #ffcc00;
+  color: #ffcc00;
+}
+
+.speed-btn {
+  width: 30px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.speed-btn.active {
+  background: #ffcc00;
+  color: #000;
+  border-color: #aa8800;
+}
+
+/* Game canvas container */
+#game-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #000;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Messages */
+#messages {
+  position: absolute;
+  bottom: 40px;
+  left: 10px;
+  max-width: 450px;
+  pointer-events: none;
+}
+
+.msg {
+  background: rgba(0, 0, 0, 0.75);
+  color: #eee;
+  padding: 4px 10px;
+  margin-top: 3px;
+  border-radius: 4px;
+  font-size: 12px;
+  border-left: 3px solid #ffcc00;
+  animation: msgFadeIn 0.3s ease;
+}
+
+@keyframes msgFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Help panel */
+.help-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  font-size: 11px;
+}
+
+.help-grid .key {
+  font-family: monospace;
+  background: #444;
+  padding: 1px 5px;
+  border-radius: 2px;
+  text-align: center;
+  color: #ffcc00;
+  font-size: 10px;
+}
+
+.help-grid .desc {
+  color: #bbb;
+}
+
+/* Stats section */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.stat-box {
+  background: #333;
+  padding: 6px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.stat-box .stat-val {
+  font-family: monospace;
+  font-size: 16px;
+  font-weight: bold;
+  color: #ffcc00;
+}
+
+.stat-box .stat-label {
+  font-size: 9px;
+  color: #888;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* Population bars */
+.pop-bar {
+  height: 8px;
+  background: #333;
+  border-radius: 4px;
+  margin-top: 4px;
+  overflow: hidden;
+  display: flex;
+}
+
+.pop-bar .pop-black {
+  background: #668;
+  height: 100%;
+  transition: width 0.3s;
+}
+
+.pop-bar .pop-red {
+  background: #c44;
+  height: 100%;
+  transition: width 0.3s;
+}
+
+/* Scrollbar styling */
+#sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+#sidebar::-webkit-scrollbar-track {
+  background: #2c2c2c;
+}
+#sidebar::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  #sidebar {
+    width: 200px;
+  }
+  #header h1 {
+    font-size: 14px;
+  }
+}
+  </style>
+</head>
+<body>
+
+<!-- Header Bar -->
+<div id="header">
+  <span class="ant-icon">🐜</span>
+  <h1>SimAnt</h1>
+  <div class="header-controls">
+    <button id="btn-pause">⏸ Pause</button>
+    <span style="color:#888; font-size:12px;">Speed:</span>
+    <button class="speed-btn" id="speed-1">1</button>
+    <button class="speed-btn active" id="speed-2">2</button>
+    <button class="speed-btn" id="speed-3">3</button>
+    <button class="speed-btn" id="speed-4">4</button>
+    <button id="btn-newgame">🔄 New</button>
+  </div>
+</div>
+
+<!-- Main Layout -->
+<div id="main">
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+
+    <!-- Your Colony (Black) -->
+    <div class="panel black-colony">
+      <h3>🖤 Your Colony</h3>
+      <div class="panel-row">
+        <span class="label">Population</span>
+        <span class="value" id="black-pop">0</span>
+      </div>
+      <div class="panel-row">
+        <span class="label">Food Store</span>
+        <span class="value" id="black-food">0</span>
+      </div>
+      <div class="panel-row">
+        <span class="label">Workers</span>
+        <span class="value" id="black-workers">0</span>
+      </div>
+      <div class="panel-row">
+        <span class="label">Soldiers</span>
+        <span class="value" id="black-soldiers">0</span>
+      </div>
+    </div>
+
+    <!-- Enemy Colony (Red) -->
+    <div class="panel red-colony">
+      <h3>❤️ Enemy Colony</h3>
+      <div class="panel-row">
+        <span class="label">Population</span>
+        <span class="value" id="red-pop">0</span>
+      </div>
+      <div class="panel-row">
+        <span class="label">Food Store</span>
+        <span class="value" id="red-food">0</span>
+      </div>
+    </div>
+
+    <!-- Population Balance -->
+    <div class="panel">
+      <h3>⚖️ Balance</h3>
+      <div class="pop-bar">
+        <div class="pop-black" id="pop-bar-black" style="width:50%"></div>
+        <div class="pop-red" id="pop-bar-red" style="width:50%"></div>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:10px; color:#888; margin-top:4px;">
+        <span>Black</span>
+        <span>Red</span>
+      </div>
+    </div>
+
+    <!-- Behavior Allocation -->
+    <div class="panel">
+      <h3>📋 Colony Orders</h3>
+      <div class="slider-row">
+        <label>Forage</label>
+        <input type="range" id="slider-forage" min="0" max="100" value="50">
+        <span class="slider-val" id="val-forage">50</span>
+      </div>
+      <div class="slider-row">
+        <label>Dig</label>
+        <input type="range" id="slider-dig" min="0" max="100" value="20">
+        <span class="slider-val" id="val-dig">20</span>
+      </div>
+      <div class="slider-row">
+        <label>Nurse</label>
+        <input type="range" id="slider-nurse" min="0" max="100" value="20">
+        <span class="slider-val" id="val-nurse">20</span>
+      </div>
+      <div class="slider-row">
+        <label>Fight</label>
+        <input type="range" id="slider-fight" min="0" max="100" value="10">
+        <span class="slider-val" id="val-fight">10</span>
+      </div>
+    </div>
+
+    <!-- View Controls -->
+    <div class="panel">
+      <h3>👁 View</h3>
+      <div class="controls-row">
+        <button id="btn-underground">🌿 Surface</button>
+        <button id="btn-pheromones">🧪 Trails</button>
+        <button id="btn-follow" class="active">📍 Follow</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="panel">
+      <h3>📊 Stats</h3>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-val" id="stat-kills">0</div>
+          <div class="stat-label">Enemies Killed</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="stat-lost">0</div>
+          <div class="stat-label">Ants Lost</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="stat-food">0</div>
+          <div class="stat-label">Food Collected</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="frame-count">0</div>
+          <div class="stat-label">Time</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls Help -->
+    <div class="panel">
+      <h3>🎮 Controls</h3>
+      <div class="help-grid">
+        <span class="key">WASD</span><span class="desc">Move ant</span>
+        <span class="key">SPACE</span><span class="desc">Dig (underground)</span>
+        <span class="key">E</span><span class="desc">Drop food</span>
+        <span class="key">F</span><span class="desc">Attack</span>
+        <span class="key">U</span><span class="desc">Toggle underground</span>
+        <span class="key">V</span><span class="desc">Show pheromone trails</span>
+        <span class="key">C</span><span class="desc">Toggle camera follow</span>
+        <span class="key">P</span><span class="desc">Pause</span>
+        <span class="key">1-4</span><span class="desc">Game speed</span>
+      </div>
+    </div>
+
+    <!-- About -->
+    <div class="panel" style="border-bottom:none;">
+      <h3>ℹ️ About</h3>
+      <p style="font-size:11px; color:#888; line-height:1.5;">
+        A recreation of SimAnt (Maxis, 1991). Control the yellow ant, grow your colony, 
+        and drive out the red ants. Watch out for spiders and the lawn mower!
+      </p>
+    </div>
+  </div>
+
+  <!-- Game Canvas -->
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    <div id="messages"></div>
+  </div>
+
+</div>
+
+<script>
+(function() {
+
+// === constants.js ===
+
+var TILE_SIZE = 16;
+var WORLD_COLS = 80;
+var WORLD_ROWS = 50;
+var WORLD_WIDTH = WORLD_COLS * TILE_SIZE;
+var WORLD_HEIGHT = WORLD_ROWS * TILE_SIZE;
+
+var YARD_COLS = 8;
+var YARD_ROWS = 6;
+
+var CASTE = {
+  WORKER: 'worker',
+  SOLDIER: 'soldier',
+  QUEEN: 'queen',
+  MALE: 'male',
+  LARVA: 'larva',
+  PUPA: 'pupa',
+};
+
+var BEHAVIOR = {
+  IDLE: 'idle',
+  FORAGE: 'forage',
+  DIG: 'dig',
+  NURSE: 'nurse',
+  FIGHT: 'fight',
+  FOLLOW_TRAIL: 'follow_trail',
+  RETURN_FOOD: 'return_food',
+  FLEE: 'flee',
+  WANDER: 'wander',
+};
+
+var TEAM = {
+  BLACK: 'black',
+  RED: 'red',
+};
+
+var SURFACE = {
+  GRASS: 0,
+  DIRT: 1,
+  ROCK: 2,
+  SAND: 3,
+  WATER: 4,
+  NEST_ENTRANCE: 5,
+  FOOD_CRUMB: 6,
+  FOOD_BUG: 7,
+};
+
+var UNDERGROUND = {
+  SOLID: 0,
+  TUNNEL: 1,
+  CHAMBER: 2,
+  QUEEN_CHAMBER: 3,
+  FOOD_STORE: 4,
+  BROOD_CHAMBER: 5,
+};
+
+var PHEROMONE = {
+  FOOD: 'food',
+  HOME: 'home',
+  ALARM: 'alarm',
+  TRAIL: 'trail',
+};
+
+var PREDATOR_TYPE = {
+  SPIDER: 'spider',
+  ANTLION: 'antlion',
+  LAWNMOWER: 'lawnmower',
+};
+
+var COLORS = {
+  GRASS_LIGHT: '#4a8c3f',
+  GRASS_DARK: '#3d7534',
+  DIRT: '#8B7355',
+  ROCK: '#808080',
+  SAND: '#C2B280',
+  WATER: '#4488cc',
+  TUNNEL: '#5C4033',
+  SOLID_EARTH: '#3B2716',
+  CHAMBER: '#6B5344',
+
+  BLACK_ANT: '#1a1a1a',
+  RED_ANT: '#cc3333',
+  PLAYER_ANT: '#ffdd00',
+  QUEEN_ANT: '#8B4513',
+
+  FOOD_CRUMB: '#F5DEB3',
+  FOOD_BUG: '#556B2F',
+
+  PHEROMONE_FOOD: 'rgba(0, 255, 0, 0.3)',
+  PHEROMONE_HOME: 'rgba(0, 100, 255, 0.3)',
+  PHEROMONE_ALARM: 'rgba(255, 0, 0, 0.3)',
+
+  NEST_ENTRANCE: '#2a1a0a',
+
+  UI_BG: '#2c2c2c',
+  UI_BORDER: '#555',
+  UI_TEXT: '#eee',
+  UI_ACCENT: '#4a9eff',
+};
+
+var SPEED = {
+  PAUSED: 0,
+  SLOW: 0.5,
+  NORMAL: 1,
+  FAST: 2,
+  ULTRA: 4,
+};
+
+var ANT_STATS = {};
+ANT_STATS[CASTE.WORKER] = { speed: 1.5, hp: 3, attack: 1, size: 3, carryCapacity: 1 };
+ANT_STATS[CASTE.SOLDIER] = { speed: 1.2, hp: 6, attack: 3, size: 4, carryCapacity: 0 };
+ANT_STATS[CASTE.QUEEN] = { speed: 0.5, hp: 20, attack: 0, size: 6, carryCapacity: 0 };
+ANT_STATS[CASTE.MALE] = { speed: 2.0, hp: 1, attack: 0, size: 3, carryCapacity: 0 };
+
+var DEFAULT_BEHAVIOR_ALLOC = {
+  forage: 50,
+  dig: 20,
+  nurse: 20,
+  fight: 10,
+};
+
+var MAX_ANTS_PER_COLONY = 200;
+var FOOD_TO_SPAWN_ANT = 5;
+var PHEROMONE_DECAY_RATE = 0.995;
+var PHEROMONE_STRENGTH = 100;
+var ANT_VISION_RANGE = 5;
+var QUEEN_LAY_INTERVAL = 300;
+var LARVA_GROW_TIME = 500;
+var PUPA_GROW_TIME = 400;
+
+
+// === pheromone.js ===
+
+class PheromoneGrid {
+  constructor() {
+    this.food = this.createGrid();
+    this.home = this.createGrid();
+    this.alarm = this.createGrid();
+    this.homeRed = this.createGrid();
+    this.foodRed = this.createGrid();
+  }
+
+  createGrid() {
+    return new Float32Array(WORLD_COLS * WORLD_ROWS);
+  }
+
+  idx(col, row) {
+    return row * WORLD_COLS + col;
+  }
+
+  deposit(type, col, row, strength, team = 'black') {
+    if (col < 0 || col >= WORLD_COLS || row < 0 || row >= WORLD_ROWS) return;
+    const i = this.idx(col, row);
+    if (type === 'food') {
+      const grid = team === 'red' ? this.foodRed : this.food;
+      grid[i] = Math.min(grid[i] + strength, 255);
+    } else if (type === 'home') {
+      const grid = team === 'red' ? this.homeRed : this.home;
+      grid[i] = Math.min(grid[i] + strength, 255);
+    } else if (type === 'alarm') {
+      this.alarm[i] = Math.min(this.alarm[i] + strength, 255);
+    }
+  }
+
+  get(type, col, row, team = 'black') {
+    if (col < 0 || col >= WORLD_COLS || row < 0 || row >= WORLD_ROWS) return 0;
+    const i = this.idx(col, row);
+    if (type === 'food') return team === 'red' ? this.foodRed[i] : this.food[i];
+    if (type === 'home') return team === 'red' ? this.homeRed[i] : this.home[i];
+    if (type === 'alarm') return this.alarm[i];
+    return 0;
+  }
+
+  update() {
+    const grids = [this.food, this.home, this.alarm, this.homeRed, this.foodRed];
+    for (const grid of grids) {
+      for (let i = 0; i < grid.length; i++) {
+        grid[i] *= PHEROMONE_DECAY_RATE;
+        if (grid[i] < 0.5) grid[i] = 0;
+      }
+    }
+  }
+
+  getGradient(type, col, row, team = 'black') {
+    let bestVal = 0;
+    let bestDx = 0;
+    let bestDy = 0;
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dy = -2; dy <= 2; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        const val = this.get(type, col + dx, row + dy, team);
+        if (val > bestVal) {
+          bestVal = val;
+          bestDx = dx;
+          bestDy = dy;
+        }
+      }
+    }
+    if (bestVal > 0) {
+      const len = Math.sqrt(bestDx * bestDx + bestDy * bestDy);
+      return { dx: bestDx / len, dy: bestDy / len, strength: bestVal };
+    }
+    return null;
+  }
+}
+
+
+// === world.js ===
+
+class World {
+  constructor() {
+    this.surface = new Uint8Array(WORLD_COLS * WORLD_ROWS);
+    this.underground = new Uint8Array(WORLD_COLS * WORLD_ROWS);
+    this.foodMap = new Float32Array(WORLD_COLS * WORLD_ROWS);
+    this.isUnderground = false;
+    this.generate();
+  }
+
+  idx(col, row) {
+    return row * WORLD_COLS + col;
+  }
+
+  getSurface(col, row) {
+    if (col < 0 || col >= WORLD_COLS || row < 0 || row >= WORLD_ROWS) return SURFACE.ROCK;
+    return this.surface[this.idx(col, row)];
+  }
+
+  getUnderground(col, row) {
+    if (col < 0 || col >= WORLD_COLS || row < 0 || row >= WORLD_ROWS) return UNDERGROUND.SOLID;
+    return this.underground[this.idx(col, row)];
+  }
+
+  setUnderground(col, row, val) {
+    if (col < 0 || col >= WORLD_COLS || row < 0 || row >= WORLD_ROWS) return;
+    this.underground[this.idx(col, row)] = val;
+  }
+
+  setSurface(col, row, val) {
+    if (col < 0 || col >= WORLD_COLS || row < 0 || row >= WORLD_ROWS) return;
+    this.surface[this.idx(col, row)] = val;
+  }
+
+  getFood(col, row) {
+    if (col < 0 || col >= WORLD_COLS || row < 0 || row >= WORLD_ROWS) return 0;
+    return this.foodMap[this.idx(col, row)];
+  }
+
+  addFood(col, row, amount) {
+    if (col < 0 || col >= WORLD_COLS || row < 0 || row >= WORLD_ROWS) return;
+    this.foodMap[this.idx(col, row)] += amount;
+  }
+
+  removeFood(col, row, amount) {
+    if (col < 0 || col >= WORLD_COLS || row < 0 || row >= WORLD_ROWS) return 0;
+    const i = this.idx(col, row);
+    const taken = Math.min(this.foodMap[i], amount);
+    this.foodMap[i] -= taken;
+    if (this.foodMap[i] <= 0) {
+      this.foodMap[i] = 0;
+      const s = this.surface[i];
+      if (s === SURFACE.FOOD_CRUMB || s === SURFACE.FOOD_BUG) {
+        this.surface[i] = SURFACE.GRASS;
+      }
+    }
+    return taken;
+  }
+
+  isWalkableSurface(col, row) {
+    const t = this.getSurface(col, row);
+    return t !== SURFACE.ROCK && t !== SURFACE.WATER;
+  }
+
+  isWalkableUnderground(col, row) {
+    const t = this.getUnderground(col, row);
+    return t !== UNDERGROUND.SOLID;
+  }
+
+  isWalkable(col, row) {
+    return this.isUnderground
+      ? this.isWalkableUnderground(col, row)
+      : this.isWalkableSurface(col, row);
+  }
+
+  isDiggable(col, row) {
+    if (col < 0 || col >= WORLD_COLS || row < 0 || row >= WORLD_ROWS) return false;
+    return this.underground[this.idx(col, row)] === UNDERGROUND.SOLID;
+  }
+
+  dig(col, row) {
+    if (!this.isDiggable(col, row)) return false;
+    this.underground[this.idx(col, row)] = UNDERGROUND.TUNNEL;
+    return true;
+  }
+
+  generate() {
+    for (let row = 0; row < WORLD_ROWS; row++) {
+      for (let col = 0; col < WORLD_COLS; col++) {
+        const i = this.idx(col, row);
+        let terrain = SURFACE.GRASS;
+
+        const nx = col / WORLD_COLS;
+        const ny = row / WORLD_ROWS;
+
+        if (this.noise(col * 0.15, row * 0.15) > 0.75) {
+          terrain = SURFACE.ROCK;
+        }
+        else if (this.noise(col * 0.08 + 50, row * 0.08 + 50) > 0.65) {
+          terrain = SURFACE.DIRT;
+        }
+        else if (this.noise(col * 0.1 + 100, row * 0.1 + 100) > 0.72) {
+          terrain = SURFACE.SAND;
+        }
+        else if (this.noise(col * 0.12 + 200, row * 0.12 + 200) > 0.82) {
+          terrain = SURFACE.WATER;
+        }
+
+        this.surface[i] = terrain;
+        this.underground[i] = UNDERGROUND.SOLID;
+      }
+    }
+
+    this.placeFood();
+    this.createNest(15, 25, 'black');
+    this.createNest(65, 25, 'red');
+  }
+
+  placeFood() {
+    for (let i = 0; i < 30; i++) {
+      const col = Math.floor(Math.random() * WORLD_COLS);
+      const row = Math.floor(Math.random() * WORLD_ROWS);
+      if (this.getSurface(col, row) === SURFACE.GRASS) {
+        this.surface[this.idx(col, row)] = SURFACE.FOOD_CRUMB;
+        this.foodMap[this.idx(col, row)] = 3 + Math.random() * 7;
+      }
+    }
+    for (let i = 0; i < 8; i++) {
+      const col = Math.floor(Math.random() * WORLD_COLS);
+      const row = Math.floor(Math.random() * WORLD_ROWS);
+      if (this.getSurface(col, row) === SURFACE.GRASS) {
+        this.surface[this.idx(col, row)] = SURFACE.FOOD_BUG;
+        this.foodMap[this.idx(col, row)] = 15 + Math.random() * 20;
+      }
+    }
+  }
+
+  createNest(cx, cy, team) {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        this.setSurface(cx + dx, cy + dy, SURFACE.NEST_ENTRANCE);
+      }
+    }
+    this.setSurface(cx, cy, SURFACE.NEST_ENTRANCE);
+
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dy = -2; dy <= 2; dy++) {
+        this.setUnderground(cx + dx, cy + dy, UNDERGROUND.QUEEN_CHAMBER);
+      }
+    }
+
+    const tunnelDirs = [
+      { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+      { dx: 0, dy: 1 }, { dx: -1, dy: 0 },
+      { dx: 1, dy: -1 }, { dx: -1, dy: 1 },
+    ];
+
+    for (const dir of tunnelDirs) {
+      const len = 5 + Math.floor(Math.random() * 8);
+      for (let s = 3; s < len; s++) {
+        const tc = cx + dir.dx * s;
+        const tr = cy + dir.dy * s;
+        this.setUnderground(tc, tr, UNDERGROUND.TUNNEL);
+        if (Math.random() < 0.3) {
+          this.setUnderground(tc + (Math.random() > 0.5 ? 1 : -1), tr, UNDERGROUND.TUNNEL);
+        }
+      }
+      const endC = cx + dir.dx * len;
+      const endR = cy + dir.dy * len;
+      const chamberType = Math.random() > 0.5 ? UNDERGROUND.FOOD_STORE : UNDERGROUND.BROOD_CHAMBER;
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          this.setUnderground(endC + dx, endR + dy, chamberType);
+        }
+      }
+    }
+
+    return { col: cx, row: cy };
+  }
+
+  noise(x, y) {
+    const xi = Math.floor(x);
+    const yi = Math.floor(y);
+    const xf = x - xi;
+    const yf = y - yi;
+
+    const hash = (a, b) => {
+      let h = ((a * 2654435761) ^ (b * 2246822519)) & 0x7fffffff;
+      h = ((h >> 13) ^ h) * 1274126177;
+      return ((h >> 16) ^ h & 0x7fffffff) / 0x7fffffff;
+    };
+
+    const v00 = hash(xi, yi);
+    const v10 = hash(xi + 1, yi);
+    const v01 = hash(xi, yi + 1);
+    const v11 = hash(xi + 1, yi + 1);
+
+    const sx = xf * xf * (3 - 2 * xf);
+    const sy = yf * yf * (3 - 2 * yf);
+
+    const a = v00 + sx * (v10 - v00);
+    const b = v01 + sx * (v11 - v01);
+    return a + sy * (b - a);
+  }
+
+  spawnRandomFood() {
+    if (Math.random() < 0.002) {
+      const col = Math.floor(Math.random() * WORLD_COLS);
+      const row = Math.floor(Math.random() * WORLD_ROWS);
+      if (this.getSurface(col, row) === SURFACE.GRASS) {
+        this.surface[this.idx(col, row)] = SURFACE.FOOD_CRUMB;
+        this.foodMap[this.idx(col, row)] = 2 + Math.random() * 5;
+      }
+    }
+  }
+
+  getNestEntrance(team) {
+    if (team === 'black') return { col: 15, row: 25 };
+    return { col: 65, row: 25 };
+  }
+}
+
+
+// === ant.js ===
+
+let nextAntId = 1;
+
+class Ant {
+  constructor(col, row, team, caste) {
+    if (caste === undefined) caste = CASTE.WORKER;
+    this.id = nextAntId++;
+    this.x = col * TILE_SIZE + TILE_SIZE / 2;
+    this.y = row * TILE_SIZE + TILE_SIZE / 2;
+    this.team = team;
+    this.caste = caste;
+
+    const stats = ANT_STATS[caste] || ANT_STATS[CASTE.WORKER];
+    this.speed = stats.speed;
+    this.maxHp = stats.hp;
+    this.hp = stats.hp;
+    this.attack = stats.attack;
+    this.size = stats.size;
+    this.carryCapacity = stats.carryCapacity;
+
+    this.behavior = BEHAVIOR.WANDER;
+    this.carrying = 0;
+    this.angle = Math.random() * Math.PI * 2;
+    this.targetX = 0;
+    this.targetY = 0;
+    this.hasTarget = false;
+    this.alive = true;
+    this.underground = false;
+    this.wanderTimer = 0;
+    this.stuckTimer = 0;
+    this.prevCol = -1;
+    this.prevRow = -1;
+    this.fightTarget = null;
+    this.age = 0;
+    this.maxAge = 8000 + Math.random() * 4000;
+
+    this.layTimer = 0;
+  }
+
+  get col() {
+    return Math.floor(this.x / TILE_SIZE);
+  }
+
+  get row() {
+    return Math.floor(this.y / TILE_SIZE);
+  }
+
+  update(world, pheromones, colony, allAnts) {
+    if (!this.alive) return;
+    this.age++;
+
+    if (this.caste !== CASTE.QUEEN && this.age > this.maxAge) {
+      this.alive = false;
+      return;
+    }
+
+    if (this.caste === CASTE.LARVA || this.caste === CASTE.PUPA) return;
+
+    if (this.caste === CASTE.QUEEN) {
+      this.updateQueen(colony);
+      return;
+    }
+
+    switch (this.behavior) {
+      case BEHAVIOR.FORAGE: this.updateForage(world, pheromones); break;
+      case BEHAVIOR.RETURN_FOOD: this.updateReturnFood(world, pheromones, colony); break;
+      case BEHAVIOR.DIG: this.updateDig(world); break;
+      case BEHAVIOR.FIGHT: this.updateFight(allAnts, pheromones); break;
+      case BEHAVIOR.WANDER: this.updateWander(world); break;
+      case BEHAVIOR.FOLLOW_TRAIL: this.updateFollowTrail(pheromones); break;
+      case BEHAVIOR.FLEE: this.updateFlee(pheromones); break;
+      default: this.updateWander(world); break;
+    }
+
+    this.clampPosition();
+  }
+
+  updateQueen(colony) {
+    this.layTimer++;
+    if (this.layTimer > 300 && colony.food >= 3) {
+      colony.food -= 3;
+      colony.pendingEggs++;
+      this.layTimer = 0;
+    }
+  }
+
+  updateForage(world, pheromones) {
+    const col = this.col;
+    const row = this.row;
+
+    const food = world.getFood(col, row);
+    if (food > 0 && this.carrying < this.carryCapacity) {
+      const taken = world.removeFood(col, row, 1);
+      this.carrying += taken;
+      if (this.carrying >= this.carryCapacity) {
+        this.behavior = BEHAVIOR.RETURN_FOOD;
+        pheromones.deposit('food', col, row, PHEROMONE_STRENGTH, this.team);
+        return;
+      }
+    }
+
+    let nearestFood = null;
+    let nearestDist = Infinity;
+    for (let dx = -ANT_VISION_RANGE; dx <= ANT_VISION_RANGE; dx++) {
+      for (let dy = -ANT_VISION_RANGE; dy <= ANT_VISION_RANGE; dy++) {
+        const nc = col + dx;
+        const nr = row + dy;
+        if (world.getFood(nc, nr) > 0) {
+          const d = dx * dx + dy * dy;
+          if (d < nearestDist) {
+            nearestDist = d;
+            nearestFood = { col: nc, row: nr };
+          }
+        }
+      }
+    }
+
+    if (nearestFood) {
+      this.moveToward(nearestFood.col * TILE_SIZE + TILE_SIZE / 2,
+                      nearestFood.row * TILE_SIZE + TILE_SIZE / 2, world);
+    } else {
+      const grad = pheromones.getGradient('food', col, row, this.team);
+      if (grad && grad.strength > 5) {
+        this.moveInDirection(grad.dx, grad.dy, world);
+      } else {
+        this.randomWalk(world);
+      }
+    }
+
+    pheromones.deposit('home', col, row, PHEROMONE_STRENGTH * 0.3, this.team);
+  }
+
+  updateReturnFood(world, pheromones, colony) {
+    const col = this.col;
+    const row = this.row;
+    const nest = world.getNestEntrance(this.team);
+
+    const dist = Math.abs(col - nest.col) + Math.abs(row - nest.row);
+    if (dist <= 2) {
+      colony.food += this.carrying;
+      this.carrying = 0;
+      this.behavior = BEHAVIOR.FORAGE;
+      return;
+    }
+
+    const grad = pheromones.getGradient('home', col, row, this.team);
+    if (grad && grad.strength > 5) {
+      this.moveInDirection(grad.dx, grad.dy, world);
+    } else {
+      this.moveToward(nest.col * TILE_SIZE + TILE_SIZE / 2,
+                      nest.row * TILE_SIZE + TILE_SIZE / 2, world);
+    }
+
+    pheromones.deposit('food', col, row, PHEROMONE_STRENGTH * 0.5, this.team);
+  }
+
+  updateDig(world) {
+    if (!this.underground) {
+      const nest = world.getNestEntrance(this.team);
+      const dist = Math.abs(this.col - nest.col) + Math.abs(this.row - nest.row);
+      if (dist <= 2) {
+        this.underground = true;
+      } else {
+        this.moveToward(nest.col * TILE_SIZE + TILE_SIZE / 2,
+                        nest.row * TILE_SIZE + TILE_SIZE / 2, world);
+      }
+      return;
+    }
+
+    const dx = Math.floor(Math.random() * 3) - 1;
+    const dy = Math.floor(Math.random() * 3) - 1;
+    const nc = this.col + dx;
+    const nr = this.row + dy;
+
+    if (world.isDiggable(nc, nr)) {
+      world.dig(nc, nr);
+    }
+
+    if (world.isWalkableUnderground(nc, nr)) {
+      this.x = nc * TILE_SIZE + TILE_SIZE / 2;
+      this.y = nr * TILE_SIZE + TILE_SIZE / 2;
+    } else {
+      this.randomWalk(world);
+    }
+  }
+
+  updateFight(allAnts, pheromones) {
+    let nearest = null;
+    let nearestDist = Infinity;
+    const visionPx = ANT_VISION_RANGE * TILE_SIZE;
+
+    for (const other of allAnts) {
+      if (!other.alive || other.team === this.team) continue;
+      if (other.caste === CASTE.LARVA || other.caste === CASTE.PUPA) continue;
+      const dx = other.x - this.x;
+      const dy = other.y - this.y;
+      const d = dx * dx + dy * dy;
+      if (d < nearestDist && d < visionPx * visionPx) {
+        nearestDist = d;
+        nearest = other;
+      }
+    }
+
+    if (nearest) {
+      const dx = nearest.x - this.x;
+      const dy = nearest.y - this.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+
+      if (d < TILE_SIZE) {
+        nearest.hp -= this.attack;
+        if (nearest.hp <= 0) {
+          nearest.alive = false;
+        }
+        this.hp -= nearest.attack * 0.5;
+        if (this.hp <= 0) {
+          this.alive = false;
+        }
+        pheromones.deposit('alarm', this.col, this.row, PHEROMONE_STRENGTH * 2, this.team);
+      } else {
+        this.x += (dx / d) * this.speed * 1.5;
+        this.y += (dy / d) * this.speed * 1.5;
+      }
+    } else {
+      this.randomWalk(null);
+    }
+  }
+
+  updateWander(world) {
+    this.randomWalk(world);
+  }
+
+  updateFollowTrail(pheromones) {
+    const grad = pheromones.getGradient('food', this.col, this.row, this.team);
+    if (grad && grad.strength > 3) {
+      this.moveInDirection(grad.dx, grad.dy, null);
+    } else {
+      this.randomWalk(null);
+    }
+  }
+
+  updateFlee(pheromones) {
+    const grad = pheromones.getGradient('alarm', this.col, this.row);
+    if (grad) {
+      this.moveInDirection(-grad.dx, -grad.dy, null);
+    } else {
+      this.behavior = BEHAVIOR.WANDER;
+    }
+  }
+
+  moveToward(tx, ty, world) {
+    const dx = tx - this.x;
+    const dy = ty - this.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < 1) return;
+
+    const nx = dx / d;
+    const ny = dy / d;
+    this.moveInDirection(nx, ny, world);
+  }
+
+  moveInDirection(dx, dy, world) {
+    const newX = this.x + dx * this.speed;
+    const newY = this.y + dy * this.speed;
+    const newCol = Math.floor(newX / TILE_SIZE);
+    const newRow = Math.floor(newY / TILE_SIZE);
+
+    if (world) {
+      const walkable = this.underground
+        ? world.isWalkableUnderground(newCol, newRow)
+        : world.isWalkableSurface(newCol, newRow);
+      if (walkable) {
+        this.x = newX;
+        this.y = newY;
+        this.angle = Math.atan2(dy, dx);
+      } else {
+        const slideX = this.x + dx * this.speed;
+        const slideCol = Math.floor(slideX / TILE_SIZE);
+        const canSlideX = this.underground
+          ? world.isWalkableUnderground(slideCol, this.row)
+          : world.isWalkableSurface(slideCol, this.row);
+        if (canSlideX) {
+          this.x = slideX;
+          this.angle = Math.atan2(0, dx);
+        } else {
+          const slideY = this.y + dy * this.speed;
+          const slideRow = Math.floor(slideY / TILE_SIZE);
+          const canSlideY = this.underground
+            ? world.isWalkableUnderground(this.col, slideRow)
+            : world.isWalkableSurface(this.col, slideRow);
+          if (canSlideY) {
+            this.y = slideY;
+            this.angle = Math.atan2(dy, 0);
+          }
+        }
+        this.stuckTimer++;
+        if (this.stuckTimer > 30) {
+          this.angle = Math.random() * Math.PI * 2;
+          this.stuckTimer = 0;
+        }
+      }
+    } else {
+      this.x = newX;
+      this.y = newY;
+      this.angle = Math.atan2(dy, dx);
+    }
+  }
+
+  randomWalk(world) {
+    this.wanderTimer--;
+    if (this.wanderTimer <= 0) {
+      this.angle += (Math.random() - 0.5) * 1.2;
+      this.wanderTimer = 15 + Math.floor(Math.random() * 30);
+    }
+    const dx = Math.cos(this.angle);
+    const dy = Math.sin(this.angle);
+    this.moveInDirection(dx, dy, world);
+  }
+
+  clampPosition() {
+    this.x = Math.max(TILE_SIZE, Math.min(this.x, (WORLD_COLS - 1) * TILE_SIZE));
+    this.y = Math.max(TILE_SIZE, Math.min(this.y, (WORLD_ROWS - 1) * TILE_SIZE));
+  }
+
+  assignBehavior(behaviorType) {
+    this.behavior = behaviorType;
+  }
+
+  takeDamage(amount) {
+    this.hp -= amount;
+    if (this.hp <= 0) {
+      this.alive = false;
+    }
+  }
+}
+
+
+// === colony.js ===
+
+class Colony {
+  constructor(team, nestCol, nestRow) {
+    this.team = team;
+    this.nestCol = nestCol;
+    this.nestRow = nestRow;
+    this.food = 50;
+    this.ants = [];
+    this.queen = null;
+    this.pendingEggs = 0;
+
+    this.behaviorAlloc = Object.assign({}, DEFAULT_BEHAVIOR_ALLOC);
+
+    this.workerCount = 0;
+    this.soldierCount = 0;
+
+    this.spawnQueue = [];
+    this.spawnTimer = 0;
+  }
+
+  init() {
+    this.queen = new Ant(this.nestCol, this.nestRow, this.team, CASTE.QUEEN);
+    this.queen.underground = true;
+    this.ants.push(this.queen);
+
+    for (let i = 0; i < 25; i++) {
+      const a = this.spawnAnt(CASTE.WORKER);
+      if (a) this.assignRandomBehavior(a);
+    }
+
+    for (let i = 0; i < 5; i++) {
+      const a = this.spawnAnt(CASTE.SOLDIER);
+      if (a) a.behavior = BEHAVIOR.FIGHT;
+    }
+  }
+
+  spawnAnt(caste) {
+    if (this.ants.length >= MAX_ANTS_PER_COLONY) return null;
+
+    const offsetX = (Math.random() - 0.5) * 4;
+    const offsetY = (Math.random() - 0.5) * 4;
+    const ant = new Ant(this.nestCol + offsetX, this.nestRow + offsetY, this.team, caste);
+    this.ants.push(ant);
+    return ant;
+  }
+
+  assignRandomBehavior(ant) {
+    const r = Math.random() * 100;
+    const { forage, dig, nurse, fight } = this.behaviorAlloc;
+
+    if (r < forage) {
+      ant.behavior = BEHAVIOR.FORAGE;
+    } else if (r < forage + dig) {
+      ant.behavior = BEHAVIOR.DIG;
+    } else if (r < forage + dig + nurse) {
+      ant.behavior = BEHAVIOR.WANDER;
+    } else {
+      ant.behavior = BEHAVIOR.FIGHT;
+    }
+  }
+
+  update(world, pheromones, allAnts) {
+    if (this.pendingEggs > 0 && this.ants.length < MAX_ANTS_PER_COLONY) {
+      this.spawnTimer++;
+      if (this.spawnTimer > 20) {
+        this.pendingEggs--;
+        this.spawnTimer = 0;
+
+        const caste = Math.random() < 0.8 ? CASTE.WORKER : CASTE.SOLDIER;
+        const ant = this.spawnAnt(caste);
+        if (ant) this.assignRandomBehavior(ant);
+      }
+    }
+
+    this.workerCount = 0;
+    this.soldierCount = 0;
+    for (let i = this.ants.length - 1; i >= 0; i--) {
+      const ant = this.ants[i];
+      if (!ant.alive) {
+        this.ants.splice(i, 1);
+        continue;
+      }
+      ant.update(world, pheromones, this, allAnts);
+
+      if (ant.caste === CASTE.WORKER) this.workerCount++;
+      else if (ant.caste === CASTE.SOLDIER) this.soldierCount++;
+    }
+
+    if (!this.queen || !this.queen.alive) {
+      if (Math.random() < 0.001) {
+        for (const ant of this.ants) {
+          if (ant.caste !== CASTE.QUEEN && Math.random() < 0.1) {
+            ant.alive = false;
+          }
+        }
+      }
+    }
+  }
+
+  getTotalAnts() {
+    return this.ants.filter(a => a.alive && a.caste !== CASTE.LARVA && a.caste !== CASTE.PUPA).length;
+  }
+
+  setBehaviorAllocation(forage, dig, nurse, fight) {
+    const total = forage + dig + nurse + fight;
+    if (total === 0) return;
+    this.behaviorAlloc = {
+      forage: (forage / total) * 100,
+      dig: (dig / total) * 100,
+      nurse: (nurse / total) * 100,
+      fight: (fight / total) * 100,
+    };
+
+    for (const ant of this.ants) {
+      if (ant.caste === CASTE.WORKER && ant.behavior !== BEHAVIOR.RETURN_FOOD) {
+        this.assignRandomBehavior(ant);
+      }
+    }
+  }
+}
+
+
+// === player.js ===
+
+class PlayerAnt extends Ant {
+  constructor(col, row) {
+    super(col, row, 'black', CASTE.WORKER);
+    this.isPlayer = true;
+    this.speed = 2.5;
+    this.maxHp = 10;
+    this.hp = 10;
+    this.attack = 2;
+    this.size = 4;
+    this.behavior = BEHAVIOR.IDLE;
+
+    this.keys = { up: false, down: false, left: false, right: false };
+    this.actions = { dig: false, drop: false, attack: false };
+  }
+
+  update(world, pheromones, colony, allAnts) {
+    if (!this.alive) return;
+
+    let dx = 0;
+    let dy = 0;
+
+    if (this.keys.up) dy = -1;
+    if (this.keys.down) dy = 1;
+    if (this.keys.left) dx = -1;
+    if (this.keys.right) dx = 1;
+
+    if (dx !== 0 || dy !== 0) {
+      const len = Math.sqrt(dx * dx + dy * dy);
+      dx /= len;
+      dy /= len;
+      this.moveInDirection(dx, dy, world);
+    }
+
+    if (this.actions.dig) {
+      this.actions.dig = false;
+      if (this.underground) {
+        const digCol = this.col + Math.round(Math.cos(this.angle));
+        const digRow = this.row + Math.round(Math.sin(this.angle));
+        world.dig(digCol, digRow);
+      }
+    }
+
+    if (!this.underground) {
+      const food = world.getFood(this.col, this.row);
+      if (food > 0 && this.carrying < 1) {
+        const taken = world.removeFood(this.col, this.row, 1);
+        this.carrying += taken;
+      }
+    }
+
+    if (this.actions.drop) {
+      this.actions.drop = false;
+      if (this.carrying > 0) {
+        const nest = world.getNestEntrance(this.team);
+        const dist = Math.abs(this.col - nest.col) + Math.abs(this.row - nest.row);
+        if (dist <= 3) {
+          colony.food += this.carrying;
+          this.carrying = 0;
+        } else {
+          world.addFood(this.col, this.row, this.carrying);
+          if (world.getSurface(this.col, this.row) === SURFACE.GRASS) {
+            world.setSurface(this.col, this.row, SURFACE.FOOD_CRUMB);
+          }
+          this.carrying = 0;
+        }
+      }
+    }
+
+    if (dx !== 0 || dy !== 0) {
+      if (this.carrying > 0) {
+        pheromones.deposit('food', this.col, this.row, PHEROMONE_STRENGTH * 0.8, this.team);
+      } else {
+        pheromones.deposit('home', this.col, this.row, PHEROMONE_STRENGTH * 0.3, this.team);
+      }
+    }
+
+    if (this.actions.attack) {
+      this.actions.attack = false;
+      const attackRange = TILE_SIZE * 1.5;
+      for (const other of allAnts) {
+        if (!other.alive || other.team === this.team || other === this) continue;
+        const adx = other.x - this.x;
+        const ady = other.y - this.y;
+        if (adx * adx + ady * ady < attackRange * attackRange) {
+          other.takeDamage(this.attack);
+          break;
+        }
+      }
+    }
+
+    const surfaceTile = world.getSurface(this.col, this.row);
+    if (surfaceTile === SURFACE.NEST_ENTRANCE) {
+      this.canToggleUnderground = true;
+    } else if (!this.underground) {
+      this.canToggleUnderground = false;
+    }
+
+    this.clampPosition();
+  }
+
+  toggleUnderground() {
+    if (this.canToggleUnderground || this.underground) {
+      this.underground = !this.underground;
+    }
+  }
+}
+
+
+// === predator.js ===
+
+class Predator {
+  constructor(type, col, row) {
+    this.type = type;
+    this.x = col * TILE_SIZE + TILE_SIZE / 2;
+    this.y = row * TILE_SIZE + TILE_SIZE / 2;
+    this.alive = true;
+    this.angle = Math.random() * Math.PI * 2;
+    this.speed = type === 'spider' ? 0.8 : type === 'lawnmower' ? 1.5 : 0;
+    this.size = type === 'spider' ? 12 : type === 'lawnmower' ? 20 : 8;
+    this.wanderTimer = 0;
+    this.killRadius = type === 'lawnmower' ? TILE_SIZE * 2 : TILE_SIZE * 1.5;
+    this.cooldown = 0;
+  }
+
+  get col() { return Math.floor(this.x / TILE_SIZE); }
+  get row() { return Math.floor(this.y / TILE_SIZE); }
+
+  update(ants) {
+    if (!this.alive) return;
+    this.cooldown = Math.max(0, this.cooldown - 1);
+
+    switch (this.type) {
+      case 'spider': this.updateSpider(ants); break;
+      case 'antlion': this.updateAntlion(ants); break;
+      case 'lawnmower': this.updateLawnmower(ants); break;
+    }
+  }
+
+  updateSpider(ants) {
+    this.wanderTimer--;
+    if (this.wanderTimer <= 0) {
+      this.angle += (Math.random() - 0.5) * 1.5;
+      this.wanderTimer = 40 + Math.floor(Math.random() * 60);
+    }
+
+    let nearestAnt = null;
+    let nearestDist = Infinity;
+    const huntRange = TILE_SIZE * 8;
+
+    for (const ant of ants) {
+      if (!ant.alive || ant.underground) continue;
+      const dx = ant.x - this.x;
+      const dy = ant.y - this.y;
+      const d = dx * dx + dy * dy;
+      if (d < nearestDist && d < huntRange * huntRange) {
+        nearestDist = d;
+        nearestAnt = ant;
+      }
+    }
+
+    if (nearestAnt && Math.random() < 0.6) {
+      const dx = nearestAnt.x - this.x;
+      const dy = nearestAnt.y - this.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      this.angle = Math.atan2(dy, dx);
+    }
+
+    this.x += Math.cos(this.angle) * this.speed;
+    this.y += Math.sin(this.angle) * this.speed;
+
+    if (this.cooldown <= 0) {
+      for (const ant of ants) {
+        if (!ant.alive || ant.underground) continue;
+        const dx = ant.x - this.x;
+        const dy = ant.y - this.y;
+        if (dx * dx + dy * dy < this.killRadius * this.killRadius) {
+          ant.alive = false;
+          this.cooldown = 30;
+          break;
+        }
+      }
+    }
+
+    this.x = Math.max(TILE_SIZE, Math.min(this.x, (WORLD_COLS - 1) * TILE_SIZE));
+    this.y = Math.max(TILE_SIZE, Math.min(this.y, (WORLD_ROWS - 1) * TILE_SIZE));
+  }
+
+  updateAntlion(ants) {
+    for (const ant of ants) {
+      if (!ant.alive || ant.underground) continue;
+      const dx = ant.x - this.x;
+      const dy = ant.y - this.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < this.killRadius) {
+        ant.x -= (dx / d) * 0.5;
+        ant.y -= (dy / d) * 0.5;
+        if (d < TILE_SIZE * 0.5) {
+          ant.alive = false;
+        }
+      }
+    }
+  }
+
+  updateLawnmower(ants) {
+    this.x += Math.cos(this.angle) * this.speed;
+    this.y += Math.sin(this.angle) * this.speed;
+
+    if (this.x < TILE_SIZE * 2 || this.x > (WORLD_COLS - 2) * TILE_SIZE) {
+      this.angle = Math.PI - this.angle;
+      this.y += TILE_SIZE * 3;
+    }
+    if (this.y < TILE_SIZE * 2 || this.y > (WORLD_ROWS - 2) * TILE_SIZE) {
+      this.angle = -this.angle;
+    }
+
+    for (const ant of ants) {
+      if (!ant.alive || ant.underground) continue;
+      const dx = ant.x - this.x;
+      const dy = ant.y - this.y;
+      if (dx * dx + dy * dy < this.killRadius * this.killRadius) {
+        ant.alive = false;
+      }
+    }
+
+    this.x = Math.max(TILE_SIZE, Math.min(this.x, (WORLD_COLS - 1) * TILE_SIZE));
+    this.y = Math.max(TILE_SIZE, Math.min(this.y, (WORLD_ROWS - 1) * TILE_SIZE));
+  }
+
+  draw(ctx, camX, camY) {
+    const sx = this.x - camX;
+    const sy = this.y - camY;
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(this.angle);
+
+    switch (this.type) {
+      case 'spider':
+        this.drawSpider(ctx);
+        break;
+      case 'antlion':
+        ctx.rotate(-this.angle);
+        this.drawAntlion(ctx);
+        break;
+      case 'lawnmower':
+        this.drawLawnmower(ctx);
+        break;
+    }
+
+    ctx.restore();
+  }
+
+  drawSpider(ctx) {
+    const s = this.size;
+    ctx.fillStyle = '#2a1a0a';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s * 0.6, s * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(s * 0.5, 0, s * 0.35, s * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#3a2a1a';
+    ctx.lineWidth = 1.5;
+    for (let i = -3; i <= 3; i++) {
+      if (i === 0) continue;
+      const lx = i * s * 0.15;
+      const side = i > 0 ? 1 : -1;
+      ctx.beginPath();
+      ctx.moveTo(lx, 0);
+      ctx.lineTo(lx + side * s * 0.1, -s * 0.7);
+      ctx.lineTo(lx + side * s * 0.3, -s * 0.9);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(lx, 0);
+      ctx.lineTo(lx + side * s * 0.1, s * 0.7);
+      ctx.lineTo(lx + side * s * 0.3, s * 0.9);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#ff0000';
+    ctx.beginPath();
+    ctx.arc(s * 0.6, -s * 0.12, 1.5, 0, Math.PI * 2);
+    ctx.arc(s * 0.6, s * 0.12, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  drawAntlion(ctx) {
+    const s = this.size;
+    ctx.strokeStyle = '#8B7355';
+    ctx.lineWidth = 1;
+    for (let r = s; r > 2; r -= 3) {
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#3a2a1a';
+    ctx.beginPath();
+    ctx.moveTo(-3, 0);
+    ctx.lineTo(0, -4);
+    ctx.lineTo(3, 0);
+    ctx.lineTo(0, 4);
+    ctx.fill();
+  }
+
+  drawLawnmower(ctx) {
+    const s = this.size;
+    ctx.fillStyle = '#cc4444';
+    ctx.fillRect(-s * 0.6, -s * 0.4, s * 1.2, s * 0.8);
+    ctx.fillStyle = '#333';
+    ctx.fillRect(-s * 0.7, -s * 0.5, s * 0.15, s);
+    ctx.fillRect(s * 0.55, -s * 0.5, s * 0.15, s);
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.6, 0);
+    ctx.lineTo(-s * 1.2, 0);
+    ctx.stroke();
+    ctx.strokeStyle = '#aaa';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.3, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+function createPredators() {
+  const predators = [];
+
+  predators.push(new Predator('spider',
+    10 + Math.floor(Math.random() * 60),
+    5 + Math.floor(Math.random() * 40)));
+
+  predators.push(new Predator('spider',
+    10 + Math.floor(Math.random() * 60),
+    5 + Math.floor(Math.random() * 40)));
+
+  predators.push(new Predator('antlion',
+    25 + Math.floor(Math.random() * 30),
+    10 + Math.floor(Math.random() * 30)));
+
+  predators.push(new Predator('antlion',
+    25 + Math.floor(Math.random() * 30),
+    10 + Math.floor(Math.random() * 30)));
+
+  return predators;
+}
+
+
+// === renderer.js ===
+
+class Renderer {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.camX = 0;
+    this.camY = 0;
+    this.viewWidth = canvas.width;
+    this.viewHeight = canvas.height;
+    this.showPheromones = false;
+    this.pheromoneType = 'food';
+  }
+
+  resize(w, h) {
+    this.canvas.width = w;
+    this.canvas.height = h;
+    this.viewWidth = w;
+    this.viewHeight = h;
+  }
+
+  centerOn(x, y) {
+    this.camX = x - this.viewWidth / 2;
+    this.camY = y - this.viewHeight / 2;
+    this.clampCamera();
+  }
+
+  clampCamera() {
+    this.camX = Math.max(0, Math.min(this.camX, WORLD_COLS * TILE_SIZE - this.viewWidth));
+    this.camY = Math.max(0, Math.min(this.camY, WORLD_ROWS * TILE_SIZE - this.viewHeight));
+  }
+
+  clear() {
+    this.ctx.fillStyle = '#000';
+    this.ctx.fillRect(0, 0, this.viewWidth, this.viewHeight);
+  }
+
+  drawWorld(world) {
+    const ctx = this.ctx;
+    const startCol = Math.max(0, Math.floor(this.camX / TILE_SIZE));
+    const endCol = Math.min(WORLD_COLS, Math.ceil((this.camX + this.viewWidth) / TILE_SIZE) + 1);
+    const startRow = Math.max(0, Math.floor(this.camY / TILE_SIZE));
+    const endRow = Math.min(WORLD_ROWS, Math.ceil((this.camY + this.viewHeight) / TILE_SIZE) + 1);
+
+    for (let row = startRow; row < endRow; row++) {
+      for (let col = startCol; col < endCol; col++) {
+        const sx = col * TILE_SIZE - this.camX;
+        const sy = row * TILE_SIZE - this.camY;
+
+        if (world.isUnderground) {
+          this.drawUndergroundTile(ctx, col, row, sx, sy, world);
+        } else {
+          this.drawSurfaceTile(ctx, col, row, sx, sy, world);
+        }
+      }
+    }
+  }
+
+  drawSurfaceTile(ctx, col, row, sx, sy, world) {
+    const tile = world.getSurface(col, row);
+    const checker = (col + row) % 2 === 0;
+
+    switch (tile) {
+      case SURFACE.GRASS:
+        ctx.fillStyle = checker ? COLORS.GRASS_LIGHT : COLORS.GRASS_DARK;
+        break;
+      case SURFACE.DIRT:
+        ctx.fillStyle = COLORS.DIRT;
+        break;
+      case SURFACE.ROCK:
+        ctx.fillStyle = COLORS.ROCK;
+        break;
+      case SURFACE.SAND:
+        ctx.fillStyle = COLORS.SAND;
+        break;
+      case SURFACE.WATER:
+        ctx.fillStyle = COLORS.WATER;
+        break;
+      case SURFACE.NEST_ENTRANCE:
+        ctx.fillStyle = COLORS.NEST_ENTRANCE;
+        break;
+      case SURFACE.FOOD_CRUMB:
+        ctx.fillStyle = checker ? COLORS.GRASS_LIGHT : COLORS.GRASS_DARK;
+        ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+        ctx.fillStyle = COLORS.FOOD_CRUMB;
+        ctx.beginPath();
+        ctx.arc(sx + TILE_SIZE / 2, sy + TILE_SIZE / 2, 3, 0, Math.PI * 2);
+        ctx.fill();
+        return;
+      case SURFACE.FOOD_BUG:
+        ctx.fillStyle = checker ? COLORS.GRASS_LIGHT : COLORS.GRASS_DARK;
+        ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+        ctx.fillStyle = COLORS.FOOD_BUG;
+        ctx.beginPath();
+        ctx.ellipse(sx + TILE_SIZE / 2, sy + TILE_SIZE / 2, 5, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 0.5;
+        for (let i = -1; i <= 1; i++) {
+          ctx.beginPath();
+          ctx.moveTo(sx + TILE_SIZE / 2 + i * 3, sy + TILE_SIZE / 2 - 3);
+          ctx.lineTo(sx + TILE_SIZE / 2 + i * 3 - 2, sy + TILE_SIZE / 2 - 6);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(sx + TILE_SIZE / 2 + i * 3, sy + TILE_SIZE / 2 + 3);
+          ctx.lineTo(sx + TILE_SIZE / 2 + i * 3 - 2, sy + TILE_SIZE / 2 + 6);
+          ctx.stroke();
+        }
+        return;
+      default:
+        ctx.fillStyle = COLORS.GRASS_LIGHT;
+    }
+    ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+
+    if (tile === SURFACE.NEST_ENTRANCE) {
+      ctx.fillStyle = '#0a0a0a';
+      ctx.beginPath();
+      ctx.arc(sx + TILE_SIZE / 2, sy + TILE_SIZE / 2, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawUndergroundTile(ctx, col, row, sx, sy, world) {
+    const tile = world.getUnderground(col, row);
+
+    switch (tile) {
+      case UNDERGROUND.SOLID:
+        ctx.fillStyle = COLORS.SOLID_EARTH;
+        break;
+      case UNDERGROUND.TUNNEL:
+        ctx.fillStyle = COLORS.TUNNEL;
+        break;
+      case UNDERGROUND.CHAMBER:
+        ctx.fillStyle = COLORS.CHAMBER;
+        break;
+      case UNDERGROUND.QUEEN_CHAMBER:
+        ctx.fillStyle = '#7B6354';
+        break;
+      case UNDERGROUND.FOOD_STORE:
+        ctx.fillStyle = '#6B6344';
+        break;
+      case UNDERGROUND.BROOD_CHAMBER:
+        ctx.fillStyle = '#5B5374';
+        break;
+      default:
+        ctx.fillStyle = COLORS.SOLID_EARTH;
+    }
+    ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+
+    if (tile !== UNDERGROUND.SOLID) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(sx, sy, TILE_SIZE, TILE_SIZE);
+    }
+  }
+
+  drawPheromones(pheromones, team) {
+    const ctx = this.ctx;
+    const startCol = Math.max(0, Math.floor(this.camX / TILE_SIZE));
+    const endCol = Math.min(WORLD_COLS, Math.ceil((this.camX + this.viewWidth) / TILE_SIZE) + 1);
+    const startRow = Math.max(0, Math.floor(this.camY / TILE_SIZE));
+    const endRow = Math.min(WORLD_ROWS, Math.ceil((this.camY + this.viewHeight) / TILE_SIZE) + 1);
+
+    for (let row = startRow; row < endRow; row++) {
+      for (let col = startCol; col < endCol; col++) {
+        const sx = col * TILE_SIZE - this.camX;
+        const sy = row * TILE_SIZE - this.camY;
+
+        const foodVal = pheromones.get('food', col, row, team);
+        const homeVal = pheromones.get('home', col, row, team);
+        const alarmVal = pheromones.get('alarm', col, row);
+
+        if (foodVal > 2) {
+          ctx.fillStyle = `rgba(0, 255, 0, ${Math.min(foodVal / 100, 0.5)})`;
+          ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+        }
+        if (homeVal > 2) {
+          ctx.fillStyle = `rgba(0, 100, 255, ${Math.min(homeVal / 100, 0.4)})`;
+          ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+        }
+        if (alarmVal > 2) {
+          ctx.fillStyle = `rgba(255, 0, 0, ${Math.min(alarmVal / 100, 0.5)})`;
+          ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+        }
+      }
+    }
+  }
+
+  drawAnts(ants, isUnderground) {
+    const ctx = this.ctx;
+    for (const ant of ants) {
+      if (!ant.alive) continue;
+      if (ant.underground !== isUnderground) continue;
+
+      const sx = ant.x - this.camX;
+      const sy = ant.y - this.camY;
+
+      if (sx < -20 || sx > this.viewWidth + 20 || sy < -20 || sy > this.viewHeight + 20) continue;
+
+      this.drawAnt(ctx, ant, sx, sy);
+    }
+  }
+
+  drawAnt(ctx, ant, sx, sy) {
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(ant.angle);
+
+    const s = ant.size;
+
+    let bodyColor;
+    if (ant.isPlayer) {
+      bodyColor = COLORS.PLAYER_ANT;
+    } else if (ant.team === 'red') {
+      bodyColor = COLORS.RED_ANT;
+    } else {
+      bodyColor = COLORS.BLACK_ANT;
+    }
+
+    if (ant.caste === CASTE.QUEEN) {
+      bodyColor = ant.team === 'red' ? '#991111' : '#442200';
+    }
+
+    ctx.fillStyle = bodyColor;
+
+    ctx.beginPath();
+    ctx.ellipse(s * 0.8, 0, s * 0.35, s * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s * 0.4, s * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.ellipse(-s * 0.8, 0, s * 0.5, s * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = bodyColor;
+    ctx.lineWidth = 0.8;
+    for (let i = -1; i <= 1; i++) {
+      const lx = i * s * 0.3;
+      ctx.beginPath();
+      ctx.moveTo(lx, -s * 0.25);
+      ctx.lineTo(lx - s * 0.1, -s * 0.6);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(lx, s * 0.25);
+      ctx.lineTo(lx - s * 0.1, s * 0.6);
+      ctx.stroke();
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(s * 0.9, -s * 0.2);
+    ctx.quadraticCurveTo(s * 1.2, -s * 0.5, s * 1.4, -s * 0.3);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(s * 0.9, s * 0.2);
+    ctx.quadraticCurveTo(s * 1.2, s * 0.5, s * 1.4, s * 0.3);
+    ctx.stroke();
+
+    if (ant.caste === CASTE.SOLDIER) {
+      ctx.strokeStyle = '#660000';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(s * 1.0, -s * 0.1);
+      ctx.lineTo(s * 1.3, -s * 0.3);
+      ctx.lineTo(s * 1.2, 0);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(s * 1.0, s * 0.1);
+      ctx.lineTo(s * 1.3, s * 0.3);
+      ctx.lineTo(s * 1.2, 0);
+      ctx.stroke();
+    }
+
+    if (ant.carrying > 0) {
+      ctx.fillStyle = COLORS.FOOD_CRUMB;
+      ctx.beginPath();
+      ctx.arc(s * 1.1, 0, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (ant.isPlayer) {
+      ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, s * 1.2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    if (ant.hp < ant.maxHp) {
+      ctx.rotate(-ant.angle);
+      const barW = s * 2;
+      const barH = 2;
+      const hpPct = ant.hp / ant.maxHp;
+      ctx.fillStyle = '#333';
+      ctx.fillRect(-barW / 2, -s * 1.5, barW, barH);
+      ctx.fillStyle = hpPct > 0.5 ? '#0f0' : hpPct > 0.25 ? '#ff0' : '#f00';
+      ctx.fillRect(-barW / 2, -s * 1.5, barW * hpPct, barH);
+    }
+
+    ctx.restore();
+  }
+
+  drawPredators(predators) {
+    for (const pred of predators) {
+      if (!pred.alive) continue;
+      pred.draw(this.ctx, this.camX, this.camY);
+    }
+  }
+
+  drawMinimap(world, playerAnt, blackColony, redColony) {
+    const ctx = this.ctx;
+    const mmW = 160;
+    const mmH = 100;
+    const mmX = this.viewWidth - mmW - 10;
+    const mmY = 10;
+    const scaleX = mmW / WORLD_COLS;
+    const scaleY = mmH / WORLD_ROWS;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(mmX - 2, mmY - 2, mmW + 4, mmH + 4);
+
+    for (let row = 0; row < WORLD_ROWS; row += 2) {
+      for (let col = 0; col < WORLD_COLS; col += 2) {
+        const tile = world.getSurface(col, row);
+        switch (tile) {
+          case SURFACE.ROCK: ctx.fillStyle = '#666'; break;
+          case SURFACE.WATER: ctx.fillStyle = '#44c'; break;
+          case SURFACE.NEST_ENTRANCE: ctx.fillStyle = '#840'; break;
+          case SURFACE.FOOD_CRUMB:
+          case SURFACE.FOOD_BUG: ctx.fillStyle = '#cc0'; break;
+          default: ctx.fillStyle = '#3a6b30'; break;
+        }
+        ctx.fillRect(mmX + col * scaleX, mmY + row * scaleY, scaleX * 2, scaleY * 2);
+      }
+    }
+
+    ctx.fillStyle = '#333';
+    for (const ant of blackColony.ants) {
+      if (!ant.alive || ant.underground) continue;
+      ctx.fillRect(
+        mmX + (ant.x / TILE_SIZE) * scaleX,
+        mmY + (ant.y / TILE_SIZE) * scaleY,
+        1, 1
+      );
+    }
+
+    ctx.fillStyle = '#c33';
+    for (const ant of redColony.ants) {
+      if (!ant.alive || ant.underground) continue;
+      ctx.fillRect(
+        mmX + (ant.x / TILE_SIZE) * scaleX,
+        mmY + (ant.y / TILE_SIZE) * scaleY,
+        1, 1
+      );
+    }
+
+    if (playerAnt.alive) {
+      ctx.fillStyle = '#ff0';
+      ctx.fillRect(
+        mmX + (playerAnt.x / TILE_SIZE) * scaleX - 1,
+        mmY + (playerAnt.y / TILE_SIZE) * scaleY - 1,
+        3, 3
+      );
+    }
+
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(
+      mmX + (this.camX / TILE_SIZE) * scaleX,
+      mmY + (this.camY / TILE_SIZE) * scaleY,
+      (this.viewWidth / TILE_SIZE) * scaleX,
+      (this.viewHeight / TILE_SIZE) * scaleY
+    );
+
+    ctx.strokeStyle = COLORS.UI_BORDER;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(mmX - 2, mmY - 2, mmW + 4, mmH + 4);
+  }
+}
+
+
+// === game.js ===
+
+class Game {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.renderer = new Renderer(canvas);
+    this.world = new World();
+    this.pheromones = new PheromoneGrid();
+
+    this.blackColony = new Colony('black', 15, 25);
+    this.redColony = new Colony('red', 65, 25);
+    this.blackColony.init();
+    this.redColony.init();
+
+    this.player = new PlayerAnt(16, 24);
+    this.blackColony.ants.push(this.player);
+
+    this.predators = createPredators();
+    this.lawnmowerActive = false;
+    this.lawnmowerTimer = 0;
+
+    this.speed = SPEED.NORMAL;
+    this.paused = false;
+    this.frame = 0;
+    this.followPlayer = true;
+    this.showPheromones = false;
+
+    this.isRaining = false;
+    this.rainTimer = 0;
+    this.rainDrops = [];
+
+    this.stats = {
+      foodCollected: 0,
+      enemiesKilled: 0,
+      antsLost: 0,
+    };
+
+    this.prevBlackCount = this.blackColony.getTotalAnts();
+    this.prevRedCount = this.redColony.getTotalAnts();
+
+    this.messages = [];
+    this.addMessage('Welcome to SimAnt! You are the yellow ant. Use WASD to move.');
+    this.addMessage('Collect food and bring it back to the nest (dark area).');
+
+    this.setupInput();
+    this.resize();
+  }
+
+  setupInput() {
+    window.addEventListener('keydown', (e) => {
+      switch (e.key.toLowerCase()) {
+        case 'w': case 'arrowup': this.player.keys.up = true; e.preventDefault(); break;
+        case 's': case 'arrowdown': this.player.keys.down = true; e.preventDefault(); break;
+        case 'a': case 'arrowleft': this.player.keys.left = true; e.preventDefault(); break;
+        case 'd': case 'arrowright': this.player.keys.right = true; e.preventDefault(); break;
+        case ' ': this.player.actions.dig = true; e.preventDefault(); break;
+        case 'e': this.player.actions.drop = true; break;
+        case 'f': this.player.actions.attack = true; break;
+        case 'u': this.player.toggleUnderground(); this.world.isUnderground = this.player.underground; break;
+        case 'p': this.togglePause(); break;
+        case 'v': this.showPheromones = !this.showPheromones; break;
+        case 'c': this.followPlayer = !this.followPlayer; break;
+        case '1': this.speed = SPEED.SLOW; this.updateSpeedUI(); break;
+        case '2': this.speed = SPEED.NORMAL; this.updateSpeedUI(); break;
+        case '3': this.speed = SPEED.FAST; this.updateSpeedUI(); break;
+        case '4': this.speed = SPEED.ULTRA; this.updateSpeedUI(); break;
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      switch (e.key.toLowerCase()) {
+        case 'w': case 'arrowup': this.player.keys.up = false; break;
+        case 's': case 'arrowdown': this.player.keys.down = false; break;
+        case 'a': case 'arrowleft': this.player.keys.left = false; break;
+        case 'd': case 'arrowright': this.player.keys.right = false; break;
+      }
+    });
+
+    this.canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      if (!this.followPlayer) {
+        this.renderer.camX += e.deltaX * 0.5;
+        this.renderer.camY += e.deltaY * 0.5;
+        this.renderer.clampCamera();
+      }
+    });
+
+    this.canvas.addEventListener('click', (e) => {
+      if (!this.followPlayer) {
+        const rect = this.canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left + this.renderer.camX;
+        const clickY = e.clientY - rect.top + this.renderer.camY;
+        this.renderer.centerOn(clickX, clickY);
+      }
+    });
+
+    window.addEventListener('resize', () => this.resize());
+  }
+
+  resize() {
+    const container = document.getElementById('game-container');
+    if (container) {
+      this.renderer.resize(container.clientWidth, container.clientHeight);
+    }
+  }
+
+  togglePause() {
+    this.paused = !this.paused;
+    const btn = document.getElementById('btn-pause');
+    if (btn) btn.textContent = this.paused ? '▶ Play' : '⏸ Pause';
+  }
+
+  updateSpeedUI() {
+    document.querySelectorAll('.speed-btn').forEach(btn => btn.classList.remove('active'));
+    var speedMap = {};
+    speedMap[SPEED.SLOW] = '1';
+    speedMap[SPEED.NORMAL] = '2';
+    speedMap[SPEED.FAST] = '3';
+    speedMap[SPEED.ULTRA] = '4';
+    const btn = document.getElementById('speed-' + speedMap[this.speed]);
+    if (btn) btn.classList.add('active');
+  }
+
+  addMessage(text) {
+    this.messages.push({ text: text, time: Date.now() });
+    if (this.messages.length > 5) this.messages.shift();
+    this.updateMessageUI();
+  }
+
+  updateMessageUI() {
+    const el = document.getElementById('messages');
+    if (el) {
+      el.innerHTML = this.messages.map(function(m) { return '<div class="msg">' + m.text + '</div>'; }).join('');
+      el.scrollTop = el.scrollHeight;
+    }
+  }
+
+  getAllAnts() {
+    return this.blackColony.ants.concat(this.redColony.ants);
+  }
+
+  update() {
+    if (this.paused) return;
+
+    const steps = Math.max(1, Math.round(this.speed));
+    for (let s = 0; s < steps; s++) {
+      this.frame++;
+      this.tick();
+    }
+  }
+
+  tick() {
+    const allAnts = this.getAllAnts();
+
+    this.blackColony.update(this.world, this.pheromones, allAnts);
+    this.redColony.update(this.world, this.pheromones, allAnts);
+
+    this.player.update(this.world, this.pheromones, this.blackColony, allAnts);
+
+    if (this.frame % 3 === 0) {
+      this.pheromones.update();
+    }
+
+    for (const pred of this.predators) {
+      if (!pred.alive) continue;
+      pred.update(allAnts);
+    }
+
+    this.lawnmowerTimer++;
+    if (this.lawnmowerTimer > 12000 && !this.lawnmowerActive) {
+      this.lawnmowerActive = true;
+      this.lawnmowerTimer = 0;
+      this.predators.push(new Predator('lawnmower', 2, 5));
+      this.addMessage('⚠️ The lawn mower is coming!');
+    }
+
+    this.world.spawnRandomFood();
+
+    this.rainTimer++;
+    if (this.rainTimer > 8000) {
+      this.isRaining = !this.isRaining;
+      this.rainTimer = 0;
+      if (this.isRaining) {
+        this.addMessage('🌧️ It starts to rain...');
+      } else {
+        this.addMessage('☀️ The rain has stopped.');
+      }
+    }
+
+    const newBlack = this.blackColony.getTotalAnts();
+    const newRed = this.redColony.getTotalAnts();
+    if (newBlack < this.prevBlackCount) {
+      this.stats.antsLost += this.prevBlackCount - newBlack;
+    }
+    if (newRed < this.prevRedCount) {
+      this.stats.enemiesKilled += this.prevRedCount - newRed;
+    }
+    this.prevBlackCount = newBlack;
+    this.prevRedCount = newRed;
+
+    if (newRed === 0 && this.frame > 100) {
+      this.addMessage('🎉 Victory! The red colony has been eliminated!');
+      this.paused = true;
+    }
+    if (newBlack === 0 && this.frame > 100) {
+      this.addMessage('💀 Defeat! Your colony has been destroyed.');
+      this.paused = true;
+    }
+    if (!this.player.alive && this.frame > 100) {
+      this.addMessage('You died! But your colony lives on...');
+      this.respawnPlayer();
+    }
+  }
+
+  respawnPlayer() {
+    const nest = this.world.getNestEntrance('black');
+    this.player = new PlayerAnt(nest.col, nest.row);
+    this.blackColony.ants.push(this.player);
+    this.addMessage('A new ant takes your place.');
+  }
+
+  draw() {
+    this.renderer.clear();
+
+    if (this.followPlayer && this.player.alive) {
+      this.renderer.centerOn(this.player.x, this.player.y);
+    }
+
+    this.renderer.drawWorld(this.world);
+
+    if (this.showPheromones) {
+      this.renderer.drawPheromones(this.pheromones, 'black');
+    }
+
+    this.renderer.drawAnts(this.blackColony.ants, this.world.isUnderground);
+    this.renderer.drawAnts(this.redColony.ants, this.world.isUnderground);
+
+    if (!this.world.isUnderground) {
+      this.renderer.drawPredators(this.predators);
+    }
+
+    if (this.isRaining && !this.world.isUnderground) {
+      this.drawRain();
+    }
+
+    this.renderer.drawMinimap(this.world, this.player, this.blackColony, this.redColony);
+
+    this.drawHUD();
+
+    this.updateUI();
+  }
+
+  drawRain() {
+    const ctx = this.renderer.ctx;
+    ctx.strokeStyle = 'rgba(150, 180, 255, 0.3)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 80; i++) {
+      const rx = Math.random() * this.renderer.viewWidth;
+      const ry = Math.random() * this.renderer.viewHeight;
+      ctx.beginPath();
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(rx - 2, ry + 8);
+      ctx.stroke();
+    }
+  }
+
+  drawHUD() {
+    const ctx = this.renderer.ctx;
+    const vw = this.renderer.viewWidth;
+
+    const barH = 32;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, this.renderer.viewHeight - barH, vw, barH);
+
+    ctx.font = '13px "Press Start 2P", monospace';
+    ctx.fillStyle = COLORS.UI_TEXT;
+
+    const y = this.renderer.viewHeight - 10;
+    ctx.fillText('HP: ' + Math.ceil(this.player.hp) + '/' + this.player.maxHp, 10, y);
+    ctx.fillText('Food: ' + (this.player.carrying > 0 ? '🍞' : '—'), 180, y);
+
+    const layer = this.world.isUnderground ? '⛏ Underground' : '🌿 Surface';
+    ctx.fillText(layer, 300, y);
+
+    if (this.paused) {
+      ctx.font = 'bold 24px monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.textAlign = 'center';
+      ctx.fillText('PAUSED', vw / 2, this.renderer.viewHeight / 2);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  updateUI() {
+    var setHtml = function(id, html) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = html;
+    };
+
+    setHtml('black-pop', '' + this.blackColony.getTotalAnts());
+    setHtml('black-food', '' + Math.floor(this.blackColony.food));
+    setHtml('black-workers', '' + this.blackColony.workerCount);
+    setHtml('black-soldiers', '' + this.blackColony.soldierCount);
+
+    setHtml('red-pop', '' + this.redColony.getTotalAnts());
+    setHtml('red-food', '' + Math.floor(this.redColony.food));
+
+    setHtml('stat-food', '' + this.stats.foodCollected);
+    setHtml('stat-kills', '' + this.stats.enemiesKilled);
+    setHtml('stat-lost', '' + this.stats.antsLost);
+    setHtml('frame-count', '' + this.frame);
+
+    const blackPop = this.blackColony.getTotalAnts();
+    const redPop = this.redColony.getTotalAnts();
+    const total = blackPop + redPop || 1;
+    const blackPct = (blackPop / total) * 100;
+    const redPct = (redPop / total) * 100;
+    const blackBar = document.getElementById('pop-bar-black');
+    const redBar = document.getElementById('pop-bar-red');
+    if (blackBar) blackBar.style.width = blackPct + '%';
+    if (redBar) redBar.style.width = redPct + '%';
+  }
+
+  updateBehavior() {
+    const forage = parseInt(document.getElementById('slider-forage')?.value || 50);
+    const dig = parseInt(document.getElementById('slider-dig')?.value || 20);
+    const nurse = parseInt(document.getElementById('slider-nurse')?.value || 20);
+    const fight = parseInt(document.getElementById('slider-fight')?.value || 10);
+
+    this.blackColony.setBehaviorAllocation(forage, dig, nurse, fight);
+
+    var setLabel = function(id, val) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+    setLabel('val-forage', forage);
+    setLabel('val-dig', dig);
+    setLabel('val-nurse', nurse);
+    setLabel('val-fight', fight);
+  }
+
+  start() {
+    this.updateSpeedUI();
+    var self = this;
+    var loop = function() {
+      self.update();
+      self.draw();
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+}
+
+
+// === main.js ===
+
+window.addEventListener('DOMContentLoaded', function() {
+  var canvas = document.getElementById('game-canvas');
+  var game = new Game(canvas);
+
+  document.getElementById('btn-pause')?.addEventListener('click', function() { game.togglePause(); });
+
+  document.getElementById('speed-1')?.addEventListener('click', function() { game.speed = 0.5; game.updateSpeedUI(); });
+  document.getElementById('speed-2')?.addEventListener('click', function() { game.speed = 1; game.updateSpeedUI(); });
+  document.getElementById('speed-3')?.addEventListener('click', function() { game.speed = 2; game.updateSpeedUI(); });
+  document.getElementById('speed-4')?.addEventListener('click', function() { game.speed = 4; game.updateSpeedUI(); });
+
+  ['forage', 'dig', 'nurse', 'fight'].forEach(function(name) {
+    var slider = document.getElementById('slider-' + name);
+    if (slider) {
+      slider.addEventListener('input', function() { game.updateBehavior(); });
+    }
+  });
+
+  document.getElementById('btn-pheromones')?.addEventListener('click', function() {
+    game.showPheromones = !game.showPheromones;
+    var btn = document.getElementById('btn-pheromones');
+    btn.classList.toggle('active', game.showPheromones);
+  });
+
+  document.getElementById('btn-follow')?.addEventListener('click', function() {
+    game.followPlayer = !game.followPlayer;
+    var btn = document.getElementById('btn-follow');
+    btn.classList.toggle('active', game.followPlayer);
+  });
+
+  document.getElementById('btn-underground')?.addEventListener('click', function() {
+    game.player.toggleUnderground();
+    game.world.isUnderground = game.player.underground;
+    var btn = document.getElementById('btn-underground');
+    btn.textContent = game.world.isUnderground ? '⛏ Underground' : '🌿 Surface';
+  });
+
+  document.getElementById('btn-newgame')?.addEventListener('click', function() {
+    if (confirm('Start a new game?')) {
+      location.reload();
+    }
+  });
+
+  game.start();
+});
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,318 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #1a1a1a;
+  color: #eee;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+#header {
+  background: linear-gradient(180deg, #3a2a1a 0%, #2a1a0a 100%);
+  border-bottom: 3px solid #5a3a1a;
+  padding: 6px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+#header h1 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 18px;
+  color: #ffcc00;
+  text-shadow: 2px 2px 0px #000;
+  letter-spacing: 2px;
+}
+
+#header .ant-icon {
+  font-size: 22px;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Main layout */
+#main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Sidebar */
+#sidebar {
+  width: 260px;
+  background: #2c2c2c;
+  border-right: 2px solid #444;
+  overflow-y: auto;
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.panel {
+  border-bottom: 1px solid #444;
+  padding: 10px 12px;
+}
+
+.panel h3 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  color: #ffcc00;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.panel-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.panel-row .label {
+  color: #aaa;
+}
+
+.panel-row .value {
+  color: #fff;
+  font-weight: bold;
+  font-family: monospace;
+}
+
+/* Colony colors */
+.black-colony .value { color: #aad; }
+.red-colony .value { color: #f77; }
+
+/* Behavior sliders */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.slider-row label {
+  width: 55px;
+  font-size: 11px;
+  color: #bbb;
+}
+
+.slider-row input[type="range"] {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #444;
+  border-radius: 3px;
+  outline: none;
+}
+
+.slider-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #ffcc00;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid #aa8800;
+}
+
+.slider-row .slider-val {
+  width: 25px;
+  text-align: right;
+  font-family: monospace;
+  font-size: 11px;
+  color: #ffcc00;
+}
+
+/* Controls panel */
+.controls-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+/* Buttons */
+button, .btn {
+  background: #444;
+  color: #eee;
+  border: 1px solid #666;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+
+button:hover, .btn:hover {
+  background: #555;
+}
+
+button.active, .btn.active {
+  background: #5a3a1a;
+  border-color: #ffcc00;
+  color: #ffcc00;
+}
+
+.speed-btn {
+  width: 30px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.speed-btn.active {
+  background: #ffcc00;
+  color: #000;
+  border-color: #aa8800;
+}
+
+/* Game canvas container */
+#game-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #000;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Messages */
+#messages {
+  position: absolute;
+  bottom: 40px;
+  left: 10px;
+  max-width: 450px;
+  pointer-events: none;
+}
+
+.msg {
+  background: rgba(0, 0, 0, 0.75);
+  color: #eee;
+  padding: 4px 10px;
+  margin-top: 3px;
+  border-radius: 4px;
+  font-size: 12px;
+  border-left: 3px solid #ffcc00;
+  animation: msgFadeIn 0.3s ease;
+}
+
+@keyframes msgFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Help panel */
+.help-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  font-size: 11px;
+}
+
+.help-grid .key {
+  font-family: monospace;
+  background: #444;
+  padding: 1px 5px;
+  border-radius: 2px;
+  text-align: center;
+  color: #ffcc00;
+  font-size: 10px;
+}
+
+.help-grid .desc {
+  color: #bbb;
+}
+
+/* Stats section */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.stat-box {
+  background: #333;
+  padding: 6px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.stat-box .stat-val {
+  font-family: monospace;
+  font-size: 16px;
+  font-weight: bold;
+  color: #ffcc00;
+}
+
+.stat-box .stat-label {
+  font-size: 9px;
+  color: #888;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* Population bars */
+.pop-bar {
+  height: 8px;
+  background: #333;
+  border-radius: 4px;
+  margin-top: 4px;
+  overflow: hidden;
+  display: flex;
+}
+
+.pop-bar .pop-black {
+  background: #668;
+  height: 100%;
+  transition: width 0.3s;
+}
+
+.pop-bar .pop-red {
+  background: #c44;
+  height: 100%;
+  transition: width 0.3s;
+}
+
+/* Scrollbar styling */
+#sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+#sidebar::-webkit-scrollbar-track {
+  background: #2c2c2c;
+}
+#sidebar::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  #sidebar {
+    width: 200px;
+  }
+  #header h1 {
+    font-size: 14px;
+  }
+}
