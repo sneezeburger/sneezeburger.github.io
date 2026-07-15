@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cymatics</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a0f;
+  overflow: hidden;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  color: #c0c0c0;
+  user-select: none;
+}
+canvas { display: block; }
+#ui {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  background: rgba(10,10,20,0.85);
+  backdrop-filter: blur(12px);
+  padding: 12px 24px;
+  border-radius: 40px;
+  border: 1px solid rgba(255,255,255,0.08);
+  z-index: 10;
+  font-size: 13px;
+}
+#ui label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+#ui input[type=range] {
+  width: 80px; accent-color: #7eb8da;
+}
+button.ctrl {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #c0c0c0;
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+button.ctrl:hover { background: rgba(255,255,255,0.14); }
+#info {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(180,200,220,0.5);
+  z-index: 10;
+}
+#mode-display {
+  position: fixed;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 42px;
+  font-weight: 200;
+  color: rgba(126,184,218,0.0);
+  z-index: 10;
+  transition: color 0.3s;
+  pointer-events: none;
+}
+#mode-display.show { color: rgba(126,184,218,0.6); }
+</style>
+</head>
+<body>
+<div id="info">cymatics</div>
+<div id="mode-display"></div>
+<canvas id="c"></canvas>
+<div id="ui">
+  <label>n <input type="range" id="rn" min="1" max="8" value="2" step="1"><span id="vn">2</span></label>
+  <label>m <input type="range" id="rm" min="1" max="8" value="3" step="1"><span id="vm">3</span></label>
+  <label>particles <input type="range" id="rp" min="1000" max="20000" value="8000" step="500"><span id="vp">8000</span></label>
+  <button class="ctrl" id="scatter">scatter</button>
+  <button class="ctrl" id="sound">sound off</button>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+let W, H, S; // width, height, plate size
+let n = 2, m = 3;
+let targetN = 2, targetM = 3;
+let NUM_PARTICLES = 8000;
+
+// Particle arrays (SoA for performance)
+let px, py, vx, vy;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  S = Math.min(W, H) * 0.85;
+}
+window.addEventListener('resize', () => { resize(); });
+resize();
+
+function initParticles(count, scatter) {
+  NUM_PARTICLES = count;
+  px = new Float32Array(NUM_PARTICLES);
+  py = new Float32Array(NUM_PARTICLES);
+  vx = new Float32Array(NUM_PARTICLES);
+  vy = new Float32Array(NUM_PARTICLES);
+  for (let i = 0; i < NUM_PARTICLES; i++) {
+    if (scatter) {
+      px[i] = Math.random();
+      py[i] = Math.random();
+    } else {
+      px[i] = Math.random();
+      py[i] = Math.random();
+    }
+    vx[i] = 0;
+    vy[i] = 0;
+  }
+}
+initParticles(NUM_PARTICLES, true);
+
+// Chladni function: returns amplitude at (x,y) in [0,1]x[0,1]
+function chladni(x, y, n, m) {
+  return Math.cos(n * Math.PI * x) * Math.cos(m * Math.PI * y)
+       - Math.cos(m * Math.PI * x) * Math.cos(n * Math.PI * y);
+}
+
+// Gradient of Chladni function (drives particles toward nodal lines)
+function chladniGrad(x, y, n, m) {
+  const npx = n * Math.PI;
+  const mpy = m * Math.PI;
+  const dfdx = -npx * Math.sin(npx * x) * Math.cos(mpy * y)
+              + mpy * Math.sin(mpy * x) * Math.cos(n * Math.PI * y);
+  const dfdy = -mpy * Math.cos(npx * x) * Math.sin(mpy * y)
+              + n * Math.PI * Math.cos(mpy * x) * Math.sin(n * Math.PI * y);
+  return [dfdx, dfdy];
+}
+
+// Mouse interaction
+let mouseX = -1, mouseY = -1, mouseDown = false;
+canvas.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+canvas.addEventListener('mousedown', e => { mouseDown = true; mouseX = e.clientX; mouseY = e.clientY; });
+canvas.addEventListener('mouseup', () => { mouseDown = false; });
+canvas.addEventListener('mouseleave', () => { mouseDown = false; mouseX = -1; });
+canvas.addEventListener('touchstart', e => {
+  mouseDown = true;
+  mouseX = e.touches[0].clientX;
+  mouseY = e.touches[0].clientY;
+}, { passive: true });
+canvas.addEventListener('touchmove', e => {
+  mouseX = e.touches[0].clientX;
+  mouseY = e.touches[0].clientY;
+}, { passive: true });
+canvas.addEventListener('touchend', () => { mouseDown = false; });
+
+// Audio
+let audioCtx = null, oscillator = null, gainNode = null, soundOn = false;
+function initAudio() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  oscillator = audioCtx.createOscillator();
+  gainNode = audioCtx.createGain();
+  oscillator.type = 'sine';
+  oscillator.frequency.value = 0;
+  gainNode.gain.value = 0;
+  oscillator.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+  oscillator.start();
+}
+function updateSound() {
+  if (!audioCtx || !soundOn) return;
+  // Map mode to a frequency: base 110Hz, scale by n^2 + m^2
+  const freq = 110 * Math.sqrt(n * n + m * m);
+  oscillator.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.1);
+  gainNode.gain.setTargetAtTime(0.08, audioCtx.currentTime, 0.1);
+}
+
+// UI
+const rnEl = document.getElementById('rn');
+const rmEl = document.getElementById('rm');
+const rpEl = document.getElementById('rp');
+const vnEl = document.getElementById('vn');
+const vmEl = document.getElementById('vm');
+const vpEl = document.getElementById('vp');
+const modeDisp = document.getElementById('mode-display');
+let modeTimeout;
+
+function flashMode() {
+  modeDisp.textContent = `(${n}, ${m})`;
+  modeDisp.classList.add('show');
+  clearTimeout(modeTimeout);
+  modeTimeout = setTimeout(() => modeDisp.classList.remove('show'), 1500);
+}
+
+rnEl.addEventListener('input', () => {
+  targetN = n = parseInt(rnEl.value);
+  vnEl.textContent = n;
+  flashMode();
+  updateSound();
+});
+rmEl.addEventListener('input', () => {
+  targetM = m = parseInt(rmEl.value);
+  vmEl.textContent = m;
+  flashMode();
+  updateSound();
+});
+rpEl.addEventListener('input', () => {
+  const count = parseInt(rpEl.value);
+  vpEl.textContent = count;
+  initParticles(count, true);
+});
+document.getElementById('scatter').addEventListener('click', () => {
+  initParticles(NUM_PARTICLES, true);
+});
+document.getElementById('sound').addEventListener('click', () => {
+  soundOn = !soundOn;
+  document.getElementById('sound').textContent = soundOn ? 'sound on' : 'sound off';
+  if (soundOn) {
+    if (!audioCtx) initAudio();
+    audioCtx.resume();
+    updateSound();
+  } else if (gainNode) {
+    gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+  }
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' && n < 8) { n++; rnEl.value = n; vnEl.textContent = n; flashMode(); updateSound(); }
+  if (e.key === 'ArrowLeft' && n > 1)  { n--; rnEl.value = n; vnEl.textContent = n; flashMode(); updateSound(); }
+  if (e.key === 'ArrowUp' && m < 8)    { m++; rmEl.value = m; vmEl.textContent = m; flashMode(); updateSound(); }
+  if (e.key === 'ArrowDown' && m > 1)  { m--; rmEl.value = m; vmEl.textContent = m; flashMode(); updateSound(); }
+  if (e.key === ' ') { e.preventDefault(); initParticles(NUM_PARTICLES, true); }
+  if (e.key === 's' || e.key === 'S') { document.getElementById('sound').click(); }
+});
+
+// Precompute nodal line texture for background glow
+const texSize = 256;
+const texCanvas = document.createElement('canvas');
+texCanvas.width = texCanvas.height = texSize;
+const texCtx = texCanvas.getContext('2d');
+let lastTexN = -1, lastTexM = -1;
+
+function updateTexture() {
+  if (lastTexN === n && lastTexM === m) return;
+  lastTexN = n; lastTexM = m;
+  const imgData = texCtx.createImageData(texSize, texSize);
+  const d = imgData.data;
+  for (let j = 0; j < texSize; j++) {
+    for (let i = 0; i < texSize; i++) {
+      const x = i / (texSize - 1);
+      const y = j / (texSize - 1);
+      const val = chladni(x, y, n, m);
+      const abs = Math.abs(val);
+      // Nodal lines glow: bright where abs is small
+      const glow = Math.exp(-abs * abs * 40);
+      const idx = (j * texSize + i) * 4;
+      d[idx]     = Math.floor(40 + 60 * glow);   // R
+      d[idx + 1] = Math.floor(50 + 100 * glow);  // G
+      d[idx + 2] = Math.floor(70 + 130 * glow);  // B
+      d[idx + 3] = Math.floor(25 * glow);         // A - subtle
+    }
+  }
+  texCtx.putImageData(imgData, 0, 0);
+}
+
+// Spatial grid for density-based dispersal
+const GRID_RES = 128;
+const grid = new Uint16Array(GRID_RES * GRID_RES);      // particle count per cell
+const gridCX = new Float32Array(GRID_RES * GRID_RES);   // center-of-mass x
+const gridCY = new Float32Array(GRID_RES * GRID_RES);   // center-of-mass y
+
+// Main simulation step
+const DAMPING = 0.92;
+const FORCE_SCALE = 0.0004;
+const NOISE_SCALE = 0.00008;
+const MOUSE_RADIUS = 0.12;
+const MOUSE_FORCE = 0.003;
+const DISPERSE_FORCE = 0.00025;
+const DISPERSE_THRESHOLD = 3; // min particles in cell before dispersal kicks in
+
+function simulate() {
+  const ox = (W - S) / 2;
+  const oy = (H - S) / 2;
+
+  // Normalized mouse position
+  let mx = -10, my = -10;
+  if (mouseDown && mouseX >= 0) {
+    mx = (mouseX - ox) / S;
+    my = (mouseY - oy) / S;
+  }
+
+  for (let i = 0; i < NUM_PARTICLES; i++) {
+    let x = px[i], y = py[i];
+
+    // Chladni gradient force — drives particles toward nodal lines
+    const val = chladni(x, y, n, m);
+    const [gx, gy] = chladniGrad(x, y, n, m);
+    // Force proportional to value * gradient (minimizes val^2)
+    const fx = -val * gx * FORCE_SCALE;
+    const fy = -val * gy * FORCE_SCALE;
+
+    vx[i] = vx[i] * DAMPING + fx + (Math.random() - 0.5) * NOISE_SCALE;
+    vy[i] = vy[i] * DAMPING + fy + (Math.random() - 0.5) * NOISE_SCALE;
+
+    // Mouse excitation: push particles away
+    if (mouseDown) {
+      const dx = x - mx;
+      const dy = y - my;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < MOUSE_RADIUS && dist > 0.001) {
+        const strength = MOUSE_FORCE * (1 - dist / MOUSE_RADIUS);
+        vx[i] += dx / dist * strength;
+        vy[i] += dy / dist * strength;
+      }
+    }
+
+    px[i] = x + vx[i];
+    py[i] = y + vy[i];
+
+    // Boundary: reflect
+    if (px[i] < 0) { px[i] = -px[i]; vx[i] *= -0.5; }
+    if (px[i] > 1) { px[i] = 2 - px[i]; vx[i] *= -0.5; }
+    if (py[i] < 0) { py[i] = -py[i]; vy[i] *= -0.5; }
+    if (py[i] > 1) { py[i] = 2 - py[i]; vy[i] *= -0.5; }
+  }
+}
+
+// Render
+function render() {
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, W, H);
+
+  const ox = (W - S) / 2;
+  const oy = (H - S) / 2;
+
+  // Draw background texture (subtle nodal line glow)
+  updateTexture();
+  ctx.globalAlpha = 0.4;
+  ctx.drawImage(texCanvas, ox, oy, S, S);
+  ctx.globalAlpha = 1.0;
+
+  // Draw plate border
+  ctx.strokeStyle = 'rgba(126,184,218,0.12)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(ox, oy, S, S);
+
+  // Draw particles
+  const imgData = ctx.getImageData(0, 0, W, H);
+  const data = imgData.data;
+
+  for (let i = 0; i < NUM_PARTICLES; i++) {
+    const sx = Math.floor(ox + px[i] * S);
+    const sy = Math.floor(oy + py[i] * S);
+    if (sx < 0 || sx >= W || sy < 0 || sy >= H) continue;
+
+    const speed = Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i]);
+    const settled = Math.max(0, 1 - speed * 200);
+
+    // Color: warm when moving, cool/bright when settled
+    const r = Math.floor(200 + 55 * (1 - settled));
+    const g = Math.floor(190 + 40 * settled);
+    const b = Math.floor(150 + 80 * settled);
+    const a = Math.floor(180 + 75 * settled);
+
+    const idx = (sy * W + sx) * 4;
+    // Additive blend
+    data[idx]     = Math.min(255, data[idx] + r);
+    data[idx + 1] = Math.min(255, data[idx + 1] + g);
+    data[idx + 2] = Math.min(255, data[idx + 2] + b);
+    data[idx + 3] = Math.min(255, data[idx + 3] + a);
+
+    // Glow: adjacent pixels for settled particles
+    if (settled > 0.5) {
+      const gr = Math.floor(r * 0.3);
+      const gg = Math.floor(g * 0.3);
+      const gb = Math.floor(b * 0.3);
+      const ga = Math.floor(a * 0.25);
+      const offsets = [-1, 0, 1, 0, 0, -1, 0, 1];
+      for (let j = 0; j < 8; j += 2) {
+        const nx = sx + offsets[j];
+        const ny = sy + offsets[j + 1];
+        if (nx >= 0 && nx < W && ny >= 0 && ny < H) {
+          const ni = (ny * W + nx) * 4;
+          data[ni]     = Math.min(255, data[ni] + gr);
+          data[ni + 1] = Math.min(255, data[ni + 1] + gg);
+          data[ni + 2] = Math.min(255, data[ni + 2] + gb);
+          data[ni + 3] = Math.min(255, data[ni + 3] + ga);
+        }
+      }
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+}
+
+function frame() {
+  simulate();
+  render();
+  requestAnimationFrame(frame);
+}
+
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
