@@ -577,24 +577,21 @@ SCENARIOS.forEach((s, i) => {
 //  CONFIGURATION / TUNING PARAMS
 // ═══════════════════════════════════════════════════════════════
 const DEFAULTS = {
-  gravity:       { val: 392,    min: 100,  max: 1500, step: 10,   label: 'Gravity' },
-  glideFriction: { val: 0.002,  min: 0,    max: 0.02, step: 0.001, label: 'Glide Friction' },
-  brakeFriction: { val: 0.08,   min: 0.01, max: 0.4,  step: 0.01, label: 'Brake Friction' },
-  brakeDrag:     { val: 200,    min: 50,   max: 800,  step: 10,   label: 'Brake Drag' },
-  airDrag:       { val: 0.0003, min: 0,    max: 0.002,step: 0.0001,label: 'Air Drag' },
-  bounce:        { val: 0.15,   min: 0,    max: 0.8,  step: 0.05, label: 'Bounce' },
-  leanSpeed:     { val: 15,     min: 3,    max: 30,   step: 1,    label: 'Lean Speed' },
-  leanRange:     { val: 2.5,    min: 1,    max: 4,    step: 0.1,  label: 'Lean Range' },
-  crouchSpeed:   { val: 12,     min: 3,    max: 25,   step: 1,    label: 'Crouch Speed' },
-  jumpForce:     { val: 140,    min: 50,   max: 300,  step: 5,    label: 'Jump Force (legacy)' },
-  cogHeight:     { val: 40,     min: 20,   max: 70,   step: 1,    label: 'CoG Height (px)' },
-  leanInfluence: { val: 0.4,    min: 0,    max: 1,    step: 0.05, label: 'Lean Influence' },
-  bodyTrack:     { val: 16,     min: 4,    max: 30,   step: 1,    label: 'Body Tracking' },
-  airTorque:     { val: 10,     min: 2,    max: 25,   step: 1,    label: 'Air Torque' },
-  airDamping:    { val: 0.92,   min: 0.8,  max: 0.99, step: 0.01, label: 'Air Damping' },
-  crashAngle:    { val: 1.8,    min: 0.5,  max: 2.5,  step: 0.1,  label: 'Crash Angle' },
-  crashImpact:   { val: 750,    min: 300,  max: 2000, step: 50,   label: 'Crash Impact' },
-  bindingStrength:{ val: 1300,   min: 500,  max: 3900, step: 100,  label: 'Binding Strength' },
+  // Physics
+  gravity:       { val: 500,    min: 200,  max: 1000, step: 10,   label: 'Gravity (px/s²)' },
+  groundKp:      { val: 2000,   min: 500,  max: 8000, step: 100,  label: 'Ground Stiffness' },
+  groundKd:      { val: 200,    min: 50,   max: 800,  step: 10,   label: 'Ground Damping' },
+  skiFriction:   { val: 0.015,  min: 0.001,max: 0.1,  step: 0.001,label: 'Ski Friction' },
+  brakeFriction: { val: 0.5,    min: 0.1,  max: 1.0,  step: 0.05, label: 'Brake Friction' },
+  bodyFriction:  { val: 0.6,    min: 0.1,  max: 1.5,  step: 0.05, label: 'Body Friction' },
+  // Joint PD
+  pdMultiplier:  { val: 2.8,    min: 0.5,  max: 5.0,  step: 0.1,  label: 'PD Strength' },
+  jointDamping:  { val: 0.9998, min: 0.990,max: 1.000,step: 0.0001,label: 'Angular Damping' },
+  ragdollDamping:{ val: 0.999,  min: 0.990,max: 1.000,step: 0.0001,label: 'Ragdoll Damping' },
+  // Crash
+  crashImpact:   { val: 2000,   min: 500,  max: 5000, step: 50,   label: 'Crash Threshold' },
+  bindingStrength:{ val: 3800,  min: 1000, max: 8000, step: 100,  label: 'Binding Strength' },
+  // Scoring
   flipPoints:    { val: 100,    min: 50,   max: 300,  step: 10,   label: 'Flip Points' },
   smoothMultiplier:{ val: 1.5,  min: 1.0,  max: 3.0,  step: 0.1,  label: 'Smooth Multiplier' },
   perfectMultiplier:{ val: 2.0, min: 1.5,  max: 4.0,  step: 0.1,  label: 'Perfect Multiplier' },
@@ -607,10 +604,9 @@ for (const k in DEFAULTS) cfg[k] = DEFAULTS[k].val;
 (function() {
   const panel = document.getElementById('params-panel');
   const secs = {
-    'Physics':  ['gravity','glideFriction','brakeFriction','brakeDrag','airDrag','bounce'],
-    'Controls': ['leanSpeed','leanRange','crouchSpeed','cogHeight','jumpForce'],
-    'Body':     ['leanInfluence','bodyTrack','airTorque','airDamping'],
-    'Crash':    ['crashAngle','crashImpact','bindingStrength'],
+    'Physics':  ['gravity','groundKp','groundKd','skiFriction','brakeFriction','bodyFriction'],
+    'Joints':   ['pdMultiplier','jointDamping','ragdollDamping'],
+    'Crash':    ['crashImpact','bindingStrength'],
     'Scoring':  ['flipPoints','smoothMultiplier','perfectMultiplier','airtimePoints'],
   };
   let html = '';
@@ -1080,7 +1076,7 @@ function updateRagdoll(dt) {
       // Joint constraints
       solveJointConstraints();
       // Damping (stronger during ragdoll to prevent endless spinning)
-      const angDamp = skier.crashed ? 0.999 : PHYS.jointDamping;
+      const angDamp = skier.crashed ? cfg.ragdollDamping : cfg.jointDamping;
       for (const link of links) {
         link.angVel *= angDamp;
       }
@@ -1302,22 +1298,16 @@ function initLinks() {
 // kp must produce this at moderate error angles (~0.5 rad).
 const JOINTS = [
   { kp: 0, kd: 0, minA: 0, maxA: 0, tMin: 0, tMax: 0 },
-  { kp: 120000, kd: 8000, minA: -130*DEG, maxA: 10*DEG, tMin: -800000, tMax: 800000 },  // ankle
-  { kp: 50000, kd: 5000, minA: -40*DEG, maxA: 140*DEG, tMin: -600000, tMax: 600000 },   // hip
-  { kp: 20000, kd: 1500, minA: -90*DEG, maxA: 90*DEG, tMin: -100000, tMax: 100000 },    // shoulder
+  { kp: 120000, kd: 8000, minA: -130*DEG, maxA: 10*DEG, tMin: -1200000, tMax: 1200000 },  // ankle
+  { kp: 50000, kd: 5000, minA: -40*DEG, maxA: 140*DEG, tMin: -1000000, tMax: 1000000 },   // hip
+  { kp: 20000, kd: 1500, minA: -90*DEG, maxA: 90*DEG, tMin: -120000, tMax: 120000 },    // shoulder
 ];
 
 // Physics params (from .afig link_kp/kd, common.setup dt_sim, brakeMonitor cf)
 const PHYS = {
-  groundKp: 2000,     // from link_kp 2000 (no scaling needed for spring constant)
-  groundKd: 200,      // from link_kd 200
-  groundCf: 0.6,      // Coulomb friction for body parts (reasonable default)
-  brakeCf: 0.5,       // from brakeMonitor "0.5 step"
   fixedDt: 0.001,     // from common.setup: dt_sim 0.001
   maxSubsteps: 30,    // cap substeps per frame
-  jointDamping: 0.9998, // angular damping per substep (reduced — not in original)
   linearDamping: 1.0,    // no linear damping (original has none; friction handles it)
-  gravity: 392,       // 9.81 * 40 = 392 px/s² (physically accurate for scale=40)
 };
 
 let links = [];
@@ -1418,8 +1408,9 @@ function computePDTorque(jointIdx, currentAngle, relAngVel, targetAngle) {
     return Math.max(-3000, Math.min(3000, torque));
   }
   const error = targetAngle - currentAngle;
-  const torque = j.kp * error - j.kd * relAngVel;
-  return Math.max(j.tMin, Math.min(j.tMax, torque));
+  const mult = cfg.pdMultiplier;
+  const torque = j.kp * mult * error - j.kd * mult * relAngVel;
+  return Math.max(j.tMin * mult, Math.min(j.tMax * mult, torque));
 }
 
 // --- Ground Contact Forces (Penalty-Based) ---
@@ -1429,8 +1420,8 @@ function applyGroundForces(link, dt, isBraking) {
 
   // Ski has very low friction along its direction (gliding on snow)
   const isSki = link.tag === 'ski';
-  const skiAlongCf = isBraking ? PHYS.brakeCf : 0.015; // brake cf from original brakeMonitor
-  const bodyCf = PHYS.groundCf;                  // body parts
+  const skiAlongCf = isBraking ? cfg.brakeFriction : cfg.skiFriction;
+  const bodyCf = cfg.bodyFriction;
 
   for (const localPt of link.points) {
     const wp = worldPoint(link, localPt);
@@ -1456,7 +1447,7 @@ function applyGroundForces(link, dt, isBraking) {
     const vn = -(vpx * nx + vpy * ny);
 
     // Normal force: spring + damper, clamped non-negative
-    let fn = PHYS.groundKp * pen + PHYS.groundKd * Math.max(0, vn);
+    let fn = cfg.groundKp * pen + cfg.groundKd * Math.max(0, vn);
     fn = Math.max(0, fn);
     fn = Math.min(fn, 50000); // cap to prevent explosion
 
@@ -1603,15 +1594,15 @@ function updatePhysics(dt) {
     return;
   }
 
-  // Update lean/crouch for compatibility with other systems
-  skier.lean = (mouseX - 0.5) * cfg.leanRange;
+  // Update lean for compatibility
+  skier.lean = (mouseX - 0.5) * 2.5;
   skier.crouch = Math.max(0, Math.min(1, mouseY * 1.3));
 
   // Space bar jump — apply impulse to all links along ground normal
   skier.jumpCooldown = Math.max(0, skier.jumpCooldown - dt);
   if (skier.onGround && jumpPressed && skier.jumpCooldown <= 0) {
     const terrain = getTerrainAt(skier.x);
-    const impulse = cfg.jumpForce;
+    const impulse = 140;
     const nx = Math.sin(terrain.angle);
     const ny = -Math.cos(terrain.angle);
     for (const link of links) {
@@ -1680,7 +1671,7 @@ function updatePhysics(dt) {
     for (const link of links) {
       link.vel.x *= PHYS.linearDamping;
       link.vel.y *= PHYS.linearDamping;
-      link.angVel *= PHYS.jointDamping;
+      link.angVel *= cfg.jointDamping;
     }
 
     // 8. Angular momentum conservation when airborne (tuck = spin faster)
@@ -1705,7 +1696,7 @@ function updatePhysics(dt) {
 
       // Track angular momentum and adjust
       if (skier._prevAirI !== undefined && skier._prevAirI > 0) {
-        // L = I * omega (total angular momentum about CM)
+        // Compute current total angular momentum about CM
         let totalL = 0;
         for (const link of links) {
           const dx = link.pos.x - cmx;
@@ -1713,10 +1704,10 @@ function updatePhysics(dt) {
           const linkI = link.inertia + link.mass * (dx * dx + dy * dy);
           totalL += linkI * link.angVel;
         }
-        // Scale factor to conserve angular momentum as I changes
+        // Scale angular velocities to conserve L as MOI distribution changes
+        // Stronger correction for responsive tuck/extend rotation control
         const ratio = skier._prevAirI / effectiveI;
-        // Apply gentle correction (don't snap instantly — blend toward conservation)
-        const correction = 0.02 * (ratio - 1.0); // 2% per substep toward ideal
+        const correction = 0.15 * (ratio - 1.0); // 15% per substep toward ideal
         for (const link of links) {
           link.angVel *= (1.0 + correction);
         }
