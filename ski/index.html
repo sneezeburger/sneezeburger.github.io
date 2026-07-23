@@ -995,26 +995,32 @@ function detectTricks() {
 //  RAGDOLL CRASH SYSTEM
 // ═══════════════════════════════════════════════════════════════
 function initRagdoll() {
+  // For connected ragdoll, we just let the articulated body continue
+  // with relaxJtPd (near-zero PD) which is already handled in computePDTorque.
+  // Only explode into parts for extreme impacts.
+  skier.ragdoll = null; // null = connected ragdoll (use articulated links)
+}
+
+function initExplosionRagdoll() {
+  // Extreme impact: scatter body parts
   const angle = skier.bodyAngle;
   const cos = Math.cos(angle), sin = Math.sin(angle);
   const speed = skier.speed;
-  // Create body parts as independent physics objects
   const parts = [];
   const offsets = [
     { name: 'head', ox: 0, oy: -30, r: 5, color: '#2255aa' },
     { name: 'torso', ox: 0, oy: -18, r: 6, color: '#cc3333' },
     { name: 'hip', ox: 0, oy: -5, r: 4, color: '#1a1a3a' },
-    { name: 'ski_l', ox: -8, oy: 2, r: 2, color: '#2a2a5a', isLong: true },
-    { name: 'ski_r', ox: 8, oy: 2, r: 2, color: '#2a2a5a', isLong: true },
-    { name: 'pole', ox: 5, oy: -10, r: 1, color: '#666', isLong: true },
+    { name: 'leg_l', ox: -4, oy: 5, r: 3, color: '#1a1a3a', isLong: true },
+    { name: 'leg_r', ox: 4, oy: 5, r: 3, color: '#1a1a3a', isLong: true },
   ];
   for (const o of offsets) {
     const px = skier.x + o.ox * cos - o.oy * sin;
     const py = skier.y + o.ox * sin + o.oy * cos;
     parts.push({
       x: px, y: py,
-      vx: skier.vx + (Math.random() - 0.5) * speed * 0.5,
-      vy: skier.vy + (Math.random() - 0.5) * speed * 0.3 - Math.random() * 200,
+      vx: skier.vx + (Math.random() - 0.5) * speed * 0.6,
+      vy: skier.vy + (Math.random() - 0.5) * speed * 0.4 - Math.random() * 250,
       angle: angle + (Math.random() - 0.5) * 2,
       angVel: (Math.random() - 0.5) * 15,
       r: o.r, color: o.color,
@@ -1026,49 +1032,142 @@ function initRagdoll() {
 }
 
 function updateRagdoll(dt) {
-  if (!skier.ragdoll) return;
-  for (const p of skier.ragdoll) {
-    p.vy += cfg.gravity * dt;
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.angle += p.angVel * dt;
-    // Ground collision
-    const t = getTerrainAt(p.x);
-    if (p.y > t.y - p.r) {
-      p.y = t.y - p.r;
-      p.vy *= -0.3;
-      p.vx *= 0.85;
-      p.angVel *= 0.8;
-      if (Math.abs(p.vy) < 10) p.vy = 0;
+  if (skier.ragdoll) {
+    // Explosion mode: update scattered parts
+    for (const p of skier.ragdoll) {
+      p.vy += cfg.gravity * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.angle += p.angVel * dt;
+      const t = getTerrainAt(p.x);
+      if (p.y > t.y - p.r) {
+        p.y = t.y - p.r;
+        p.vy *= -0.3;
+        p.vx *= 0.85;
+        p.angVel *= 0.8;
+        if (Math.abs(p.vy) < 10) p.vy = 0;
+      }
+      p.vx *= 0.998;
+      p.angVel *= 0.995;
     }
-    // Damping
-    p.vx *= 0.998;
-    p.angVel *= 0.995;
+  } else {
+    // Connected ragdoll: run articulated physics with floppy joints
+    const substeps = Math.min(PHYS.maxSubsteps, Math.round(dt / PHYS.fixedDt));
+    const subDt = PHYS.fixedDt;
+    for (let step = 0; step < substeps; step++) {
+      // PD torques (will be near-zero due to crashed check in computePDTorque)
+      for (let i = 1; i < 4; i++) {
+        const relAngle = links[i].angle - links[i-1].angle;
+        const relAngVel = links[i].angVel - links[i-1].angVel;
+        const torque = computePDTorque(i, relAngle, relAngVel, 0);
+        links[i].angVel += (torque / links[i].inertia) * subDt;
+        links[i-1].angVel -= (torque / links[i-1].inertia) * subDt;
+      }
+      // Gravity
+      for (const link of links) {
+        link.vel.y += cfg.gravity * subDt;
+      }
+      // Ground contact
+      for (const link of links) {
+        applyGroundForces(link, subDt, false);
+      }
+      // Integrate
+      for (const link of links) {
+        link.pos.x += link.vel.x * subDt;
+        link.pos.y += link.vel.y * subDt;
+        link.angle += link.angVel * subDt;
+      }
+      // Joint constraints
+      solveJointConstraints();
+      // Damping (stronger during ragdoll to prevent endless spinning)
+      const angDamp = skier.crashed ? 0.999 : PHYS.jointDamping;
+      for (const link of links) {
+        link.angVel *= angDamp;
+      }
+    }
+    // Update skier position for camera tracking
+    skier.x = links[0].pos.x;
+    skier.y = links[0].pos.y;
+    skier.vx = links[0].vel.x;
+    skier.vy = links[0].vel.y;
+    skier.speed = Math.sqrt(skier.vx * skier.vx + skier.vy * skier.vy);
+
+    // Ragdoll telemetry
+    if (!skier._lastRagdollTelemetry) skier._lastRagdollTelemetry = 0;
+    skier._lastRagdollTelemetry += dt;
+    if (skier._lastRagdollTelemetry >= 0.25) {
+      skier._lastRagdollTelemetry = 0;
+      const DEG_INV = 180 / Math.PI;
+      const ankleA = (links[1].angle - links[0].angle) * DEG_INV;
+      const hipA = (links[2].angle - links[1].angle) * DEG_INV;
+      const shoulderA = (links[3].angle - links[2].angle) * DEG_INV;
+      console.log(
+        `[RAGDOLL] spd=${skier.speed.toFixed(0)} pos=(${skier.x.toFixed(0)},${skier.y.toFixed(0)})` +
+        ` t=${skier.crashTimer.toFixed(1)}s` +
+        ` | angles: ski=${(links[0].angle * DEG_INV).toFixed(0)}° leg=${(links[1].angle * DEG_INV).toFixed(0)}°` +
+        ` torso=${(links[2].angle * DEG_INV).toFixed(0)}° arms=${(links[3].angle * DEG_INV).toFixed(0)}°` +
+        ` | joints: ankle=${ankleA.toFixed(0)}° hip=${hipA.toFixed(0)}° shldr=${shoulderA.toFixed(0)}°` +
+        ` | angVel: ${links.map(l => l.angVel.toFixed(1)).join('/')}`
+      );
+    }
   }
 }
 
 function drawRagdoll(camX, camY) {
-  if (!skier.ragdoll) return;
-  for (const p of skier.ragdoll) {
-    const sx = p.x - camX + W * 0.3;
-    const sy = p.y - camY + H * 0.5;
-    ctx.save();
-    ctx.translate(sx, sy);
-    ctx.rotate(p.angle);
-    if (p.isLong) {
-      ctx.strokeStyle = p.color;
-      ctx.lineWidth = p.r * 2;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(-12, 0); ctx.lineTo(12, 0);
-      ctx.stroke();
-    } else {
-      ctx.beginPath();
-      ctx.arc(0, 0, p.r, 0, Math.PI * 2);
-      ctx.fillStyle = p.color;
-      ctx.fill();
+  if (skier.ragdoll) {
+    // Explosion mode: draw scattered parts
+    for (const p of skier.ragdoll) {
+      const sx = p.x - camX + W * 0.3;
+      const sy = p.y - camY + H * 0.5;
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(p.angle);
+      if (p.isLong) {
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = p.r * 2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-12, 0); ctx.lineTo(12, 0);
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(0, 0, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+      }
+      ctx.restore();
     }
-    ctx.restore();
+  } else {
+    // Connected ragdoll: draw the articulated figure normally (it flops)
+    if (!links || links.length < 4) return;
+    const ox = -camX + W * 0.3;
+    const oy = -camY + H * 0.5;
+
+    // Draw skis
+    if (!skiDetached) {
+      drawSkiPair(links[0].pos.x, links[0].pos.y, links[0].angle, camX, camY);
+    }
+    // Draw leg, boot, torso, arms
+    drawLinkPolygon(links[1], camX, camY, 1);
+    if (links[0].bootPts) {
+      ctx.save();
+      ctx.translate(links[0].pos.x + ox, links[0].pos.y + oy);
+      ctx.rotate(links[0].angle);
+      ctx.beginPath();
+      ctx.moveTo(links[0].bootPts[0].x, links[0].bootPts[0].y);
+      for (let i = 1; i < links[0].bootPts.length; i++) {
+        ctx.lineTo(links[0].bootPts[i].x, links[0].bootPts[i].y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = '#2a2a50';
+      ctx.fill();
+      ctx.strokeStyle = '#1a1a3a';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+    }
+    drawLinkPolygon(links[2], camX, camY, 2);
+    drawLinkPolygon(links[3], camX, camY, 3);
   }
 }
 
@@ -1203,9 +1302,9 @@ function initLinks() {
 // kp must produce this at moderate error angles (~0.5 rad).
 const JOINTS = [
   { kp: 0, kd: 0, minA: 0, maxA: 0, tMin: 0, tMax: 0 },
-  { kp: 120000, kd: 2500, minA: -130*DEG, maxA: 10*DEG, tMin: -800000, tMax: 800000 },  // ankle (2.7× increase)
-  { kp: 50000, kd: 2500, minA: -40*DEG, maxA: 140*DEG, tMin: -600000, tMax: 600000 },   // hip (2.7× increase)
-  { kp: 20000, kd: 250, minA: -90*DEG, maxA: 90*DEG, tMin: -100000, tMax: 100000 },     // shoulder (2.5× increase)
+  { kp: 120000, kd: 8000, minA: -130*DEG, maxA: 10*DEG, tMin: -800000, tMax: 800000 },  // ankle
+  { kp: 50000, kd: 5000, minA: -40*DEG, maxA: 140*DEG, tMin: -600000, tMax: 600000 },   // hip
+  { kp: 20000, kd: 1500, minA: -90*DEG, maxA: 90*DEG, tMin: -100000, tMax: 100000 },    // shoulder
 ];
 
 // Physics params (from .afig link_kp/kd, common.setup dt_sim, brakeMonitor cf)
@@ -1313,10 +1412,10 @@ function computeTargetAngles() {
 function computePDTorque(jointIdx, currentAngle, relAngVel, targetAngle) {
   const j = JOINTS[jointIdx];
   if (j.kp === 0 && j.kd === 0) return 0;
-  // Ragdoll mode: near-zero stiffness, light damping (from original relaxJtPd)
+  // Ragdoll mode: near-zero stiffness, moderate damping (from original relaxJtPd)
   if (skier.crashed) {
-    const torque = -0.1 * relAngVel;
-    return Math.max(-500, Math.min(500, torque));
+    const torque = -5.0 * relAngVel;
+    return Math.max(-3000, Math.min(3000, torque));
   }
   const error = targetAngle - currentAngle;
   const torque = j.kp * error - j.kd * relAngVel;
@@ -1438,20 +1537,56 @@ function solveJointConstraints() {
       child.pos.y += dy * childRatio;
 
       // Velocity correction: project out relative velocity along constraint
-      // Compute velocity of parent's joint point
       const rp = rotatePoint(parent.jointOrg, parent.angle);
       const vpx = parent.vel.x - parent.angVel * rp.y;
       const vpy = parent.vel.y + parent.angVel * rp.x;
-      // Child's velocity at its pos is just child.vel
       const dvx = vpx - child.vel.x;
       const dvy = vpy - child.vel.y;
 
-      // Apply velocity correction
       const velBias = 0.3;
       parent.vel.x -= dvx * parentRatio * velBias;
       parent.vel.y -= dvy * parentRatio * velBias;
       child.vel.x += dvx * childRatio * velBias;
       child.vel.y += dvy * childRatio * velBias;
+    }
+
+    // Enforce joint angle limits
+    // During ragdoll: use wider limits to allow flopping but prevent 360° spinning
+    const ragdoll = skier.crashed;
+    const RAG_LIMITS = [
+      null, // link0 unused
+      { minA: -Math.PI, maxA: Math.PI * 0.25 },    // ankle: -180° to 45°
+      { minA: -Math.PI * 0.5, maxA: Math.PI },      // hip: -90° to 180°
+      { minA: -Math.PI * 0.75, maxA: Math.PI * 0.75 } // shoulder: -135° to 135°
+    ];
+    for (let i = 1; i < 4; i++) {
+      const j = ragdoll ? RAG_LIMITS[i] : JOINTS[i];
+      if (!ragdoll && j.minA === 0 && j.maxA === 0) continue;
+      const relAngle = links[i].angle - links[i-1].angle;
+      if (relAngle < j.minA) {
+        const correction = j.minA - relAngle;
+        const totalMass = links[i].mass + links[i-1].mass;
+        links[i].angle += correction * (links[i-1].mass / totalMass);
+        links[i-1].angle -= correction * (links[i].mass / totalMass);
+        const relAngVel = links[i].angVel - links[i-1].angVel;
+        if (relAngVel < 0) {
+          // During ragdoll, absorb most energy at limits (inelastic collision)
+          const dampFactor = ragdoll ? 0.8 : 1.0;
+          links[i].angVel -= relAngVel * (links[i-1].mass / totalMass) * dampFactor;
+          links[i-1].angVel += relAngVel * (links[i].mass / totalMass) * dampFactor;
+        }
+      } else if (relAngle > j.maxA) {
+        const correction = j.maxA - relAngle;
+        const totalMass = links[i].mass + links[i-1].mass;
+        links[i].angle += correction * (links[i-1].mass / totalMass);
+        links[i-1].angle -= correction * (links[i].mass / totalMass);
+        const relAngVel = links[i].angVel - links[i-1].angVel;
+        if (relAngVel > 0) {
+          const dampFactor = ragdoll ? 0.8 : 1.0;
+          links[i].angVel -= relAngVel * (links[i-1].mass / totalMass) * dampFactor;
+          links[i-1].angVel += relAngVel * (links[i].mass / totalMass) * dampFactor;
+        }
+      }
     }
   }
 }
@@ -1522,7 +1657,8 @@ function updatePhysics(dt) {
       if (result.anyContact) frameAnyContact = true;
       if (link.tag === 'ski') {
         frameMaxSkiForce = Math.max(frameMaxSkiForce, result.totalForce);
-      } else {
+      } else if (link.tag !== 'arms') {
+        // Arms excluded from crash force (too light to trigger realistic crashes)
         if (result.totalForce > frameMaxForce) {
           frameMaxForce = result.totalForce;
           frameMaxForceLink = link.tag;
@@ -1607,55 +1743,83 @@ function updatePhysics(dt) {
   skier.wasOnGround = wasOnGround;
   skier.onGround = frameAnyContact;
 
+  // --- Physics telemetry (logged every 0.5s) ---
+  if (!skier._lastTelemetry) skier._lastTelemetry = 0;
+  skier._lastTelemetry += dt;
+  if (skier._lastTelemetry >= 0.25) {
+    skier._lastTelemetry = 0;
+    const DEG_INV = 180 / Math.PI;
+    const terrain = getTerrainAt(skier.x);
+    const ankleA = (links[1].angle - links[0].angle) * DEG_INV;
+    const hipA = (links[2].angle - links[1].angle) * DEG_INV;
+    const shoulderA = (links[3].angle - links[2].angle) * DEG_INV;
+    console.log(
+      `[PHYS] spd=${skier.speed.toFixed(0)} pos=(${skier.x.toFixed(0)},${skier.y.toFixed(0)})` +
+      ` ground=${skier.onGround ? 'Y' : 'N'} air=${skier.airTime.toFixed(2)}s` +
+      ` slope=${(terrain.angle * DEG_INV).toFixed(1)}°` +
+      ` | joints: ankle=${ankleA.toFixed(0)}° hip=${hipA.toFixed(0)}° shldr=${shoulderA.toFixed(0)}°` +
+      ` | forces: ski=${Math.round(frameMaxSkiForce)} body=${Math.round(frameMaxForce)}(${frameMaxForceLink||'-'})` +
+      ` | mouse=(${mouseX.toFixed(2)},${mouseY.toFixed(2)}) brake=${braking}`
+    );
+  }
+
   if (skier.onGround) {
     if (!wasOnGround && skier.airTime > 0.3) {
       // Landing
       detectTricks();
-
-      // Crash on hard body impact
-      const impactThreshold = cfg.crashImpact * 100;
-      if (frameMaxForce > impactThreshold) {
-        skier.crashed = true;
-        skier.crashTimer = 0;
-        skier.crashReason = `${frameMaxForceLink} impact: ${Math.round(frameMaxForce)} (threshold: ${Math.round(impactThreshold)})`;
-        initRagdoll();
-        SFX.playCrash();
-        addCommentary('crashes');
-        return;
-      }
-
-      // Ski binding detachment
-      if (!skiDetached && frameMaxSkiForce > cfg.bindingStrength * 150) {
-        skiDetached = true;
-        const skiLink = links[0];
-        // Two skis detach independently (as seen in original gameplay)
-        for (let i = 0; i < 2; i++) {
-          detachedSkis.push({
-            x: skiLink.pos.x,
-            y: skiLink.pos.y,
-            vx: skiLink.vel.x + (Math.random() - 0.5) * 150 + (i === 0 ? -60 : 60),
-            vy: skiLink.vel.y - 80 - Math.random() * 120,
-            angle: skiLink.angle + (Math.random() - 0.5) * 0.8,
-            angVel: (Math.random() - 0.5) * 10,
-            points: skiLink.points,  // same polygon geometry
-          });
-        }
-        SFX.playImpact(frameMaxSkiForce / 5);
-        addCommentary('badLandings');
-        setTimeout(() => {
-          if (!skier.crashed && skiDetached) {
-            skier.crashed = true;
-            skier.crashTimer = 0;
-            skier.crashReason = 'ski detachment';
-            initRagdoll();
-            SFX.playCrash();
-            addCommentary('crashes');
-          }
-        }, 400);
-      }
-
-      if (frameMaxSkiForce > 100) SFX.playImpact(frameMaxSkiForce / 10);
     }
+
+    // Crash on hard body impact (checked continuously, matching original maxShock=13000)
+    // Original uses accumulated force across all links; we use peak force per frame
+    const impactThreshold = cfg.crashImpact * 100;
+    if (frameMaxForce > impactThreshold) {
+      skier.crashed = true;
+      skier.crashTimer = 0;
+      skier.crashReason = `${frameMaxForceLink} impact: ${Math.round(frameMaxForce)} (threshold: ${Math.round(impactThreshold)})`;
+      if (frameMaxForce > impactThreshold * 3) {
+        initExplosionRagdoll(); // extreme impact: scatter parts
+      } else {
+        initRagdoll(); // normal crash: connected ragdoll
+      }
+      SFX.playCrash();
+      addCommentary('crashes');
+      return;
+    }
+
+    // Ski binding detachment (original: MaxHzImpact/MaxDnImpact = 1300)
+    if (!skiDetached && frameMaxSkiForce > cfg.bindingStrength * 150) {
+      skiDetached = true;
+      const skiLink = links[0];
+      for (let i = 0; i < 2; i++) {
+        detachedSkis.push({
+          x: skiLink.pos.x,
+          y: skiLink.pos.y,
+          vx: skiLink.vel.x + (Math.random() - 0.5) * 150 + (i === 0 ? -60 : 60),
+          vy: skiLink.vel.y - 80 - Math.random() * 120,
+          angle: skiLink.angle + (Math.random() - 0.5) * 0.8,
+          angVel: (Math.random() - 0.5) * 10,
+          points: skiLink.points,
+        });
+      }
+      // Switch foot link from ski polygon to boot polygon for ground contact
+      // Ski is gone — foot should collide using boot shape, not invisible ski
+      skiLink.points = skiLink.bootPts;
+      skiLink.tag = 'foot'; // use body friction instead of ski friction
+      SFX.playImpact(frameMaxSkiForce / 5);
+      addCommentary('badLandings');
+      setTimeout(() => {
+        if (!skier.crashed && skiDetached) {
+          skier.crashed = true;
+          skier.crashTimer = 0;
+          skier.crashReason = 'ski detachment';
+          initRagdoll(); // connected ragdoll (not explosion)
+          SFX.playCrash();
+          addCommentary('crashes');
+        }
+      }, 400);
+    }
+
+    if (frameMaxSkiForce > 100) SFX.playImpact(frameMaxSkiForce / 10);
     skier.airTime = 0;
   } else {
     skier.airTime += dt;
@@ -1663,20 +1827,9 @@ function updatePhysics(dt) {
     skier.totalRotation += torsoLink.angVel * dt;
   }
 
-  // Crash angle detection (torso too rotated relative to terrain on ground)
-  if (skier.onGround) {
-    const terrain = getTerrainAt(skier.x);
-    const angleDiff = Math.abs(torsoLink.angle - terrain.angle);
-    if (angleDiff > cfg.crashAngle && skier.speed > 50) {
-      skier.crashed = true;
-      skier.crashTimer = 0;
-      skier.crashReason = `torso angle: ${(angleDiff * 180 / Math.PI).toFixed(0)}° (threshold: ${(cfg.crashAngle * 180 / Math.PI).toFixed(0)}°, speed: ${Math.round(skier.speed)})`;
-      initRagdoll();
-      SFX.playCrash();
-      addCommentary('crashes');
-      return;
-    }
-  }
+  // Crash angle detection — REMOVED per original game analysis.
+  // Original only crashes from force exceeding maxShock (13000).
+  // Angle-based crash is not present in original.
 
   // Stats
   runStats.maxSpeed = Math.max(runStats.maxSpeed, skier.speed);
