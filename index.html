@@ -1,225 +1,2791 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>toys</title>
-  <style>
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      max-width: 700px;
-      margin: 4rem auto;
-      padding: 0 1rem;
-      line-height: 1.6;
-      color: #222;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ski Stunt Simulator</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; }
+canvas { display: block; }
 
-    .filters {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin: 1.5rem 0;
-    }
+/* --- Menu Overlay --- */
+#menu-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, #1a3a6a 0%, #4a90d9 40%, #87ceeb 80%, #f0f4ff 100%);
+  transition: opacity 0.5s;
+}
+#menu-overlay.hidden { opacity: 0; pointer-events: none; }
+#menu-overlay h1 {
+  font-size: 52px; color: #fff; text-shadow: 3px 3px 8px rgba(0,0,0,0.5);
+  margin-bottom: 8px; letter-spacing: 2px;
+}
+#menu-overlay .subtitle {
+  font-size: 16px; color: rgba(255,255,255,0.8); margin-bottom: 40px;
+  text-shadow: 1px 1px 4px rgba(0,0,0,0.4);
+}
+.menu-section { margin-bottom: 20px; text-align: center; }
+.menu-section h2 { color: #fff; font-size: 14px; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 12px; opacity: 0.7; }
+.scenario-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  max-width: 600px; margin: 0 auto;
+}
+.scenario-btn {
+  background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.3);
+  color: #fff; padding: 12px 16px; border-radius: 8px; cursor: pointer;
+  font-size: 13px; font-weight: 600; transition: all 0.2s;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+}
+.scenario-btn:hover { background: rgba(255,255,255,0.3); border-color: #fff; transform: scale(1.05); }
+.scenario-btn.selected { background: rgba(255,255,255,0.35); border-color: #fff; box-shadow: 0 0 15px rgba(255,255,255,0.3); }
+.scenario-btn .diff { font-size: 10px; opacity: 0.7; display: block; margin-top: 2px; }
+#start-btn {
+  background: rgba(255,200,0,0.9); border: none; color: #1a1a3a;
+  padding: 16px 60px; border-radius: 30px; font-size: 20px; font-weight: 700;
+  cursor: pointer; margin-top: 20px; transition: all 0.2s;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+#start-btn:hover { background: #ffd700; transform: scale(1.05); }
+/* --- Victory Overlay --- */
+#victory-overlay {
+  position: fixed; inset: 0; z-index: 90;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(0,20,60,0.75);
+}
+#victory-overlay.visible { display: flex; }
+#victory-overlay .victory-box {
+  background: linear-gradient(135deg, rgba(10,30,80,0.95), rgba(30,60,120,0.95));
+  border: 2px solid rgba(255,215,0,0.5); border-radius: 16px;
+  padding: 36px 56px; text-align: center; color: #fff;
+  box-shadow: 0 0 40px rgba(255,215,0,0.2);
+  min-width: 360px;
+}
+#victory-overlay h2 { font-size: 36px; color: #ffd700; margin-bottom: 4px; text-shadow: 0 0 20px rgba(255,215,0,0.4); }
+#victory-overlay .medal { font-size: 48px; margin: 8px 0; }
+#victory-overlay .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; margin: 16px 0; text-align: left; font-size: 14px; }
+#victory-overlay .stats-grid .label { color: rgba(255,255,255,0.6); }
+#victory-overlay .stats-grid .value { color: #8cf; text-align: right; }
+#victory-overlay .btn-row { margin-top: 18px; display: flex; gap: 10px; justify-content: center; }
+#victory-overlay button {
+  padding: 10px 28px; border-radius: 20px; font-size: 14px; font-weight: 600;
+  cursor: pointer; border: 1px solid rgba(255,255,255,0.3); transition: all 0.2s;
+}
+#victory-overlay .btn-retry { background: rgba(255,200,0,0.9); color: #1a1a3a; border: none; }
+#victory-overlay .btn-retry:hover { background: #ffd700; transform: scale(1.05); }
+#victory-overlay .btn-menu { background: rgba(255,255,255,0.15); color: #fff; }
+#victory-overlay .btn-menu:hover { background: rgba(255,255,255,0.3); }
+/* --- Minimap --- */
+#minimap {
+  position: fixed; bottom: 12px; right: 12px; z-index: 15;
+  pointer-events: none;
+}
+/* --- Goal HUD --- */
+#goal-hud {
+  position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+  color: #fff; font: 13px monospace; text-align: center;
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+  pointer-events: none; z-index: 10;
+}
+.controls-hint {
+  margin-top: 30px; color: rgba(255,255,255,0.6); font-size: 12px; line-height: 1.8;
+}
 
-    .filter-btn {
-      background: #eee;
-      border: 1px solid #ccc;
-      border-radius: 1rem;
-      padding: 0.25rem 0.75rem;
-      font-size: 0.85rem;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s;
-    }
-
-    .filter-btn:hover {
-      background: #ddd;
-    }
-
-    .filter-btn.active {
-      background: #222;
-      color: #fff;
-      border-color: #222;
-    }
-
-    .app-list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    .app-item {
-      border-bottom: 1px solid #eee;
-      padding: 1rem 0;
-    }
-
-    .app-item:last-child {
-      border-bottom: none;
-    }
-
-    .app-item.hidden {
-      display: none;
-    }
-
-    .app-item a {
-      font-weight: 600;
-      text-decoration: none;
-      color: #0366d6;
-      font-size: 1.1rem;
-    }
-
-    .app-item a:hover {
-      text-decoration: underline;
-    }
-
-    .app-summary {
-      margin: 0.25rem 0 0.4rem;
-      color: #555;
-      font-size: 0.95rem;
-    }
-
-    .app-tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.35rem;
-    }
-
-    .tag {
-      background: #f0f0f0;
-      border-radius: 0.75rem;
-      padding: 0.1rem 0.5rem;
-      font-size: 0.75rem;
-      color: #666;
-    }
-  </style>
+/* --- HUD --- */
+#hud {
+  position: fixed; top: 12px; left: 12px;
+  color: #fff; font: 14px monospace;
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+  pointer-events: none; z-index: 10; line-height: 1.6;
+}
+#trick-display {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  pointer-events: none; z-index: 11; text-align: center;
+}
+#score-display {
+  position: fixed; top: 12px; right: 12px;
+  color: #fff; font: 14px monospace;
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+  pointer-events: none; z-index: 10; text-align: right; line-height: 1.6;
+}
+#instructions {
+  position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+  color: rgba(255,255,255,0.5); font: 12px monospace;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+  pointer-events: none; z-index: 10; text-align: center;
+}
+#pause-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.6);
+}
+#pause-overlay.visible { display: flex; }
+#pause-overlay .pause-box {
+  background: rgba(0,20,60,0.9); border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 12px; padding: 30px 50px; text-align: center; color: #fff;
+}
+/* Params panel */
+#params-toggle {
+  position: fixed; top: 12px; right: 12px; z-index: 20;
+  background: rgba(0,0,0,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.2);
+  font: 12px monospace; padding: 4px 10px; cursor: pointer; border-radius: 4px;
+  display: none;
+}
+#params-panel {
+  position: fixed; top: 36px; right: 12px; z-index: 20;
+  background: rgba(0,0,0,0.85); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px; padding: 10px 14px; width: 280px;
+  max-height: calc(100vh - 50px); overflow-y: auto;
+  font: 11px monospace; color: #ccc; display: none;
+}
+#params-panel.open { display: block; }
+#params-panel h3 { color: #fff; margin: 8px 0 4px; font-size: 11px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px; }
+#params-panel h3:first-child { margin-top: 0; }
+.param-row { display: flex; align-items: center; justify-content: space-between; margin: 3px 0; }
+.param-row label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 10px; }
+.param-row input[type=range] { width: 90px; margin: 0 4px; }
+.param-row .pv { width: 42px; text-align: right; color: #8cf; font-size: 10px; }
+</style>
 </head>
 <body>
-  <h1>silly projects</h1>
-  <p>a gallery of claudiocy</p>
-  <p>different "vibe coded" audio/visual apps with varying levels of polish. all code is 0% human-written</p>
 
-  <div class="filters"></div>
+<!-- Menu -->
+<div id="menu-overlay">
+  <h1>⛷ SKI STUNT</h1>
+  <div class="subtitle">Simulator</div>
+  <div class="menu-section">
+    <h2>Select Scenario</h2>
+    <div class="scenario-grid" id="scenario-grid"></div>
+  </div>
+  <button id="start-btn">▶ START RUN</button>
+  <div class="controls-hint">
+    Mouse: control posture &amp; lean · Click: brake · Scroll: tuck/extend<br>
+    Space: jump · R: restart · Esc: pause/menu · P: params
+  </div>
+</div>
 
-  <ul class="app-list">
-    <li class="app-item" data-tags="interactive 2d game">
-      <a href="ants/simant.html">ants!</a>
-      <p class="app-summary">"Fully recreate SimAnt (https://en.wikipedia.org/wiki/SimAnt) as a web app."</p>
-    </li>
-    <li class="app-item" data-tags="2d">
-      <a href="atc/index.html">atc</a>
-      <p class="app-summary">fake Air Traffic Controller viz. Single prompt "air traffic controller"</p>
-    </li>
-    <li class="app-item" data-tags="3d">
-      <a href="coaster/index.html">coaster</a>
-      <p class="app-summary">a roller coaster</p>
-      <p class="app-summary">a few iterations on this one. Initially "web app: first person roller coaster simulator. 3D rendered. high visual detail. ornate wooden car on metal rails and scaffolding/structure. lush forest scenery with waterfall. track has slow initial ascent, rapid descent downhill, loop-the-loop".</p>
-      <p class="app-summary">The initial resulting track design was unrealistically jerky and unenjoyable. It improved a bit after prompted suggestions to analyze G-forces and roll rates.</p>
-    </li>
-    <li class="app-item" data-tags="2d audio interactive">
-      <a href="cymatics/index.html">cymatics</a>
-      <p class="app-summary">it's time to vibrate some sand!</p>
-    </li>
-    <li class="app-item" data-tags="2d">
-      <a href="desert-ufo/index.html">desert-ufo</a>
-      <p class="app-summary">single prompt: "openGL fish horse desert particle UFO, aliens, livestock, mesa"</p>
-    </li>
-    <li class="app-item" data-tags="interactive 2d">
-      <a href="fluid/index.html">fluid</a>
-      <p class="app-summary">a liquid inky painty sort of thing</p>
-      <p class="app-summary">click and drag with a mouse or a finger</p>
-    </li>
-    <li class="app-item" data-tags="2d">
-      <a href="fnarg/index.html">fnarg</a>
-      <p class="app-summary">prompt: "fnarg"</p>
-    </li>
-    <li class="app-item" data-tags="2d">
-      <a href="indie-rock/index.html">indie-rock</a>
-      <p class="app-summary">prompt: "something about indie rock"</p>
-    </li>
-    <li class="app-item" data-tags="interactive 3d game">
-      <a href="jenga/index.html">jenga</a>
-      <p class="app-summary">its that block-pulling game you love, except unplayable</p>
-      <p class="app-summary">lots of iterations on this one just trying to get the raycasting piece selection to work</p>
-    </li>
-    <li class="app-item" data-tags="2d game">
-      <a href="ski/index.html">ski</a>
-      <p class="app-summary">trying to re-create the original "Ski Stunt Simulator" Windows desktop game from 2002</p>
-    </li>
-    <li class="app-item" data-tags="interactive 3d stereoscopic">
-      <a href="stereoscopy/cosmos/index.html">stereoscopy / cosmos</a>
-      <p class="app-summary">cross your eyes!</p>
-    </li>
-    <li class="app-item" data-tags="interactive 3d stereoscopic">
-      <a href="stereoscopy/intergalactic-conflict/index.html">stereoscopy / intergalactic-conflict</a>
-      <p class="app-summary">cross your eyes some more!</p>
-    </li>
-    <li class="app-item" data-tags="2d 3d">
-      <a href="torus/canvas.html">torus / canvas</a>
-      <p class="app-summary">Rotating ASCII torus rendered on canvas.</p>
-      <p class="app-summary">"Write a screensaver in C++", followed by "create the same behavior in a web app using html and javascript"</p>
-    </li>
-    <li class="app-item" data-tags="2d 3d">
-      <a href="torus/dom.html">torus / dom</a>
-      <p class="app-summary">Rotating ASCII torus but manipulating DOM elements instead of using a canvas.</p>
-      <p class="app-summary">"Can we do another iteration in another .html file where instead of drawing on a canvas, the script directly modifies the DOM?"</p>
-    </li>
-    <li class="app-item" data-tags="audio">
-      <a href="tr-808/index.html">TR-808</a>
-      <p class="app-summary">"Create a fully-functional Roland TR-808 emulator"</p>
-      <p class="app-summary">simple little drum machine</p>
-    </li>
-    <li class="app-item" data-tags="interactive 2d">
-      <a href="voronoi/index.html">voronoi</a>
-      <p class="app-summary">interactive voronoi cell thingies</p>
-      <p class="app-summary">co-prompted in a fun evening with my friend <a href="https://nickhogle.com/">Nick</a>.</p>
-      <p class="app-summary">press P for a bunch of adjustable parameters</p>
-      <p class="app-summary">click and drag with a mouse/finger</p>
-    </li>
-  </ul>
+<!-- In-game UI -->
+<div id="hud"></div>
+<div id="trick-display"></div>
+<div id="score-display"></div>
+<div id="instructions"></div>
+<div id="pause-overlay"><div class="pause-box">
+  <h2 style="margin-bottom:12px">PAUSED</h2>
+  <p style="opacity:0.7;font-size:14px">Press Esc to resume · M for menu</p>
+</div></div>
+<div id="victory-overlay"><div class="victory-box" id="victory-box"></div></div>
+<div id="goal-hud"></div>
+<canvas id="minimap" width="220" height="60"></canvas>
+<button id="params-toggle" onclick="document.getElementById('params-panel').classList.toggle('open')">⚙</button>
+<div id="params-panel"></div>
+<canvas id="c"></canvas>
 
-  <script>
-    const TAG_LABELS = { '2d': '2D', '3d': '3D' };
-    const filtersDiv = document.querySelector('.filters');
-    const items = document.querySelectorAll('.app-item');
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  SKI STUNT SIMULATOR — Complete Web Game
+// ═══════════════════════════════════════════════════════════════
 
-    // Collect all unique tags from items
-    const allTags = new Set();
-    items.forEach(item => item.dataset.tags.split(' ').forEach(t => allTags.add(t)));
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const hudEl = document.getElementById('hud');
+const trickEl = document.getElementById('trick-display');
+const scoreEl = document.getElementById('score-display');
+const instrEl = document.getElementById('instructions');
 
-    // Generate filter buttons
-    function addFilterBtn(filter, label, active) {
-      const btn = document.createElement('button');
-      btn.className = 'filter-btn' + (active ? ' active' : '');
-      btn.dataset.filter = filter;
-      btn.textContent = label;
-      filtersDiv.appendChild(btn);
+let W, H;
+function resize() { W = canvas.width = innerWidth; H = canvas.height = innerHeight; }
+resize();
+addEventListener('resize', resize);
+
+// ═══════════════════════════════════════════════════════════════
+//  SOUND ENGINE (Web Audio API)
+// ═══════════════════════════════════════════════════════════════
+const SFX = {
+  ctx: null, master: null,
+  init() {
+    if (this.ctx) return;
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.master = this.ctx.createGain();
+    this.master.gain.value = 0.5;
+    this.master.connect(this.ctx.destination);
+
+    // Persistent wind node
+    this._windNoise = this._createNoise();
+    this._windFilter = this.ctx.createBiquadFilter();
+    this._windFilter.type = 'bandpass';
+    this._windFilter.frequency.value = 400;
+    this._windFilter.Q.value = 0.5;
+    this._windGain = this.ctx.createGain();
+    this._windGain.gain.value = 0;
+    this._windNoise.connect(this._windFilter);
+    this._windFilter.connect(this._windGain);
+    this._windGain.connect(this.master);
+
+    // Persistent ski contact noise
+    this._skiNoise = this._createNoise();
+    this._skiFilter = this.ctx.createBiquadFilter();
+    this._skiFilter.type = 'highpass';
+    this._skiFilter.frequency.value = 2000;
+    this._skiGain = this.ctx.createGain();
+    this._skiGain.gain.value = 0;
+    this._skiNoise.connect(this._skiFilter);
+    this._skiFilter.connect(this._skiGain);
+    this._skiGain.connect(this.master);
+  },
+  _createNoise() {
+    const bufferSize = this.ctx.sampleRate * 2;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    const node = this.ctx.createBufferSource();
+    node.buffer = buffer;
+    node.loop = true;
+    node.start();
+    return node;
+  },
+  updateWind(speed) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const vol = Math.min(0.25, speed / 2000);
+    const freq = 200 + Math.min(800, speed * 0.8);
+    this._windGain.gain.linearRampToValueAtTime(vol, t + 0.1);
+    this._windFilter.frequency.linearRampToValueAtTime(freq, t + 0.1);
+  },
+  updateSki(speed, onGround, braking) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    let vol = 0;
+    if (onGround && speed > 20) {
+      vol = Math.min(0.15, speed / 1500);
+      if (braking) vol *= 3;
     }
-    addFilterBtn('all', 'all', true);
-    allTags.forEach(tag => addFilterBtn(tag, TAG_LABELS[tag] || tag, false));
+    this._skiGain.gain.linearRampToValueAtTime(vol, t + 0.05);
+    this._skiFilter.frequency.linearRampToValueAtTime(braking ? 1200 : 2500, t + 0.05);
+  },
+  playImpact(force) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(80 + Math.random() * 30, t);
+    osc.frequency.exponentialRampToValueAtTime(30, t + 0.3);
+    g.gain.setValueAtTime(Math.min(0.6, force / 800), t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    osc.connect(g); g.connect(this.master);
+    osc.start(t); osc.stop(t + 0.4);
+    // Add noise burst
+    const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.15, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (d.length * 0.2));
+    const ns = this.ctx.createBufferSource();
+    ns.buffer = buf;
+    const ng = this.ctx.createGain();
+    ng.gain.setValueAtTime(Math.min(0.4, force / 600), t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    ns.connect(ng); ng.connect(this.master);
+    ns.start(t);
+  },
+  playCrash() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    // Heavy thud
+    for (let i = 0; i < 3; i++) {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(50 + i * 20, t + i * 0.05);
+      osc.frequency.exponentialRampToValueAtTime(20, t + 0.5 + i * 0.05);
+      g.gain.setValueAtTime(0.5, t + i * 0.05);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.5 + i * 0.1);
+      osc.connect(g); g.connect(this.master);
+      osc.start(t + i * 0.05); osc.stop(t + 0.6 + i * 0.1);
+    }
+    // Crunch noise
+    const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.5, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (d.length * 0.15));
+    const ns = this.ctx.createBufferSource();
+    ns.buffer = buf;
+    const ng = this.ctx.createGain();
+    ng.gain.setValueAtTime(0.5, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    ns.connect(ng); ng.connect(this.master);
+    ns.start(t);
+  },
+  playJump() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(150, t);
+    osc.frequency.exponentialRampToValueAtTime(400, t + 0.15);
+    g.gain.setValueAtTime(0.2, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    osc.connect(g); g.connect(this.master);
+    osc.start(t); osc.stop(t + 0.2);
+  },
+  playTrick(quality) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    // Pleasant chime
+    const notes = [523, 659, 784, 1047];
+    const count = Math.min(4, 1 + Math.floor(quality / 25));
+    for (let i = 0; i < count; i++) {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = notes[i % notes.length];
+      g.gain.setValueAtTime(0.15, t + i * 0.1);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.1 + 0.3);
+      osc.connect(g); g.connect(this.master);
+      osc.start(t + i * 0.1); osc.stop(t + i * 0.1 + 0.3);
+    }
+  },
+  playLanding(quality) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    // Ski scrape on landing
+    const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.2, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (d.length * 0.3));
+    const ns = this.ctx.createBufferSource();
+    ns.buffer = buf;
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'bandpass'; f.frequency.value = 3000; f.Q.value = 1;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.25, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    ns.connect(f); f.connect(g); g.connect(this.master);
+    ns.start(t);
+  }
+};
 
-    // Generate tag badges from data-tags
-    items.forEach(item => {
-      const div = document.createElement('div');
-      div.className = 'app-tags';
-      item.dataset.tags.split(' ').forEach(tag => {
-        const span = document.createElement('span');
-        span.className = 'tag';
-        span.textContent = TAG_LABELS[tag] || tag;
-        div.appendChild(span);
-      });
-      item.appendChild(div);
-    });
+// ═══════════════════════════════════════════════════════════════
+//  SCENARIO DEFINITIONS
+// ═══════════════════════════════════════════════════════════════
+const SCENARIOS = [
+  {
+    name: 'Bunny Slope', diff: 'Easy', id: 'bunny',
+    desc: 'Gentle slope with small bumps',
+    victory: { type: 'finish', scoreGoal: 50, goldScore: 200, silverScore: 100 },
+    generate(pts) {
+      let x = -200, y = 300, slope = 0.12;
+      for (let i = 0; i < 500; i++) {
+        pts.push({ x, y, type: 'snow' });
+        slope += (Math.sin(i * 0.05) * 0.01);
+        slope = Math.max(0.06, Math.min(0.2, slope));
+        x += 50; y += 50 * slope;
+      }
+    }
+  },
+  {
+    name: 'Big Air', diff: 'Medium', id: 'bigair',
+    desc: 'Series of large jumps',
+    victory: { type: 'finish', scoreGoal: 200, goldScore: 600, silverScore: 350 },
+    generate(pts) {
+      let x = -200, y = 300;
+      const addSlope = (count, s) => { for (let i = 0; i < count; i++) { pts.push({x, y, type:'snow'}); x += 50; y += 50 * s; }};
+      const addJump = (rampLen, rampAngle, gapLen, landLen) => {
+        // Approach ramp up
+        for (let i = 0; i < rampLen; i++) { pts.push({x, y, type:'snow'}); x += 50; y += 50 * (rampAngle + 0.1 * i / rampLen); }
+        // Lip (launch point, angle goes negative = uphill)
+        pts.push({x, y, type:'snow'}); x += 40; y -= 40 * 0.35;
+        pts.push({x, y, type:'snow'}); x += 30; y -= 30 * 0.15;
+        // Gap
+        for (let i = 0; i < gapLen; i++) { pts.push({x, y, type:'gap'}); x += 50; y += 50 * 0.4; }
+        // Landing ramp
+        for (let i = 0; i < landLen; i++) { pts.push({x, y, type:'snow'}); x += 50; y += 50 * 0.25; }
+      };
+      addSlope(8, 0.18);
+      addJump(4, 0.15, 5, 6);
+      addSlope(6, 0.12);
+      addJump(5, 0.18, 7, 8);
+      addSlope(6, 0.1);
+      addJump(3, 0.2, 4, 5);
+      addSlope(10, 0.15);
+      addJump(6, 0.16, 8, 10);
+      addSlope(40, 0.1);
+    }
+  },
+  {
+    name: 'Mogul Run', diff: 'Medium', id: 'moguls',
+    desc: 'Bumpy mogul field with rhythm',
+    victory: { type: 'finish', scoreGoal: 100, goldScore: 400, silverScore: 200 },
+    generate(pts) {
+      let x = -200, y = 300;
+      // Initial slope
+      for (let i = 0; i < 10; i++) { pts.push({x, y, type:'snow'}); x += 50; y += 50 * 0.15; }
+      // Mogul field
+      for (let i = 0; i < 60; i++) {
+        const mogulPhase = Math.sin(i * 0.9) * 18;
+        pts.push({x, y: y + mogulPhase, type:'snow'});
+        x += 35; y += 35 * 0.12;
+      }
+      // Runout
+      for (let i = 0; i < 30; i++) { pts.push({x, y, type:'snow'}); x += 50; y += 50 * 0.08; }
+    }
+  },
+  {
+    name: 'Cliff Drop', diff: 'Hard', id: 'cliff',
+    desc: 'Steep drops and technical landings',
+    victory: { type: 'finish', scoreGoal: 300, goldScore: 800, silverScore: 500 },
+    generate(pts) {
+      let x = -200, y = 200;
+      const slope = (n, s) => { for (let i = 0; i < n; i++) { pts.push({x, y, type:'snow'}); x += 50; y += 50 * s; }};
+      const cliff = (height) => {
+        pts.push({x, y, type:'snow'});
+        x += 30; // short lip
+        pts.push({x, y: y - 15, type:'snow'}); // slight upkick
+        x += 20;
+        pts.push({x, y: y + height * 0.2, type:'gap'});
+        x += 30;
+        pts.push({x, y: y + height, type:'snow'});
+      };
+      slope(10, 0.2);
+      cliff(120);
+      slope(8, 0.15);
+      cliff(80);
+      slope(6, 0.18);
+      cliff(150);
+      slope(10, 0.12);
+      cliff(100);
+      slope(30, 0.1);
+    }
+  },
+  {
+    name: 'Halfpipe', diff: 'Hard', id: 'halfpipe',
+    desc: 'Halfpipe for aerial tricks',
+    victory: { type: 'finish', scoreGoal: 400, goldScore: 1000, silverScore: 600 },
+    generate(pts) {
+      let x = -200, y = 300;
+      // Approach
+      for (let i = 0; i < 12; i++) { pts.push({x, y, type:'snow'}); x += 50; y += 50 * 0.2; }
+      // Transition into pipe
+      for (let i = 0; i < 4; i++) { pts.push({x, y, type:'snow'}); x += 40; y += 40 * (0.2 - i * 0.12); }
+      // Halfpipe walls (series of U-shapes)
+      const pipeWidth = 200;
+      const wallHeight = 100;
+      for (let rep = 0; rep < 6; rep++) {
+        // Left wall up
+        for (let i = 0; i < 6; i++) {
+          const t = i / 5;
+          const cy = y + wallHeight * (1 - Math.cos(t * Math.PI)) * 0.5;
+          const cx = x + pipeWidth * 0.5 * (1 - Math.cos(t * Math.PI)) * 0.5;
+          pts.push({x: cx, y: cy - wallHeight * t, type:'snow'});
+        }
+        // Flat bottom
+        x += pipeWidth * 0.15;
+        pts.push({x, y, type:'snow'});
+        x += pipeWidth * 0.3;
+        pts.push({x, y, type:'snow'});
+        // Right wall up
+        for (let i = 0; i < 6; i++) {
+          const t = i / 5;
+          pts.push({x: x + pipeWidth * 0.15 * t, y: y - wallHeight * 0.5 * Math.sin(t * Math.PI), type:'snow'});
+        }
+        x += pipeWidth * 0.35;
+      }
+      // Runout
+      for (let i = 0; i < 20; i++) { pts.push({x, y, type:'snow'}); x += 50; y += 50 * 0.05; }
+    }
+  },
+  {
+    name: 'Backcountry', diff: 'Medium', id: 'backcountry',
+    desc: 'Natural terrain with varied features',
+    victory: { type: 'finish', scoreGoal: 150, goldScore: 500, silverScore: 250 },
+    generate(pts) {
+      let x = -200, y = 300, slope = 0.15;
+      for (let i = 0; i < 400; i++) {
+        pts.push({ x, y, type: 'snow' });
+        // Natural slope variation
+        slope += (Math.sin(i * 0.03) * 0.008 + Math.sin(i * 0.11) * 0.005);
+        slope = Math.max(0.04, Math.min(0.35, slope));
+        // Occasional natural kickers
+        if (i > 15 && i % 40 < 2 && slope > 0.12) {
+          x += 40; y -= 25;
+          pts.push({x, y, type:'snow'});
+          x += 50; y += 50 * 0.5;
+          pts.push({x, y, type:'snow'});
+        } else {
+          x += 50; y += 50 * slope;
+        }
+      }
+    }
+  },
+  {
+    name: 'Speed Run', diff: 'Easy', id: 'speed',
+    desc: 'Steep and fast — max velocity',
+    victory: { type: 'finish', scoreGoal: 80, goldScore: 300, silverScore: 150 },
+    generate(pts) {
+      let x = -200, y = 200;
+      for (let i = 0; i < 400; i++) {
+        pts.push({x, y, type:'snow'});
+        const slope = 0.25 + Math.sin(i * 0.02) * 0.08;
+        x += 60; y += 60 * slope;
+      }
+    }
+  },
+  {
+    name: 'Stunt Park', diff: 'Expert', id: 'stuntpark',
+    desc: 'Rails, kickers, and gaps galore',
+    victory: { type: 'finish', scoreGoal: 500, goldScore: 1500, silverScore: 800 },
+    generate(pts) {
+      let x = -200, y = 300;
+      const slope = (n, s) => { for (let i = 0; i < n; i++) { pts.push({x, y, type:'snow'}); x += 50; y += 50 * s; }};
+      const kicker = (angle) => {
+        for (let i = 0; i < 3; i++) { pts.push({x, y, type:'snow'}); x += 40; y += 40 * 0.15; }
+        pts.push({x, y, type:'snow'}); x += 35; y -= 35 * angle;
+        pts.push({x, y, type:'snow'});
+        for (let i = 0; i < 4; i++) { pts.push({x, y: y + (i+1) * 25, type:'gap'}); x += 45; }
+        y += 4 * 25;
+        for (let i = 0; i < 5; i++) { pts.push({x, y, type:'snow'}); x += 50; y += 50 * 0.15; }
+      };
+      slope(6, 0.18);
+      kicker(0.3);
+      slope(4, 0.12);
+      kicker(0.4);
+      slope(4, 0.15);
+      kicker(0.25);
+      slope(3, 0.2);
+      kicker(0.5);
+      slope(4, 0.1);
+      kicker(0.35);
+      slope(30, 0.1);
+    }
+  },
+];
 
-    // Filter logic
-    filtersDiv.addEventListener('click', e => {
-      const btn = e.target.closest('.filter-btn');
-      if (!btn) return;
-      filtersDiv.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      const filter = btn.dataset.filter;
-      items.forEach(item => {
-        item.classList.toggle('hidden', filter !== 'all' && !item.dataset.tags.includes(filter));
+let selectedScenario = 0;
+
+// Build scenario buttons
+const scenGrid = document.getElementById('scenario-grid');
+SCENARIOS.forEach((s, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'scenario-btn' + (i === 0 ? ' selected' : '');
+  btn.innerHTML = `${s.name}<span class="diff">${s.diff}</span>`;
+  btn.onclick = () => {
+    selectedScenario = i;
+    document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+  };
+  scenGrid.appendChild(btn);
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  CONFIGURATION / TUNING PARAMS
+// ═══════════════════════════════════════════════════════════════
+const DEFAULTS = {
+  // Physics
+  gravity:       { val: 392,    min: 100,  max: 1500, step: 10,   label: 'Gravity (px/s²)' },
+  groundKp:      { val: 2000,   min: 500,  max: 8000, step: 100,  label: 'Ground Stiffness' },
+  groundKd:      { val: 200,    min: 50,   max: 800,  step: 10,   label: 'Ground Damping' },
+  skiFriction:   { val: 0.015,  min: 0.001,max: 0.1,  step: 0.001,label: 'Ski Friction' },
+  brakeFriction: { val: 0.5,    min: 0.1,  max: 1.0,  step: 0.05, label: 'Brake Friction' },
+  bodyFriction:  { val: 0.6,    min: 0.1,  max: 1.5,  step: 0.05, label: 'Body Friction' },
+  // Joint PD
+  pdMultiplier:  { val: 1.0,    min: 0.3,  max: 3.0,  step: 0.1,  label: 'PD Strength' },
+  jointDamping:  { val: 0.9998, min: 0.990,max: 1.000,step: 0.0001,label: 'Angular Damping' },
+  ragdollDamping:{ val: 0.999,  min: 0.990,max: 1.000,step: 0.0001,label: 'Ragdoll Damping' },
+  // Crash
+  crashImpact:   { val: 750,    min: 300,  max: 2000, step: 50,   label: 'Crash Threshold' },
+  bindingStrength:{ val: 1300,  min: 500,  max: 3900, step: 100,  label: 'Binding Strength' },
+  // Scoring
+  flipPoints:    { val: 100,    min: 50,   max: 300,  step: 10,   label: 'Flip Points' },
+  smoothMultiplier:{ val: 1.5,  min: 1.0,  max: 3.0,  step: 0.1,  label: 'Smooth Multiplier' },
+  perfectMultiplier:{ val: 2.0, min: 1.5,  max: 4.0,  step: 0.1,  label: 'Perfect Multiplier' },
+  airtimePoints: { val: 10,    min: 5,    max: 30,   step: 1,    label: 'Airtime Pts/0.1s' },
+};
+const cfg = {};
+for (const k in DEFAULTS) cfg[k] = DEFAULTS[k].val;
+
+// Build params panel
+(function() {
+  const panel = document.getElementById('params-panel');
+  const secs = {
+    'Physics':  ['gravity','groundKp','groundKd','skiFriction','brakeFriction','bodyFriction'],
+    'Joints':   ['pdMultiplier','jointDamping','ragdollDamping'],
+    'Crash':    ['crashImpact','bindingStrength'],
+    'Scoring':  ['flipPoints','smoothMultiplier','perfectMultiplier','airtimePoints'],
+  };
+  let html = '';
+  for (const [sec, keys] of Object.entries(secs)) {
+    html += `<h3>${sec}</h3>`;
+    for (const k of keys) {
+      const d = DEFAULTS[k];
+      html += `<div class="param-row"><label>${d.label}</label>` +
+        `<input type="range" id="p-${k}" min="${d.min}" max="${d.max}" step="${d.step}" value="${d.val}">` +
+        `<span class="pv" id="pv-${k}">${d.val}</span></div>`;
+    }
+  }
+  html += `<button onclick="resetParams()" style="margin-top:6px;width:100%;padding:4px;cursor:pointer;background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:3px;font:11px monospace">Reset</button>`;
+  panel.innerHTML = html;
+  for (const k in DEFAULTS) {
+    const sl = document.getElementById(`p-${k}`);
+    sl.addEventListener('input', () => { cfg[k] = parseFloat(sl.value); document.getElementById(`pv-${k}`).textContent = sl.value; });
+  }
+})();
+function resetParams() {
+  for (const k in DEFAULTS) {
+    cfg[k] = DEFAULTS[k].val;
+    document.getElementById(`p-${k}`).value = DEFAULTS[k].val;
+    document.getElementById(`pv-${k}`).textContent = DEFAULTS[k].val;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  INPUT
+// ═══════════════════════════════════════════════════════════════
+let mouseX = 0.5, mouseY = 0.5, braking = false, jumpPressed = false, gameState = 'menu';
+let paused = false;
+
+canvas.addEventListener('mousemove', e => { mouseX = e.clientX / W; mouseY = e.clientY / H; });
+canvas.addEventListener('mousedown', () => { braking = true; SFX.init(); });
+canvas.addEventListener('mouseup', () => braking = false);
+canvas.addEventListener('mouseleave', () => braking = false);
+canvas.addEventListener('wheel', e => {
+  // Scroll to tuck/extend — mapped to mouseY shift
+  mouseY = Math.max(0, Math.min(1, mouseY + e.deltaY * 0.002));
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === ' ' || e.key === 'Space') { jumpPressed = true; e.preventDefault(); }
+  if (e.key === 'r' || e.key === 'R') startGame(selectedScenario);
+  if (e.key === 'Escape') {
+    if (gameState === 'playing') { if (paused) unpause(); else pause(); }
+    else if (gameState === 'menu') { /* nothing */ }
+  }
+  if (e.key === 'p' || e.key === 'P') document.getElementById('params-panel').classList.toggle('open');
+  if (e.key === 'm' || e.key === 'M') {
+    if (gameState === 'playing') { unpause(); showMenu(); }
+  }
+});
+document.addEventListener('keyup', e => {
+  if (e.key === ' ' || e.key === 'Space') jumpPressed = false;
+});
+
+document.getElementById('start-btn').addEventListener('click', () => {
+  SFX.init();
+  startGame(selectedScenario);
+});
+
+function showMenu() {
+  gameState = 'menu';
+  document.getElementById('menu-overlay').classList.remove('hidden');
+  document.getElementById('params-toggle').style.display = 'none';
+}
+function hideMenu() {
+  document.getElementById('menu-overlay').classList.add('hidden');
+  document.getElementById('params-toggle').style.display = 'block';
+}
+function pause() { paused = true; document.getElementById('pause-overlay').classList.add('visible'); }
+function unpause() { paused = false; document.getElementById('pause-overlay').classList.remove('visible'); }
+
+// ═══════════════════════════════════════════════════════════════
+//  TERRAIN
+// ═══════════════════════════════════════════════════════════════
+let terrainPoints = [];
+let trees = [];
+let snowflakes = [];
+
+function buildTerrain(scenarioIdx) {
+  terrainPoints = [];
+  SCENARIOS[scenarioIdx].generate(terrainPoints);
+  // Generate trees
+  trees = [];
+  const rng = mulberry32(42);
+  for (let i = 0; i < terrainPoints.length - 1; i++) {
+    if (rng() < 0.12 && terrainPoints[i].type === 'snow') {
+      const p = terrainPoints[i];
+      trees.push({
+        x: p.x + (rng() - 0.5) * 30,
+        y: p.y,
+        h: 30 + rng() * 40,
+        w: 10 + rng() * 8,
+        shade: rng(),
       });
+    }
+  }
+  // Snowflakes
+  snowflakes = [];
+  for (let i = 0; i < 150; i++) {
+    snowflakes.push({
+      x: Math.random() * 4000 - 1000,
+      y: Math.random() * 2000 - 500,
+      r: 1 + Math.random() * 2,
+      vx: -10 - Math.random() * 20,
+      vy: 15 + Math.random() * 25,
+      phase: Math.random() * Math.PI * 2,
     });
-  </script>
+  }
+}
+
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function getTerrainAt(px) {
+  for (let i = 0; i < terrainPoints.length - 1; i++) {
+    const a = terrainPoints[i], b = terrainPoints[i + 1];
+    if (px >= a.x && px < b.x) {
+      const t = (px - a.x) / (b.x - a.x);
+      const ty = a.y + t * (b.y - a.y);
+      const angle = Math.atan2(b.y - a.y, b.x - a.x);
+      return { y: ty, angle, segIdx: i, type: a.type };
+    }
+  }
+  const last = terrainPoints[terrainPoints.length - 1];
+  return { y: last.y, angle: 0, segIdx: terrainPoints.length - 2, type: 'snow' };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SKIER STATE
+// ═══════════════════════════════════════════════════════════════
+let skier = {};
+let score = { total: 0, tricks: [], combo: 1, lastTrickTime: 0 };
+let particles = [];
+let trickMessages = [];
+let commentaryMessages = [];
+let runStats = { maxSpeed: 0, maxAir: 0, distance: 0, jumps: 0, totalFlips: 0 };
+let detachedSkis = [];
+let skiDetached = false;
+let trainingHints = [];
+let finishX = 0; // x-coordinate of finish line
+let victoryShown = false;
+let runTimer = 0;
+
+function startGame(scenIdx) {
+  selectedScenario = scenIdx;
+  buildTerrain(scenIdx);
+  hideMenu();
+  unpause();
+  hideVictory();
+  gameState = 'playing';
+  const start = getTerrainAt(0);
+  skier = {
+    x: 0, y: start.y - 5,
+    vx: 0, vy: 0,
+    onGround: true, crashed: false,
+    speed: 0, airTime: 0, totalAirTime: 0,
+    lean: 0, crouch: 0.3,
+    bodyAngle: 0, angularVel: 0,
+    totalRotation: 0,
+    wasOnGround: true,
+    jumpCooldown: 0,
+    crashTimer: 0,
+    ragdoll: null,
+  };
+  initArticulatedBody(0, start.y - 24);
+  score = { total: 0, tricks: [], combo: 1, lastTrickTime: 0 };
+  particles = [];
+  trickMessages = [];
+  commentaryMessages = [];
+  runStats = { maxSpeed: 0, maxAir: 0, distance: 0, jumps: 0, totalFlips: 0 };
+  victoryShown = false;
+  runTimer = 0;
+  detachedSkis = [];
+  skiDetached = false;
+  trainingHints = [
+    { text: "Mouse position controls posture — move up/down to crouch/extend", shown: false, triggerTime: 2 },
+    { text: "Crouch before a jump, then extend to launch higher!", shown: false, triggerTime: 8 },
+    { text: "Control rotation in the air with left/right mouse position", shown: false, triggerTime: 15 },
+    { text: "Land with body aligned to slope for bonus points!", shown: false, triggerTime: 25 },
+  ];
+  // Compute finish line from terrain extent
+  const lastPt = terrainPoints[terrainPoints.length - 1];
+  finishX = lastPt ? lastPt.x - 200 : 5000;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TRICK DETECTION
+// ═══════════════════════════════════════════════════════════════
+const TRICK_NAMES = {
+  flip_back: 'Backflip',
+  flip_front: 'Frontflip',
+  double_back: 'Double Backflip',
+  double_front: 'Double Frontflip',
+  triple: 'Triple Flip!',
+  cork: 'Cork 360',
+  air_big: 'Big Air',
+  air_huge: 'Massive Air',
+  method: 'Method',
+  tuck: 'Tuck',
+  spread: 'Spread Eagle',
+  clean_land: 'Clean Landing',
+  butter: 'Butter Landing',
+};
+
+// Commentary message helpers
+const COMMENTARY = {
+  goodFlips: ["Awesome!", "Unbelievable!", "Cool!", "Sick!", "Legendary!"],
+  badLandings: ["Bummer!", "Ouch!", "Yikes!"],
+  smoothLandings: ["Very Smooth!", "Nice!", "Butter!", "Clean!"],
+  crashes: ["That's gotta hurt!", "Call an ambulance!", "Wipeout!", "Brutal!"],
+  bigAir: ["Sky High!", "Massive!", "Orbit!"],
+};
+
+function addCommentary(category) {
+  const pool = COMMENTARY[category];
+  if (!pool || pool.length === 0) return;
+  const text = pool[Math.floor(Math.random() * pool.length)];
+  commentaryMessages.push({
+    text,
+    life: 2.5,
+    x: (Math.random() - 0.5) * 200,
+    y: -40 - Math.random() * 60,
+    vy: -20,
+    scale: 1.2 + Math.random() * 0.5,
+    color: category === 'crashes' || category === 'badLandings' ? '#ff6644' : '#44ff88',
+  });
+}
+
+function evaluateLandingQuality(impactSpeed, landAngleDiff) {
+  if (landAngleDiff < 0.17 && impactSpeed < 200) {
+    return 'perfect';
+  } else if (landAngleDiff < 0.44 && impactSpeed < 400) {
+    return 'smooth';
+  } else {
+    return 'hard';
+  }
+}
+
+function detectTricks() {
+  if (skier.crashed) return;
+  if (skier.onGround && !skier.wasOnGround && skier.airTime > 0.3) {
+    const rot = Math.abs(skier.totalRotation);
+    const flips = Math.floor(rot / (Math.PI * 2) + 0.3);
+    const airScore = Math.floor(skier.airTime * cfg.airtimePoints * 10);
+    let trickScore = airScore;
+    let trickName = '';
+    const direction = skier.totalRotation > 0 ? 'front' : 'back';
+
+    // Flip scoring: flipPoints * rotations (bonus for more)
+    if (flips >= 3) {
+      trickName = TRICK_NAMES.triple;
+      trickScore += cfg.flipPoints * flips * 1.5;
+    } else if (flips >= 2) {
+      trickName = TRICK_NAMES[`double_${direction}`];
+      trickScore += cfg.flipPoints * flips * 1.2;
+    } else if (flips >= 1) {
+      trickName = TRICK_NAMES[`flip_${direction}`];
+      trickScore += cfg.flipPoints * flips;
+    } else if (rot > Math.PI * 0.5) {
+      trickName = TRICK_NAMES.cork;
+      trickScore += cfg.flipPoints * 0.5;
+    }
+
+    if (skier.airTime > 2.5) {
+      if (!trickName) trickName = TRICK_NAMES.air_huge;
+      trickScore += 50;
+      addCommentary('bigAir');
+    } else if (skier.airTime > 1.2) {
+      if (!trickName) trickName = TRICK_NAMES.air_big;
+      trickScore += 20;
+    }
+
+    if (skier.crouch > 0.7) {
+      trickName = (trickName ? trickName + ' + ' : '') + TRICK_NAMES.tuck;
+      trickScore += 15;
+    }
+
+    // Landing quality evaluation
+    const terrain = getTerrainAt(skier.x);
+    const landAngleDiff = Math.abs(skier.bodyAngle - terrain.angle);
+    const impactSpeed = Math.abs(skier.vy);
+    let landingQuality = 'hard';
+    let landingMultiplier = 1.0;
+    let landingMsg = '';
+
+    if (skier.airTime > 0.4) {
+      landingQuality = evaluateLandingQuality(impactSpeed, landAngleDiff);
+      if (landingQuality === 'perfect') {
+        landingMultiplier = cfg.perfectMultiplier;
+        landingMsg = 'Perfect Landing!';
+        addCommentary('smoothLandings');
+      } else if (landingQuality === 'smooth') {
+        landingMultiplier = cfg.smoothMultiplier;
+        landingMsg = 'Smooth Landing!';
+        if (flips >= 1) addCommentary('smoothLandings');
+      } else {
+        landingMultiplier = 1.0;
+        landingMsg = 'Hard Landing!';
+        if (skier.airTime > 1.0) addCommentary('badLandings');
+      }
+    }
+
+    // Speed bonus at landing
+    const speedBonus = Math.floor(skier.speed * 0.02);
+    trickScore += speedBonus;
+
+    // Apply landing multiplier
+    trickScore = Math.floor(trickScore * landingMultiplier);
+
+    // Commentary for good flips
+    if (flips >= 2) addCommentary('goodFlips');
+
+    // Combo system
+    const now = performance.now() / 1000;
+    if (now - score.lastTrickTime < 4) {
+      score.combo = Math.min(5, score.combo + 0.5);
+    } else {
+      score.combo = 1;
+    }
+    score.lastTrickTime = now;
+
+    if (trickScore > 5 && (trickName || landingMsg)) {
+      const finalScore = Math.floor(trickScore * score.combo);
+      score.total += finalScore;
+      const displayName = trickName ? trickName : landingMsg;
+      score.tricks.push({ name: displayName, score: finalScore });
+      runStats.jumps++;
+      runStats.totalFlips += flips;
+
+      trickMessages.push({
+        text: displayName,
+        score: finalScore,
+        combo: score.combo,
+        life: 2.5,
+        y: 0,
+        landingQuality,
+      });
+
+      if (trickName && landingMsg) {
+        trickMessages.push({
+          text: landingMsg,
+          score: 0,
+          combo: 1,
+          life: 2.0,
+          y: 25,
+          landingQuality,
+        });
+      }
+
+      SFX.playTrick(finalScore);
+      SFX.playLanding(landingQuality === 'perfect' ? 1 : landingQuality === 'smooth' ? 0.7 : 0.3);
+    } else if (skier.airTime > 0.4) {
+      SFX.playLanding(0.3);
+      if (landingMsg && skier.airTime > 0.6) {
+        trickMessages.push({
+          text: landingMsg,
+          score: 0,
+          combo: 1,
+          life: 1.5,
+          y: 0,
+          landingQuality,
+        });
+      }
+    }
+
+    // Reset rotation tracking
+    skier.totalRotation = 0;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RAGDOLL CRASH SYSTEM
+// ═══════════════════════════════════════════════════════════════
+function initRagdoll() {
+  // For connected ragdoll, we just let the articulated body continue
+  // with relaxJtPd (near-zero PD) which is already handled in computePDTorque.
+  // Only explode into parts for extreme impacts.
+  skier.ragdoll = null; // null = connected ragdoll (use articulated links)
+}
+
+function initExplosionRagdoll() {
+  // Extreme impact: scatter body parts
+  const angle = skier.bodyAngle;
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  const speed = skier.speed;
+  const parts = [];
+  const offsets = [
+    { name: 'head', ox: 0, oy: -30, r: 5, color: '#2255aa' },
+    { name: 'torso', ox: 0, oy: -18, r: 6, color: '#cc3333' },
+    { name: 'hip', ox: 0, oy: -5, r: 4, color: '#1a1a3a' },
+    { name: 'leg_l', ox: -4, oy: 5, r: 3, color: '#1a1a3a', isLong: true },
+    { name: 'leg_r', ox: 4, oy: 5, r: 3, color: '#1a1a3a', isLong: true },
+  ];
+  for (const o of offsets) {
+    const px = skier.x + o.ox * cos - o.oy * sin;
+    const py = skier.y + o.ox * sin + o.oy * cos;
+    parts.push({
+      x: px, y: py,
+      vx: skier.vx + (Math.random() - 0.5) * speed * 0.6,
+      vy: skier.vy + (Math.random() - 0.5) * speed * 0.4 - Math.random() * 250,
+      angle: angle + (Math.random() - 0.5) * 2,
+      angVel: (Math.random() - 0.5) * 15,
+      r: o.r, color: o.color,
+      isLong: o.isLong || false,
+      name: o.name,
+    });
+  }
+  skier.ragdoll = parts;
+}
+
+function updateRagdoll(dt) {
+  if (skier.ragdoll) {
+    // Explosion mode: update scattered parts
+    for (const p of skier.ragdoll) {
+      p.vy += cfg.gravity * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.angle += p.angVel * dt;
+      const t = getTerrainAt(p.x);
+      if (p.y > t.y - p.r) {
+        p.y = t.y - p.r;
+        p.vy *= -0.3;
+        p.vx *= 0.85;
+        p.angVel *= 0.8;
+        if (Math.abs(p.vy) < 10) p.vy = 0;
+      }
+      p.vx *= 0.998;
+      p.angVel *= 0.995;
+    }
+  } else {
+    // Connected ragdoll: run articulated physics with floppy joints
+    const substeps = Math.min(PHYS.maxSubsteps, Math.round(dt / PHYS.fixedDt));
+    const subDt = PHYS.fixedDt;
+    for (let step = 0; step < substeps; step++) {
+      // PD torques (will be near-zero due to crashed check in computePDTorque)
+      for (let i = 1; i < 4; i++) {
+        const relAngle = links[i].angle - links[i-1].angle;
+        const relAngVel = links[i].angVel - links[i-1].angVel;
+        const torque = computePDTorque(i, relAngle, relAngVel, 0);
+        links[i].angVel += (torque / links[i].inertia) * subDt;
+        links[i-1].angVel -= (torque / links[i-1].inertia) * subDt;
+      }
+      // Gravity
+      for (const link of links) {
+        link.vel.y += cfg.gravity * subDt;
+      }
+      // Ground contact
+      for (const link of links) {
+        applyGroundForces(link, subDt, false);
+      }
+      // Integrate
+      for (const link of links) {
+        link.pos.x += link.vel.x * subDt;
+        link.pos.y += link.vel.y * subDt;
+        link.angle += link.angVel * subDt;
+      }
+      // Joint constraints
+      solveJointConstraints();
+      // Damping (stronger during ragdoll to prevent endless spinning)
+      const angDamp = skier.crashed ? cfg.ragdollDamping : cfg.jointDamping;
+      for (const link of links) {
+        link.angVel *= angDamp;
+      }
+    }
+    // Update skier position for camera tracking
+    skier.x = links[0].pos.x;
+    skier.y = links[0].pos.y;
+    skier.vx = links[0].vel.x;
+    skier.vy = links[0].vel.y;
+    skier.speed = Math.sqrt(skier.vx * skier.vx + skier.vy * skier.vy);
+
+    // Ragdoll telemetry
+    if (!skier._lastRagdollTelemetry) skier._lastRagdollTelemetry = 0;
+    skier._lastRagdollTelemetry += dt;
+    if (skier._lastRagdollTelemetry >= 0.25) {
+      skier._lastRagdollTelemetry = 0;
+      const DEG_INV = 180 / Math.PI;
+      const ankleA = (links[1].angle - links[0].angle) * DEG_INV;
+      const hipA = (links[2].angle - links[1].angle) * DEG_INV;
+      const shoulderA = (links[3].angle - links[2].angle) * DEG_INV;
+      console.log(
+        `[RAGDOLL] spd=${skier.speed.toFixed(0)} pos=(${skier.x.toFixed(0)},${skier.y.toFixed(0)})` +
+        ` t=${skier.crashTimer.toFixed(1)}s` +
+        ` | angles: ski=${(links[0].angle * DEG_INV).toFixed(0)}° leg=${(links[1].angle * DEG_INV).toFixed(0)}°` +
+        ` torso=${(links[2].angle * DEG_INV).toFixed(0)}° arms=${(links[3].angle * DEG_INV).toFixed(0)}°` +
+        ` | joints: ankle=${ankleA.toFixed(0)}° hip=${hipA.toFixed(0)}° shldr=${shoulderA.toFixed(0)}°` +
+        ` | angVel: ${links.map(l => l.angVel.toFixed(1)).join('/')}`
+      );
+    }
+  }
+}
+
+function drawRagdoll(camX, camY) {
+  if (skier.ragdoll) {
+    // Explosion mode: draw scattered parts
+    for (const p of skier.ragdoll) {
+      const sx = p.x - camX + W * 0.3;
+      const sy = p.y - camY + H * 0.5;
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(p.angle);
+      if (p.isLong) {
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = p.r * 2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-12, 0); ctx.lineTo(12, 0);
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(0, 0, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  } else {
+    // Connected ragdoll: draw the articulated figure normally (it flops)
+    if (!links || links.length < 4) return;
+    const ox = -camX + W * 0.3;
+    const oy = -camY + H * 0.5;
+
+    // Draw skis
+    if (!skiDetached) {
+      drawSkiPair(links[0].pos.x, links[0].pos.y, links[0].angle, camX, camY);
+    }
+    // Draw leg, boot, torso, arms
+    drawLinkPolygon(links[1], camX, camY, 1);
+    if (links[0].bootPts) {
+      ctx.save();
+      ctx.translate(links[0].pos.x + ox, links[0].pos.y + oy);
+      ctx.rotate(links[0].angle);
+      ctx.beginPath();
+      ctx.moveTo(links[0].bootPts[0].x, links[0].bootPts[0].y);
+      for (let i = 1; i < links[0].bootPts.length; i++) {
+        ctx.lineTo(links[0].bootPts[i].x, links[0].bootPts[i].y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = '#2a2a50';
+      ctx.fill();
+      ctx.strokeStyle = '#1a1a3a';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+    }
+    drawLinkPolygon(links[2], camX, camY, 2);
+    drawLinkPolygon(links[3], camX, camY, 3);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PHYSICS (Rigid-Body Articulated Figure)
+// ═══════════════════════════════════════════════════════════════
+
+// --- Rigid Body Link Definitions ---
+const LINK_SCALE = 1; // work in pixels directly
+const DEG = Math.PI / 180;
+
+function makeLink(mass, jointOrg, points, tag) {
+  // Compute moment of inertia from polygon (approximate)
+  let moi = 0;
+  for (const p of points) {
+    moi += p.x * p.x + p.y * p.y;
+  }
+  moi = mass * moi / points.length * 0.5;
+  if (moi < mass * 20) moi = mass * 20; // minimum
+  return { mass, inertia: moi, jointOrg, points, tag,
+    pos: {x:0, y:0}, vel: {x:0, y:0}, angle: 0, angVel: 0 };
+}
+
+function initLinks() {
+  // Original 4-link model from skier.afig, converted to pixel-space (scale=40, Y-flipped)
+  // Chain: ski(0) → leg(1) → torso(2) → arms(3)
+
+  // Link 0: Foot/Ski — origin at ankle (jt_org 1 = (0.940, 0.7191))
+  // Boot/calf body polygon from .afig (tagged 'b' and 'bt' points)
+  const bootPts = [
+    {x: 10.2, y:  0.4},   // calf top-right (ankle area)
+    {x:  8.3, y:  9.2},   // calf mid-right
+    {x:  8.8, y: 16.2},   // lower leg right
+    {x: 13.9, y: 19.2},   // boot front
+    {x: 13.6, y: 21.3},   // boot sole front
+    {x: -1.6, y: 21.3},   // boot sole back
+    {x: -3.9, y: 19.9},   // boot heel
+    {x: -6.6, y: 16.5},   // boot back
+    {x: -3.2, y: 15.2},   // lower leg left
+    {x: -1.9, y:  8.8},   // calf mid-left
+    {x: -1.3, y:  2.4},   // calf upper-left
+    {x:  0.0, y:  0.0},   // ankle (origin)
+  ];
+  // Ski loop from .afig provides ground contact surface
+  const skiPts = [
+    {x: 36.3, y: 19.0},   // front curve
+    {x: 40.2, y: 16.5},   // front tip top
+    {x: 48.3, y: 19.6},   // front tip
+    {x: 41.7, y: 23.9},   // front bottom (ground contact)
+    {x: 33.5, y: 23.8},   // bottom
+    {x: 25.2, y: 23.8},   // bottom
+    {x: 16.9, y: 23.7},   // bottom
+    {x:  8.6, y: 23.7},   // bottom
+    {x:  0.4, y: 23.6},   // bottom (under ankle)
+    {x: -7.9, y: 23.6},   // bottom
+    {x:-16.2, y: 23.5},   // bottom
+    {x:-24.4, y: 23.5},   // bottom
+    {x:-29.9, y: 20.7},   // rear tip
+    {x:-25.4, y: 17.1},   // rear top
+    {x:-17.3, y: 19.2},   // rear curve
+    {x: -6.4, y: 18.8},   // mid top
+  ];
+  const link0 = makeLink(5, {x: 0, y: 0}, skiPts, 'ski');
+  link0.bootPts = bootPts;  // store boot polygon for rendering
+
+  // Link 1: Thigh/Leg — origin at jt_org 2 = (1.1092, 0.7567) (ankle-on-thigh)
+  const legPts = [
+    {x:  2.3, y:-20.0},   // hip area top-right
+    {x:  2.0, y:-15.5},   // upper thigh right
+    {x: -0.5, y:-14.5},   // upper thigh inner
+    {x:  1.2, y:  1.8},   // knee right
+    {x: -1.0, y:  3.7},   // knee bottom right
+    {x: -5.7, y:  3.4},   // knee bottom left
+    {x: -7.3, y: -0.3},   // calf left
+    {x: -9.6, y: -9.7},   // mid-thigh left
+    {x:-12.9, y:-15.0},   // upper thigh left
+    {x:-14.2, y:-15.1},   // upper thigh far left
+    {x:-13.3, y:-20.3},   // hip area top-left
+  ];
+  // jointOrg = hip: (0.8777-1.1092)*40, -(1.3075-0.7567)*40
+  const link1 = makeLink(5, {x: -9.3, y: -22.0}, legPts, 'leg');
+
+  // Link 2: Torso — origin at jt_org 3 = (0.8777, 1.3075) (hip-on-torso)
+  // Includes head points from original (tagged "head:b")
+  const torsoPts = [
+    {x: 10.5, y:-35.6},   // head top-right
+    {x: 12.5, y:-27.4},   // head right
+    {x: 10.2, y:-23.4},   // neck right
+    {x:  9.6, y:-20.2},   // upper back right
+    {x: 12.4, y:-15.3},   // mid back right
+    {x: 11.7, y:  1.2},   // hip right
+    {x:  2.7, y:  3.2},   // hip bottom
+    {x: -4.5, y:  1.0},   // hip left
+    {x: -3.1, y: -3.6},   // lower back left
+    {x: -3.4, y: -6.8},   // mid-back left
+    {x: -1.5, y:-12.3},   // upper back left
+    {x: -1.6, y:-16.9},   // shoulder area left
+    {x:  0.0, y:-21.3},   // neck left
+    {x: -1.5, y:-25.9},   // head lower-left
+    {x:  0.6, y:-29.9},   // head left
+    {x:  0.5, y:-33.7},   // head upper-left
+    {x:  3.2, y:-36.3},   // head top-left
+  ];
+  // jointOrg = shoulder: (0.9776-0.8777)*40, -(1.6685-1.3075)*40
+  const link2 = makeLink(10, {x: 4.0, y: -14.4}, torsoPts, 'torso');
+
+  // Link 3: Arms — origin at jt_org 4 = (0.9776, 1.6685) (shoulder-on-arms)
+  const armsPts = [
+    {x: -1.1, y: -5.0},   // shoulder area
+    {x:  6.8, y: -4.5},   // upper arm
+    {x: 16.9, y:  4.2},   // elbow outer
+    {x: 22.5, y:  4.4},   // forearm
+    {x: 23.6, y:  5.6},   // wrist area
+    {x: 26.9, y:  4.3},   // hand top
+    {x: 30.6, y:  5.3},   // hand tip
+    {x: 29.1, y: 10.5},   // hand bottom
+    {x: 25.5, y: 10.4},   // wrist bottom
+    {x: 23.9, y: 11.4},   // forearm bottom
+    {x: 12.9, y:  9.9},   // elbow inner
+    {x:  6.4, y:  6.1},   // upper arm inner
+    {x: -1.6, y:  2.1},   // shoulder inner
+    {x: -2.3, y: -1.3},   // shoulder top
+  ];
+  const link3 = makeLink(3, {x: 28, y: 7}, armsPts, 'arms');
+
+  return [link0, link1, link2, link3];
+}
+
+// --- Joint PD Controllers ---
+// Scaled for pixel-space where gravitational torques are large.
+// Torque needed to hold torso: ~mass*g*offset = 10*392*10 ≈ 40000.
+// kp must produce this at moderate error angles (~0.5 rad).
+const JOINTS = [
+  { kp: 0, kd: 0, minA: 0, maxA: 0, tMin: 0, tMax: 0 },
+  { kp: 120000, kd: 8000, minA: -130*DEG, maxA: 10*DEG, tMin: -1200000, tMax: 1200000 },  // ankle
+  { kp: 50000, kd: 5000, minA: -40*DEG, maxA: 140*DEG, tMin: -1000000, tMax: 1000000 },   // hip
+  { kp: 20000, kd: 1500, minA: -90*DEG, maxA: 90*DEG, tMin: -120000, tMax: 120000 },    // shoulder
+];
+
+// Physics params (from .afig link_kp/kd, common.setup dt_sim, brakeMonitor cf)
+const PHYS = {
+  fixedDt: 0.001,     // from common.setup: dt_sim 0.001
+  maxSubsteps: 30,    // cap substeps per frame
+  linearDamping: 1.0,    // no linear damping (original has none; friction handles it)
+};
+
+let links = [];
+let debugJoints = false;
+
+// Listen for debug toggle
+document.addEventListener('keydown', e => {
+  if (e.key === 'j' || e.key === 'J') debugJoints = !debugJoints;
+});
+
+function initArticulatedBody(startX, startY) {
+  links = initLinks();
+  // Chain: ski(0) → leg(1) → torso(2) → arms(3)
+  // startY = ankle Y position (caller places ankle above ground)
+
+  const slopeAngle = getTerrainAt(startX).angle || 0;
+
+  // Ski on the ground, aligned with slope
+  // Ski origin = ankle position. Bottom of ski is ~24px below ankle.
+  links[0].pos = {x: startX, y: startY};
+  links[0].angle = slopeAngle;
+  links[0].vel = {x: 0, y: 0};
+  links[0].angVel = 0;
+
+  // Leg: initial ankle angle -20° (moderate ski stance, hip above ankle)
+  const initAnkle = -20 * DEG;
+  links[1].angle = slopeAngle + initAnkle;
+  const ankleWorld = worldPoint(links[0], links[0].jointOrg);
+  links[1].pos = {x: ankleWorld.x, y: ankleWorld.y};
+  links[1].vel = {x: 0, y: 0};
+  links[1].angVel = 0;
+
+  // Torso: hip angle +30° (torso tilts CW from leg = leans slightly forward)
+  const initHip = 30 * DEG;
+  links[2].angle = links[1].angle + initHip;
+  const hipWorld = worldPoint(links[1], links[1].jointOrg);
+  links[2].pos = {x: hipWorld.x, y: hipWorld.y};
+  links[2].vel = {x: 0, y: 0};
+  links[2].angVel = 0;
+
+  // Arms: shoulder angle -35° (arms extend forward/down from torso)
+  const initShoulder = -35 * DEG;
+  links[3].angle = links[2].angle + initShoulder;
+  const shoulderWorld = worldPoint(links[2], links[2].jointOrg);
+  links[3].pos = {x: shoulderWorld.x, y: shoulderWorld.y};
+  links[3].vel = {x: 0, y: 0};
+  links[3].angVel = 0;
+}
+
+function rotatePoint(pt, angle) {
+  const c = Math.cos(angle), s = Math.sin(angle);
+  return { x: pt.x * c - pt.y * s, y: pt.x * s + pt.y * c };
+}
+
+function worldPoint(link, localPt) {
+  const r = rotatePoint(localPt, link.angle);
+  return { x: link.pos.x + r.x, y: link.pos.y + r.y };
+}
+
+function getJointWorldPos(linkIdx) {
+  // Returns the world position of the joint origin on link[linkIdx]
+  return worldPoint(links[linkIdx], links[linkIdx].jointOrg);
+}
+
+// --- Mouse → Target Angles ---
+// From skier.keys, NEGATED for Y-down coordinate system.
+// Mouse Y INVERTED: user wants top=stand, bottom=crouch.
+function computeTargetAngles() {
+  const my = 1 - Math.max(0, Math.min(1, mouseY));  // inverted: 1=top(stand), 0=bottom(crouch)
+  const mx = Math.max(0, Math.min(1, mouseX));       // 0=left, 1=right
+
+  // Ankle: original lerp(100,0,my) + lerp(60,0,mx), negated for Y-down
+  const ankleTarget = (-160 + 100 * my + 60 * mx) * DEG;
+  const ankle = Math.max(JOINTS[1].minA, Math.min(JOINTS[1].maxA, ankleTarget));
+
+  // Hip: original lerp(-130,20,my) + lerp(20,-20,mx), negated for Y-down
+  // X influence doubled (80° range instead of 40°) for more responsive lean
+  const hipTarget = (110 - 150 * my + 80 * mx) * DEG;
+  const hip = Math.max(JOINTS[2].minA, Math.min(JOINTS[2].maxA, hipTarget));
+
+  // Shoulder: original lerp(20,70,my), negated for Y-down
+  const shoulderTarget = (-20 - 50 * my) * DEG;
+  const shoulder = Math.max(JOINTS[3].minA, Math.min(JOINTS[3].maxA, shoulderTarget));
+
+  return [0, ankle, hip, shoulder];
+}
+
+// --- PD Controller Torque ---
+// Standard PD: torque = kp*(target-current) - kd*angVel
+// The jt_ext sign from the original is already accounted for in the
+// Y-flipped polygon geometry and angle conventions.
+function computePDTorque(jointIdx, currentAngle, relAngVel, targetAngle) {
+  const j = JOINTS[jointIdx];
+  if (j.kp === 0 && j.kd === 0) return 0;
+  // Ragdoll mode: near-zero stiffness, moderate damping (from original relaxJtPd)
+  if (skier.crashed) {
+    const torque = -5.0 * relAngVel;
+    return Math.max(-3000, Math.min(3000, torque));
+  }
+  const error = targetAngle - currentAngle;
+  const mult = cfg.pdMultiplier;
+  const torque = j.kp * mult * error - j.kd * mult * relAngVel;
+  return Math.max(j.tMin * mult, Math.min(j.tMax * mult, torque));
+}
+
+// --- Ground Contact Forces (Penalty-Based) ---
+function applyGroundForces(link, dt, isBraking) {
+  let totalForce = 0;
+  let anyContact = false;
+
+  // Ski has very low friction along its direction (gliding on snow)
+  const isSki = link.tag === 'ski';
+  const skiAlongCf = isBraking ? cfg.brakeFriction : cfg.skiFriction;
+  const bodyCf = cfg.bodyFriction;
+
+  for (const localPt of link.points) {
+    const wp = worldPoint(link, localPt);
+    const terrain = getTerrainAt(wp.x);
+    const terrainY = terrain.y;
+
+    const pen = wp.y - terrainY;
+    if (pen <= 0) continue; // not penetrating
+
+    anyContact = true;
+
+    // Velocity at contact point (v = link.vel + angVel × r)
+    const r = rotatePoint(localPt, link.angle);
+    const vpx = link.vel.x - link.angVel * r.y;
+    const vpy = link.vel.y + link.angVel * r.x;
+
+    // Ground normal (perpendicular to slope, pointing away from ground)
+    // In Y-down: tangent=(cosθ,sinθ), outward normal = 90°CCW = (sinθ, -cosθ)
+    const nx = Math.sin(terrain.angle);
+    const ny = -Math.cos(terrain.angle);
+
+    // Normal velocity component (positive = moving into ground)
+    const vn = -(vpx * nx + vpy * ny);
+
+    // Normal force: spring + damper, clamped non-negative
+    let fn = cfg.groundKp * pen + cfg.groundKd * Math.max(0, vn);
+    fn = Math.max(0, fn);
+    fn = Math.min(fn, 50000); // cap to prevent explosion
+
+    totalForce += fn;
+
+    // Apply normal force (push up along normal)
+    const fnx = fn * nx;
+    const fny = fn * ny;
+
+    // Friction calculation
+    let ffx = 0, ffy = 0;
+
+    if (isSki) {
+      // Ski friction: very low along ski direction (gliding on snow)
+      // In 2D side-view, there's no cross-ski direction — ski moves along its length
+      const skiDirX = Math.cos(link.angle);
+      const skiDirY = Math.sin(link.angle);
+      const vAlong = vpx * skiDirX + vpy * skiDirY;
+
+      // Along-ski friction (low for gliding, higher for braking)
+      const ffAlong = skiAlongCf * fn;
+      const maxAlong = Math.abs(vAlong) * link.mass / dt * 0.3;
+      const fAlongClamped = Math.min(ffAlong, maxAlong);
+      ffx = vAlong > 0 ? -fAlongClamped * skiDirX : (vAlong < 0 ? fAlongClamped * skiDirX : 0);
+      ffy = vAlong > 0 ? -fAlongClamped * skiDirY : (vAlong < 0 ? fAlongClamped * skiDirY : 0);
+    } else {
+      // Isotropic Coulomb friction for body parts
+      const tx = Math.cos(terrain.angle);
+      const ty = Math.sin(terrain.angle);
+      const vt = vpx * tx + vpy * ty;
+      let ff = bodyCf * fn;
+      const maxFriction = Math.abs(vt) * link.mass / dt * 0.5;
+      ff = Math.min(ff, maxFriction);
+      ffx = vt > 0 ? -ff * tx : (vt < 0 ? ff * tx : 0);
+      ffy = vt > 0 ? -ff * ty : (vt < 0 ? ff * ty : 0);
+    }
+
+    // Total force on link
+    const fx = fnx + ffx;
+    const fy = fny + ffy;
+
+    link.vel.x += (fx / link.mass) * dt;
+    link.vel.y += (fy / link.mass) * dt;
+
+    // Torque about center of mass: τ = r × F
+    const torque = r.x * fy - r.y * fx;
+    link.angVel += (torque / link.inertia) * dt;
+  }
+  return { totalForce, anyContact };
+}
+
+// --- Joint Constraint Solving ---
+// Each joint connects link[i]'s jointOrg (top) to link[i+1]'s pos (bottom).
+// The child link's pos (center of its bottom) is constrained to the parent's joint.
+function solveJointConstraints() {
+  for (let iter = 0; iter < 8; iter++) {
+    for (let i = 0; i < 3; i++) {
+      const parent = links[i];
+      const child = links[i + 1];
+
+      // Where the parent's joint is in world space
+      const jointWorld = worldPoint(parent, parent.jointOrg);
+
+      // The child's anchor point is its pos (link's origin = bottom center)
+      const dx = jointWorld.x - child.pos.x;
+      const dy = jointWorld.y - child.pos.y;
+
+      if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) continue;
+
+      const totalMass = parent.mass + child.mass;
+      const parentRatio = child.mass / totalMass;
+      const childRatio = parent.mass / totalMass;
+
+      // Position correction (full correction each iteration)
+      parent.pos.x -= dx * parentRatio;
+      parent.pos.y -= dy * parentRatio;
+      child.pos.x += dx * childRatio;
+      child.pos.y += dy * childRatio;
+
+      // Velocity correction: project out relative velocity along constraint
+      const rp = rotatePoint(parent.jointOrg, parent.angle);
+      const vpx = parent.vel.x - parent.angVel * rp.y;
+      const vpy = parent.vel.y + parent.angVel * rp.x;
+      const dvx = vpx - child.vel.x;
+      const dvy = vpy - child.vel.y;
+
+      const velBias = 0.3;
+      parent.vel.x -= dvx * parentRatio * velBias;
+      parent.vel.y -= dvy * parentRatio * velBias;
+      child.vel.x += dvx * childRatio * velBias;
+      child.vel.y += dvy * childRatio * velBias;
+    }
+
+    // Enforce joint angle limits
+    // During ragdoll: use wider limits to allow flopping but prevent 360° spinning
+    const ragdoll = skier.crashed;
+    const RAG_LIMITS = [
+      null, // link0 unused
+      { minA: -Math.PI, maxA: Math.PI * 0.25 },    // ankle: -180° to 45°
+      { minA: -Math.PI * 0.5, maxA: Math.PI },      // hip: -90° to 180°
+      { minA: -Math.PI * 0.75, maxA: Math.PI * 0.75 } // shoulder: -135° to 135°
+    ];
+    for (let i = 1; i < 4; i++) {
+      const j = ragdoll ? RAG_LIMITS[i] : JOINTS[i];
+      if (!ragdoll && j.minA === 0 && j.maxA === 0) continue;
+      const relAngle = links[i].angle - links[i-1].angle;
+      if (relAngle < j.minA) {
+        const correction = j.minA - relAngle;
+        const totalMass = links[i].mass + links[i-1].mass;
+        links[i].angle += correction * (links[i-1].mass / totalMass);
+        links[i-1].angle -= correction * (links[i].mass / totalMass);
+        const relAngVel = links[i].angVel - links[i-1].angVel;
+        if (relAngVel < 0) {
+          // During ragdoll, absorb most energy at limits (inelastic collision)
+          const dampFactor = ragdoll ? 0.8 : 1.0;
+          links[i].angVel -= relAngVel * (links[i-1].mass / totalMass) * dampFactor;
+          links[i-1].angVel += relAngVel * (links[i].mass / totalMass) * dampFactor;
+        }
+      } else if (relAngle > j.maxA) {
+        const correction = j.maxA - relAngle;
+        const totalMass = links[i].mass + links[i-1].mass;
+        links[i].angle += correction * (links[i-1].mass / totalMass);
+        links[i-1].angle -= correction * (links[i].mass / totalMass);
+        const relAngVel = links[i].angVel - links[i-1].angVel;
+        if (relAngVel > 0) {
+          const dampFactor = ragdoll ? 0.8 : 1.0;
+          links[i].angVel -= relAngVel * (links[i-1].mass / totalMass) * dampFactor;
+          links[i-1].angVel += relAngVel * (links[i].mass / totalMass) * dampFactor;
+        }
+      }
+    }
+  }
+}
+
+// --- Main Physics Update ---
+function updatePhysics(dt) {
+  if (dt > 0.04) dt = 0.04;
+
+  if (skier.crashed) {
+    skier.crashTimer += dt;
+    updateRagdoll(dt);
+    SFX.updateWind(0);
+    SFX.updateSki(0, false, false);
+    return;
+  }
+
+  // Update lean for compatibility
+  skier.lean = (mouseX - 0.5) * 2.5;
+  skier.crouch = Math.max(0, Math.min(1, mouseY * 1.3));
+
+  // Space bar jump — apply impulse to all links along ground normal
+  skier.jumpCooldown = Math.max(0, skier.jumpCooldown - dt);
+  if (skier.onGround && jumpPressed && skier.jumpCooldown <= 0) {
+    const terrain = getTerrainAt(skier.x);
+    const impulse = 140;
+    const nx = Math.sin(terrain.angle);
+    const ny = -Math.cos(terrain.angle);
+    for (const link of links) {
+      link.vel.x += nx * impulse;
+      link.vel.y += ny * impulse;
+    }
+    skier.onGround = false;
+    skier.jumpCooldown = 0.3;
+    skier.totalRotation = 0;
+    SFX.playJump();
+  }
+
+  const substeps = Math.min(PHYS.maxSubsteps, Math.round(dt / PHYS.fixedDt));
+  const subDt = PHYS.fixedDt;
+  let frameMaxForce = 0;
+  let frameMaxSkiForce = 0;
+  let frameMaxForceLink = '';
+  let frameAnyContact = false;
+
+  for (let step = 0; step < substeps; step++) {
+    // 1. Compute target angles from mouse
+    const targets = computeTargetAngles();
+
+    // 2. Apply PD torques at joints
+    for (let i = 1; i < 4; i++) {
+      const relAngle = links[i].angle - links[i-1].angle;
+      const relAngVel = links[i].angVel - links[i-1].angVel;
+      const torque = computePDTorque(i, relAngle, relAngVel, targets[i]);
+
+      // Apply equal and opposite torques (Newton's 3rd law)
+      links[i].angVel += (torque / links[i].inertia) * subDt;
+      links[i-1].angVel -= (torque / links[i-1].inertia) * subDt;
+    }
+
+    // 3. Apply gravity to all links
+    for (const link of links) {
+      link.vel.y += cfg.gravity * subDt;
+    }
+
+    // 4. Apply ground penalty forces
+    for (const link of links) {
+      const result = applyGroundForces(link, subDt, braking);
+      if (result.anyContact) frameAnyContact = true;
+      if (link.tag === 'ski') {
+        frameMaxSkiForce = Math.max(frameMaxSkiForce, result.totalForce);
+      } else if (link.tag !== 'arms') {
+        // Arms excluded from crash force (too light to trigger realistic crashes)
+        if (result.totalForce > frameMaxForce) {
+          frameMaxForce = result.totalForce;
+          frameMaxForceLink = link.tag;
+        }
+      }
+    }
+
+    // 5. Integrate positions (semi-implicit Euler)
+    for (const link of links) {
+      link.pos.x += link.vel.x * subDt;
+      link.pos.y += link.vel.y * subDt;
+      link.angle += link.angVel * subDt;
+    }
+
+    // 6. Solve joint constraints
+    solveJointConstraints();
+
+    // 7. Apply damping
+    for (const link of links) {
+      link.vel.x *= PHYS.linearDamping;
+      link.vel.y *= PHYS.linearDamping;
+      link.angVel *= cfg.jointDamping;
+    }
+
+    // 8. Angular momentum conservation when airborne (tuck = spin faster)
+    if (!skier.onGround && !skier.crashed) {
+      // Compute center of mass
+      let cmx = 0, cmy = 0, totalMass = 0;
+      for (const link of links) {
+        cmx += link.mass * link.pos.x;
+        cmy += link.mass * link.pos.y;
+        totalMass += link.mass;
+      }
+      cmx /= totalMass;
+      cmy /= totalMass;
+
+      // Compute effective moment of inertia about CM
+      let effectiveI = 0;
+      for (const link of links) {
+        const dx = link.pos.x - cmx;
+        const dy = link.pos.y - cmy;
+        effectiveI += link.inertia + link.mass * (dx * dx + dy * dy);
+      }
+
+      // Track angular momentum and adjust
+      if (skier._prevAirI !== undefined && skier._prevAirI > 0) {
+        // Compute current total angular momentum about CM
+        let totalL = 0;
+        for (const link of links) {
+          const dx = link.pos.x - cmx;
+          const dy = link.pos.y - cmy;
+          const linkI = link.inertia + link.mass * (dx * dx + dy * dy);
+          totalL += linkI * link.angVel;
+        }
+        // Scale angular velocities to conserve L as MOI distribution changes
+        // Stronger correction for responsive tuck/extend rotation control
+        const ratio = skier._prevAirI / effectiveI;
+        const correction = 0.15 * (ratio - 1.0); // 15% per substep toward ideal
+        for (const link of links) {
+          link.angVel *= (1.0 + correction);
+        }
+      }
+      skier._prevAirI = effectiveI;
+    } else {
+      skier._prevAirI = undefined;
+    }
+  }
+
+  // --- Post-step: update skier state for other systems ---
+  const skiLink = links[0];
+  const torsoLink = links[2];
+
+  skier.x = skiLink.pos.x;
+  skier.y = skiLink.pos.y;
+  skier.vx = skiLink.vel.x;
+  skier.vy = skiLink.vel.y;
+  skier.speed = Math.sqrt(skier.vx * skier.vx + skier.vy * skier.vy);
+  skier.bodyAngle = torsoLink.angle;
+  skier.angularVel = torsoLink.angVel;
+
+  const wasOnGround = skier.onGround;
+  skier.wasOnGround = wasOnGround;
+  skier.onGround = frameAnyContact;
+
+  // --- Physics telemetry (logged every 0.5s) ---
+  if (!skier._lastTelemetry) skier._lastTelemetry = 0;
+  skier._lastTelemetry += dt;
+  if (skier._lastTelemetry >= 0.25) {
+    skier._lastTelemetry = 0;
+    const DEG_INV = 180 / Math.PI;
+    const terrain = getTerrainAt(skier.x);
+    const ankleA = (links[1].angle - links[0].angle) * DEG_INV;
+    const hipA = (links[2].angle - links[1].angle) * DEG_INV;
+    const shoulderA = (links[3].angle - links[2].angle) * DEG_INV;
+    console.log(
+      `[PHYS] spd=${skier.speed.toFixed(0)} pos=(${skier.x.toFixed(0)},${skier.y.toFixed(0)})` +
+      ` ground=${skier.onGround ? 'Y' : 'N'} air=${skier.airTime.toFixed(2)}s` +
+      ` slope=${(terrain.angle * DEG_INV).toFixed(1)}°` +
+      ` | joints: ankle=${ankleA.toFixed(0)}° hip=${hipA.toFixed(0)}° shldr=${shoulderA.toFixed(0)}°` +
+      ` | forces: ski=${Math.round(frameMaxSkiForce)} body=${Math.round(frameMaxForce)}(${frameMaxForceLink||'-'})` +
+      ` | mouse=(${mouseX.toFixed(2)},${mouseY.toFixed(2)}) brake=${braking}`
+    );
+  }
+
+  if (skier.onGround) {
+    if (!wasOnGround && skier.airTime > 0.3) {
+      // Landing
+      detectTricks();
+    }
+
+    // Crash on hard body impact (checked continuously, matching original maxShock=13000)
+    // Original uses accumulated force across all links; we use peak force per frame
+    const impactThreshold = cfg.crashImpact * 100;
+    if (frameMaxForce > impactThreshold) {
+      skier.crashed = true;
+      skier.crashTimer = 0;
+      skier.crashReason = `${frameMaxForceLink} impact: ${Math.round(frameMaxForce)} (threshold: ${Math.round(impactThreshold)})`;
+      if (frameMaxForce > impactThreshold * 3) {
+        initExplosionRagdoll(); // extreme impact: scatter parts
+      } else {
+        initRagdoll(); // normal crash: connected ragdoll
+      }
+      SFX.playCrash();
+      addCommentary('crashes');
+      return;
+    }
+
+    // Ski binding detachment (original: MaxHzImpact/MaxDnImpact = 1300)
+    if (!skiDetached && frameMaxSkiForce > cfg.bindingStrength * 150) {
+      skiDetached = true;
+      const skiLink = links[0];
+      for (let i = 0; i < 2; i++) {
+        detachedSkis.push({
+          x: skiLink.pos.x,
+          y: skiLink.pos.y,
+          vx: skiLink.vel.x + (Math.random() - 0.5) * 150 + (i === 0 ? -60 : 60),
+          vy: skiLink.vel.y - 80 - Math.random() * 120,
+          angle: skiLink.angle + (Math.random() - 0.5) * 0.8,
+          angVel: (Math.random() - 0.5) * 10,
+          points: skiLink.points,
+        });
+      }
+      // Switch foot link from ski polygon to boot polygon for ground contact
+      // Ski is gone — foot should collide using boot shape, not invisible ski
+      skiLink.points = skiLink.bootPts;
+      skiLink.tag = 'foot'; // use body friction instead of ski friction
+      SFX.playImpact(frameMaxSkiForce / 5);
+      addCommentary('badLandings');
+      setTimeout(() => {
+        if (!skier.crashed && skiDetached) {
+          skier.crashed = true;
+          skier.crashTimer = 0;
+          skier.crashReason = 'ski detachment';
+          initRagdoll(); // connected ragdoll (not explosion)
+          SFX.playCrash();
+          addCommentary('crashes');
+        }
+      }, 400);
+    }
+
+    if (frameMaxSkiForce > 100) SFX.playImpact(frameMaxSkiForce / 10);
+    skier.airTime = 0;
+  } else {
+    skier.airTime += dt;
+    skier.totalAirTime += dt;
+    skier.totalRotation += torsoLink.angVel * dt;
+  }
+
+  // Crash angle detection — REMOVED per original game analysis.
+  // Original only crashes from force exceeding maxShock (13000).
+  // Angle-based crash is not present in original.
+
+  // Stats
+  runStats.maxSpeed = Math.max(runStats.maxSpeed, skier.speed);
+  runStats.maxAir = Math.max(runStats.maxAir, skier.airTime);
+  runStats.distance = Math.max(runStats.distance, skier.x);
+
+  // Sound
+  SFX.updateWind(skier.speed);
+  SFX.updateSki(skier.speed, skier.onGround, braking);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  PARTICLES
+// ═══════════════════════════════════════════════════════════════
+function updateParticles(dt) {
+  // Snow spray (from ski ground contact, ~24px below ankle origin)
+  const skiGroundY = skier.y + 24;
+  if (skier.onGround && skier.speed > 80 && !skier.crashed) {
+    const rate = Math.min(4, skier.speed / 150);
+    for (let i = 0; i < rate; i++) {
+      particles.push({
+        x: skier.x - 10 - Math.random() * 12,
+        y: skiGroundY + Math.random() * 3,
+        vx: -skier.speed * 0.08 * Math.random() - 15,
+        vy: -25 - Math.random() * 45,
+        life: 0.4 + Math.random() * 0.4,
+        size: 1 + Math.random() * 2.5,
+        type: 'spray',
+      });
+    }
+  }
+  // Brake spray
+  if (braking && skier.onGround && skier.speed > 20 && !skier.crashed) {
+    for (let i = 0; i < 6; i++) {
+      particles.push({
+        x: skier.x - 5 + Math.random() * 10,
+        y: skiGroundY + Math.random() * 3,
+        vx: -skier.speed * 0.25 * Math.random() - 20,
+        vy: -40 - Math.random() * 70,
+        life: 0.3 + Math.random() * 0.5,
+        size: 1.5 + Math.random() * 3,
+        type: 'brake',
+      });
+    }
+  }
+  // Crash burst
+  if (skier.crashed && skier.crashTimer < 0.1) {
+    for (let i = 0; i < 30; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 50 + Math.random() * 200;
+      particles.push({
+        x: skier.x, y: skier.y,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 100,
+        life: 0.5 + Math.random() * 1,
+        size: 2 + Math.random() * 4,
+        type: 'crash',
+      });
+    }
+  }
+
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 120 * dt;
+    p.life -= dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function updateDetachedSkis(dt) {
+  for (let i = detachedSkis.length - 1; i >= 0; i--) {
+    const s = detachedSkis[i];
+    s.vy += cfg.gravity * dt;
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    s.angle += s.angVel * dt;
+    // Ground collision using ski bottom contact points
+    const cos = Math.cos(s.angle), sin = Math.sin(s.angle);
+    let grounded = false;
+    for (const pt of s.points) {
+      if (pt.y < 20) continue; // only check bottom points (y≈23 in local)
+      const wx = s.x + pt.x * cos - pt.y * sin;
+      const wy = s.y + pt.x * sin + pt.y * cos;
+      const t = getTerrainAt(wx);
+      if (wy > t.y) {
+        const pen = wy - t.y;
+        s.y -= pen;
+        s.vy *= -0.2;
+        s.vx *= 0.95;
+        s.angVel *= 0.8;
+        grounded = true;
+        break;
+      }
+    }
+    if (grounded && Math.abs(s.vy) < 5) s.vy = 0;
+    if (grounded && Math.abs(s.vx) < 3) s.vx = 0;
+    s.vx *= 0.999;
+    s.angVel *= 0.995;
+  }
+}
+
+function updateSnowflakes(dt, camX, camY) {
+  for (const s of snowflakes) {
+    s.x += s.vx * dt + Math.sin(performance.now() / 1000 + s.phase) * 8 * dt;
+    s.y += s.vy * dt;
+    // Wrap around camera view
+    if (s.x < camX - W) s.x += W * 3;
+    if (s.x > camX + W * 2) s.x -= W * 3;
+    if (s.y > camY + H) { s.y -= H * 2; s.x = camX + (Math.random() - 0.5) * W * 2; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RENDERING
+// ═══════════════════════════════════════════════════════════════
+function drawSky(camX, camY) {
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+  skyGrad.addColorStop(0, '#2a5599');
+  skyGrad.addColorStop(0.3, '#4a90d9');
+  skyGrad.addColorStop(0.6, '#87ceeb');
+  skyGrad.addColorStop(1, '#c8e8ff');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Sun
+  const sunX = W * 0.8, sunY = H * 0.12;
+  const sunGrad = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, 80);
+  sunGrad.addColorStop(0, 'rgba(255,255,200,0.9)');
+  sunGrad.addColorStop(0.3, 'rgba(255,240,180,0.3)');
+  sunGrad.addColorStop(1, 'rgba(255,240,180,0)');
+  ctx.fillStyle = sunGrad;
+  ctx.fillRect(sunX - 80, sunY - 80, 160, 160);
+}
+
+function drawMountains(camX) {
+  const layers = [
+    { color: '#5a7aae', px: 0.03, yBase: H * 0.32, amp: 130, freq: 0.0006 },
+    { color: '#7a9ac0', px: 0.06, yBase: H * 0.37, amp: 90, freq: 0.001 },
+    { color: '#96b4d4', px: 0.1,  yBase: H * 0.42, amp: 55, freq: 0.002 },
+  ];
+  for (const l of layers) {
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    for (let x = 0; x <= W; x += 3) {
+      const wx = x + camX * l.px;
+      const my = l.yBase - l.amp * (
+        Math.sin(wx * l.freq) +
+        0.5 * Math.sin(wx * l.freq * 2.3 + 1) +
+        0.25 * Math.sin(wx * l.freq * 4.7 + 3)
+      );
+      ctx.lineTo(x, my);
+    }
+    ctx.lineTo(W, H); ctx.closePath();
+    ctx.fillStyle = l.color; ctx.fill();
+    // Snow caps
+    ctx.beginPath();
+    for (let x = 0; x <= W; x += 3) {
+      const wx = x + camX * l.px;
+      const my = l.yBase - l.amp * (
+        Math.sin(wx * l.freq) +
+        0.5 * Math.sin(wx * l.freq * 2.3 + 1) +
+        0.25 * Math.sin(wx * l.freq * 4.7 + 3)
+      );
+      if (x === 0) ctx.moveTo(x, my);
+      else ctx.lineTo(x, my);
+    }
+    ctx.lineTo(W, H * 0.5); ctx.lineTo(0, H * 0.5); ctx.closePath();
+    ctx.fillStyle = `rgba(240,248,255,0.15)`; ctx.fill();
+  }
+}
+
+function drawTerrain(camX, camY) {
+  ctx.beginPath();
+  let first = true;
+  for (const p of terrainPoints) {
+    const sx = p.x - camX + W * 0.3;
+    const sy = p.y - camY + H * 0.5;
+    if (sx < -200 || sx > W + 200) continue;
+    if (first) { ctx.moveTo(sx, sy); first = false; }
+    else ctx.lineTo(sx, sy);
+  }
+  ctx.lineTo(W + 200, H + 100);
+  ctx.lineTo(-200, H + 100);
+  ctx.closePath();
+
+  const snowGrad = ctx.createLinearGradient(0, H * 0.3, 0, H);
+  snowGrad.addColorStop(0, '#eef3ff');
+  snowGrad.addColorStop(0.3, '#e0e8f5');
+  snowGrad.addColorStop(1, '#c0d0e8');
+  ctx.fillStyle = snowGrad;
+  ctx.fill();
+
+  // Surface line with subtle shadow
+  ctx.beginPath();
+  first = true;
+  for (const p of terrainPoints) {
+    const sx = p.x - camX + W * 0.3;
+    const sy = p.y - camY + H * 0.5;
+    if (sx < -200 || sx > W + 200) continue;
+    if (first) { ctx.moveTo(sx, sy); first = false; }
+    else ctx.lineTo(sx, sy);
+  }
+  ctx.strokeStyle = 'rgba(180,195,215,0.8)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Ski tracks (trail behind skier on ground)
+  if (!skier.crashed && skier.onGround) {
+    ctx.beginPath();
+    const trackStart = Math.max(0, skier.x - 400);
+    for (let tx = trackStart; tx < skier.x; tx += 8) {
+      const tt = getTerrainAt(tx);
+      const tsx = tx - camX + W * 0.3;
+      const tsy = tt.y - camY + H * 0.5;
+      if (tsx < -10 || tsx > W + 10) continue;
+      ctx.moveTo(tsx - 2, tsy);
+      ctx.lineTo(tsx + 2, tsy);
+    }
+    ctx.strokeStyle = 'rgba(160,175,200,0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+}
+
+function drawTrees(camX, camY) {
+  for (const t of trees) {
+    const sx = t.x - camX + W * 0.3;
+    const sy = t.y - camY + H * 0.5;
+    if (sx < -50 || sx > W + 50) continue;
+
+    // Trunk
+    ctx.fillStyle = '#4a3018';
+    ctx.fillRect(sx - 2, sy - t.h, 4, t.h);
+
+    // Foliage layers
+    for (let j = 0; j < 3; j++) {
+      const ly = sy - t.h + j * (t.h * 0.3);
+      const lw = t.w + j * 4;
+      ctx.beginPath();
+      ctx.moveTo(sx, ly - 12);
+      ctx.lineTo(sx - lw, ly + 8);
+      ctx.lineTo(sx + lw, ly + 8);
+      ctx.closePath();
+      const g = 70 + j * 20 - t.shade * 25;
+      ctx.fillStyle = `rgb(${15 + j * 10}, ${g}, ${25 + j * 8})`;
+      ctx.fill();
+    }
+
+    // Snow cap
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - t.h - 12);
+    ctx.lineTo(sx - 7, sy - t.h + 3);
+    ctx.lineTo(sx + 7, sy - t.h + 3);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(235,245,255,0.85)';
+    ctx.fill();
+  }
+}
+
+function drawParticles(camX, camY) {
+  for (const p of particles) {
+    const sx = p.x - camX + W * 0.3;
+    const sy = p.y - camY + H * 0.5;
+    if (sx < -10 || sx > W + 10 || sy < -10 || sy > H + 10) continue;
+    ctx.beginPath();
+    ctx.arc(sx, sy, p.size, 0, Math.PI * 2);
+    const alpha = Math.min(1, p.life * 2);
+    ctx.fillStyle = p.type === 'crash'
+      ? `rgba(255,200,150,${alpha})`
+      : `rgba(230,240,255,${alpha})`;
+    ctx.fill();
+  }
+}
+
+function drawSnowflakes(camX, camY) {
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  for (const s of snowflakes) {
+    const sx = s.x - camX + W * 0.3;
+    const sy = s.y - camY + H * 0.5;
+    if (sx < -10 || sx > W + 10 || sy < -10 || sy > H + 10) continue;
+    ctx.beginPath();
+    ctx.arc(sx, sy, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SKIER RENDERING (Articulated Figure)
+// ═══════════════════════════════════════════════════════════════
+function drawDetachedSkis(camX, camY) {
+  const ox = -camX + W * 0.3;
+  const oy = -camY + H * 0.5;
+  for (const s of detachedSkis) {
+    const sx = s.x + ox;
+    const sy = s.y + oy;
+    if (sx < -100 || sx > W + 100) continue;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(s.angle);
+    drawThinSki(ctx, 23); // single thin ski per detached object
+    ctx.restore();
+  }
+}
+
+function drawSpeedLines(camX, camY) {
+  if (skier.crashed || skier.speed < 200) return;
+  const intensity = Math.min(1, (skier.speed - 200) / 600);
+  const sx = skier.x - camX + W * 0.3;
+  const sy = skier.y - camY + H * 0.5;
+  ctx.save();
+  ctx.globalAlpha = intensity * 0.5;
+  ctx.strokeStyle = 'rgba(200,230,255,0.7)';
+  ctx.lineWidth = 1;
+  const numLines = Math.floor(3 + intensity * 8);
+  const time = performance.now() / 1000;
+  for (let i = 0; i < numLines; i++) {
+    const seed = i * 137.5 + time * 3;
+    const offsetY = (Math.sin(seed) * 25 + Math.cos(seed * 0.7) * 15);
+    const offsetX = Math.sin(seed * 1.3) * 10;
+    const lineLen = 15 + intensity * 30 + Math.sin(seed * 2.1) * 10;
+    ctx.beginPath();
+    ctx.moveTo(sx - 20 + offsetX, sy + offsetY);
+    ctx.lineTo(sx - 20 + offsetX - lineLen, sy + offsetY + Math.random() * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+const LINK_COLORS = ['#1a1a4a', '#1a1a3a', '#cc3333', '#cc3333'];
+const LINK_STROKES = ['#0a0a2a', '#111128', '#aa2222', '#aa2222'];
+
+// Draw a single thin ski at a given vertical offset (in local coords)
+function drawThinSki(ctxRef, yOffset) {
+  // Ski runs from x≈-30 to x≈48, thin profile (3px tall)
+  ctxRef.beginPath();
+  ctxRef.moveTo(-25, yOffset + 1.5);      // rear
+  ctxRef.quadraticCurveTo(-30, yOffset, -28, yOffset - 1.5); // rear tip curl
+  ctxRef.lineTo(40, yOffset - 1.5);       // top edge
+  ctxRef.quadraticCurveTo(48, yOffset - 2, 48, yOffset);     // front tip curl up
+  ctxRef.quadraticCurveTo(48, yOffset + 1.5, 42, yOffset + 1.5); // front tip bottom
+  ctxRef.lineTo(-25, yOffset + 1.5);      // bottom edge
+  ctxRef.closePath();
+  ctxRef.fillStyle = LINK_COLORS[0];
+  ctxRef.fill();
+  ctxRef.strokeStyle = LINK_STROKES[0];
+  ctxRef.lineWidth = 0.8;
+  ctxRef.stroke();
+}
+
+// Draw two parallel thin skis for a given position/angle
+function drawSkiPair(posX, posY, angle, camX, camY) {
+  const ox = -camX + W * 0.3;
+  const oy = -camY + H * 0.5;
+  ctx.save();
+  ctx.translate(posX + ox, posY + oy);
+  ctx.rotate(angle);
+  // Two skis offset vertically (front ski slightly higher = perspective)
+  drawThinSki(ctx, 21);   // back ski (lower)
+  drawThinSki(ctx, 25);   // front ski (higher y = further down in screen)
+  ctx.restore();
+}
+
+function drawLinkPolygon(link, camX, camY, colorIdx) {
+  if (link.points.length < 2) return;
+  const ox = -camX + W * 0.3;
+  const oy = -camY + H * 0.5;
+
+  ctx.save();
+  ctx.translate(link.pos.x + ox, link.pos.y + oy);
+  ctx.rotate(link.angle);
+
+  ctx.beginPath();
+  ctx.moveTo(link.points[0].x, link.points[0].y);
+  for (let i = 1; i < link.points.length; i++) {
+    ctx.lineTo(link.points[i].x, link.points[i].y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = LINK_COLORS[colorIdx];
+  ctx.fill();
+  ctx.strokeStyle = LINK_STROKES[colorIdx];
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawSkier(camX, camY) {
+  if (skier.crashed) {
+    drawRagdoll(camX, camY);
+    const sx = skier.x - camX + W * 0.3;
+    const sy = skier.y - camY + H * 0.5;
+    ctx.save();
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillStyle = '#ff4444';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 4;
+    ctx.fillText('CRASHED!', sx, sy - 70);
+    ctx.font = '11px monospace';
+    ctx.fillStyle = '#ffaa44';
+    if (skier.crashReason) ctx.fillText(skier.crashReason, sx, sy - 52);
+    ctx.font = '14px sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('Press R to restart · M for menu', sx, sy - 35);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return;
+  }
+
+  if (!links || links.length < 4) return;
+
+  const ox = -camX + W * 0.3;
+  const oy = -camY + H * 0.5;
+
+  // Draw shadow on terrain surface below skier
+  const skiLink = links[0];
+  const terrain = getTerrainAt(skiLink.pos.x);
+  const shadowX = skiLink.pos.x + ox;
+  const shadowY = terrain.y + oy + 2;
+  ctx.save();
+  ctx.globalAlpha = 0.12;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(shadowX, shadowY, 24, 3, terrain.angle, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Draw links back-to-front: skis, leg/thigh, boot (boot in front of thigh)
+  if (!skiDetached) {
+    drawSkiPair(links[0].pos.x, links[0].pos.y, links[0].angle, camX, camY); // two thin skis
+  } else {
+    // Draw boot stubs
+    ctx.save();
+    ctx.translate(links[0].pos.x + ox, links[0].pos.y + oy);
+    ctx.rotate(links[0].angle);
+    ctx.fillStyle = '#333';
+    ctx.fillRect(-5, -3, 10, 6);
+    ctx.restore();
+  }
+  drawLinkPolygon(links[1], camX, camY, 1); // leg/thigh (behind boot)
+  // Draw boot/calf on foot link (in front of thigh)
+  if (!skiDetached && links[0].bootPts) {
+    const bootOx = -camX + W * 0.3;
+    const bootOy = -camY + H * 0.5;
+    ctx.save();
+    ctx.translate(links[0].pos.x + bootOx, links[0].pos.y + bootOy);
+    ctx.rotate(links[0].angle);
+    ctx.beginPath();
+    ctx.moveTo(links[0].bootPts[0].x, links[0].bootPts[0].y);
+    for (let i = 1; i < links[0].bootPts.length; i++) {
+      ctx.lineTo(links[0].bootPts[i].x, links[0].bootPts[i].y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#2a2a50';
+    ctx.fill();
+    ctx.strokeStyle = '#1a1a3a';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+  drawLinkPolygon(links[2], camX, camY, 2); // torso
+  drawLinkPolygon(links[3], camX, camY, 3); // arms (in front of torso per original)
+
+  // Draw head (circle at top of torso)
+  const torsoLink = links[2];
+  const headLocal = {x: 5, y: -33}; // head center from original torso polygon head points
+  const headWorld = worldPoint(torsoLink, headLocal);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(headWorld.x + ox, headWorld.y + oy, 7, 0, Math.PI * 2);
+  ctx.fillStyle = '#2255aa';
+  ctx.fill();
+  ctx.strokeStyle = '#1a3a7a';
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+
+  // Goggles
+  const gogX = headWorld.x + ox + 6 * Math.cos(torsoLink.angle);
+  const gogY = headWorld.y + oy + 6 * Math.sin(torsoLink.angle);
+  ctx.beginPath();
+  ctx.ellipse(gogX, gogY, 4.5, 2.8, torsoLink.angle, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffaa00';
+  ctx.fill();
+  ctx.restore();
+
+  // Debug: draw joint positions
+  if (debugJoints) {
+    ctx.save();
+    for (let i = 0; i < 3; i++) {
+      const jp = getJointWorldPos(i);
+      ctx.beginPath();
+      ctx.arc(jp.x + ox, jp.y + oy, 4, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,0,0.8)';
+      ctx.fill();
+      ctx.strokeStyle = '#ff0';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    // Draw link centers
+    for (const link of links) {
+      ctx.beginPath();
+      ctx.arc(link.pos.x + ox, link.pos.y + oy, 2, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,255,0,0.8)';
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Brake spray effect
+  if (braking && skier.onGround && skier.speed > 30) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.6, skier.speed / 400);
+    for (let i = 0; i < 10; i++) {
+      const px = skiLink.pos.x + ox - 10 + Math.random() * 20;
+      const py = skiLink.pos.y + oy + Math.random() * 4;
+      ctx.beginPath();
+      ctx.arc(px - skier.speed * 0.015 * Math.random(), py - Math.random() * 12, 1 + Math.random() * 3, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(220,235,255,0.7)';
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  CAMERA
+// ═══════════════════════════════════════════════════════════════
+let cam = { x: 0, y: 0, shake: 0 };
+
+function updateCamera(dt) {
+  // Look-ahead based on velocity
+  const lookAheadX = skier.vx * 0.3;
+  const lookAheadY = skier.vy * 0.15 - 60;
+  const targetX = skier.x + lookAheadX;
+  const targetY = skier.y + lookAheadY;
+
+  cam.x += (targetX - cam.x) * 4 * dt;
+  cam.y += (targetY - cam.y) * 4 * dt;
+
+  // Shake decay
+  cam.shake *= Math.pow(0.05, dt);
+
+  // Add shake on hard landings or crashes
+  if (skier.crashed && skier.crashTimer < 0.1) cam.shake = 15;
+}
+
+function getCamOffset() {
+  const shakeX = (Math.random() - 0.5) * cam.shake * 2;
+  const shakeY = (Math.random() - 0.5) * cam.shake * 2;
+  return { x: cam.x + shakeX, y: cam.y + shakeY };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VICTORY SYSTEM
+// ═══════════════════════════════════════════════════════════════
+function hideVictory() {
+  document.getElementById('victory-overlay').classList.remove('visible');
+}
+
+function showVictory() {
+  if (victoryShown) return;
+  victoryShown = true;
+  gameState = 'victory';
+
+  const scen = SCENARIOS[selectedScenario];
+  const v = scen.victory;
+  const noCrash = !skier.crashed;
+  let finalScore = score.total;
+  const noCrashBonus = noCrash ? Math.floor(finalScore * 0.25) : 0;
+  const timeBonus = Math.max(0, Math.floor(300 - runTimer * 3));
+  finalScore += noCrashBonus + timeBonus;
+
+  let medal = '🥉', medalName = 'Bronze';
+  if (finalScore >= v.goldScore) { medal = '🥇'; medalName = 'Gold'; }
+  else if (finalScore >= v.silverScore) { medal = '🥈'; medalName = 'Silver'; }
+
+  // Save best score
+  const key = `ski_best_${scen.id}`;
+  let prev = 0;
+  try { prev = parseInt(localStorage.getItem(key) || '0'); } catch(e) {}
+  const isNewBest = finalScore > prev;
+  if (isNewBest) try { localStorage.setItem(key, finalScore); } catch(e) {}
+
+  const box = document.getElementById('victory-box');
+  box.innerHTML = `
+    <h2>🏁 RUN COMPLETE!</h2>
+    <div class="medal">${medal}</div>
+    <div style="font-size:18px;color:#ccc;margin-bottom:2px">${medalName} Medal — ${scen.name}</div>
+    <div class="stats-grid">
+      <span class="label">Trick Score</span><span class="value">${score.total}</span>
+      <span class="label">No-Crash Bonus</span><span class="value">${noCrash ? '+' + noCrashBonus : '—'}</span>
+      <span class="label">Time Bonus</span><span class="value">+${timeBonus}</span>
+      <span class="label" style="color:#ffd700;font-weight:bold">Final Score</span><span class="value" style="color:#ffd700;font-weight:bold">${finalScore}</span>
+      <span class="label">Time</span><span class="value">${runTimer.toFixed(1)}s</span>
+      <span class="label">Max Speed</span><span class="value">${(runStats.maxSpeed * 0.15).toFixed(0)} km/h</span>
+      <span class="label">Best Air</span><span class="value">${runStats.maxAir.toFixed(1)}s</span>
+      <span class="label">Tricks Landed</span><span class="value">${runStats.jumps}</span>
+      ${isNewBest ? '<span class="label" style="color:#ff6">★ NEW BEST!</span><span class="value" style="color:#ff6">was ' + prev + '</span>' : ''}
+    </div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:4px">
+      Goal: ${v.scoreGoal} · Silver: ${v.silverScore} · Gold: ${v.goldScore}
+    </div>
+    <div class="btn-row">
+      <button class="btn-retry" onclick="startGame(selectedScenario)">↻ Retry</button>
+      <button class="btn-menu" onclick="hideVictory();showMenu()">☰ Menu</button>
+    </div>`;
+  document.getElementById('victory-overlay').classList.add('visible');
+
+  SFX.init();
+  // Victory fanfare
+  if (SFX.ctx) {
+    const t = SFX.ctx.currentTime;
+    const notes = [523, 659, 784, 1047, 1319];
+    for (let i = 0; i < notes.length; i++) {
+      const osc = SFX.ctx.createOscillator();
+      const g = SFX.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = notes[i];
+      g.gain.setValueAtTime(0.15, t + i * 0.12);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.12 + 0.5);
+      osc.connect(g); g.connect(SFX.master);
+      osc.start(t + i * 0.12); osc.stop(t + i * 0.12 + 0.5);
+    }
+  }
+}
+
+function checkVictory() {
+  if (victoryShown || skier.crashed) return;
+  if (skier.x >= finishX && skier.onGround) {
+    showVictory();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MINIMAP
+// ═══════════════════════════════════════════════════════════════
+const minimapCanvas = document.getElementById('minimap');
+const mctx = minimapCanvas.getContext('2d');
+const MW = 220, MH = 60;
+
+function drawMinimap() {
+  mctx.clearRect(0, 0, MW, MH);
+  if (terrainPoints.length < 2) return;
+
+  // Background
+  mctx.fillStyle = 'rgba(0,10,30,0.7)';
+  mctx.beginPath();
+  mctx.roundRect(0, 0, MW, MH, 6);
+  mctx.fill();
+  mctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  mctx.lineWidth = 1;
+  mctx.stroke();
+
+  const firstPt = terrainPoints[0];
+  const lastPt = terrainPoints[terrainPoints.length - 1];
+  const totalX = lastPt.x - firstPt.x;
+  // Find y extents
+  let minY = Infinity, maxY = -Infinity;
+  for (const p of terrainPoints) {
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const pad = 8;
+  const drawW = MW - pad * 2;
+  const drawH = MH - pad * 2;
+  const rangeY = maxY - minY || 1;
+
+  // Draw terrain profile
+  mctx.beginPath();
+  let first = true;
+  for (const p of terrainPoints) {
+    const mx = pad + ((p.x - firstPt.x) / totalX) * drawW;
+    const my = pad + ((p.y - minY) / rangeY) * drawH;
+    if (first) { mctx.moveTo(mx, my); first = false; }
+    else mctx.lineTo(mx, my);
+  }
+  // Fill below terrain
+  mctx.lineTo(pad + drawW, pad + drawH);
+  mctx.lineTo(pad, pad + drawH);
+  mctx.closePath();
+  mctx.fillStyle = 'rgba(200,220,240,0.15)';
+  mctx.fill();
+  // Terrain line
+  mctx.beginPath();
+  first = true;
+  for (const p of terrainPoints) {
+    const mx = pad + ((p.x - firstPt.x) / totalX) * drawW;
+    const my = pad + ((p.y - minY) / rangeY) * drawH;
+    if (first) { mctx.moveTo(mx, my); first = false; }
+    else mctx.lineTo(mx, my);
+  }
+  mctx.strokeStyle = 'rgba(200,220,240,0.5)';
+  mctx.lineWidth = 1;
+  mctx.stroke();
+
+  // Finish line
+  const finishMx = pad + ((finishX - firstPt.x) / totalX) * drawW;
+  mctx.beginPath();
+  mctx.moveTo(finishMx, pad);
+  mctx.lineTo(finishMx, pad + drawH);
+  mctx.strokeStyle = 'rgba(255,215,0,0.6)';
+  mctx.lineWidth = 1.5;
+  mctx.setLineDash([3, 3]);
+  mctx.stroke();
+  mctx.setLineDash([]);
+  // Flag icon
+  mctx.fillStyle = '#ffd700';
+  mctx.font = '10px sans-serif';
+  mctx.fillText('🏁', finishMx - 5, pad + 3);
+
+  // Skier position dot
+  const skierFrac = Math.max(0, Math.min(1, (skier.x - firstPt.x) / totalX));
+  const skierTerrain = getTerrainAt(skier.x);
+  const smx = pad + skierFrac * drawW;
+  const smy = pad + ((skierTerrain.y - minY) / rangeY) * drawH;
+
+  // Trail (last portion traversed)
+  const trailStartFrac = Math.max(0, skierFrac - 0.01);
+  mctx.beginPath();
+  let trailFirst = true;
+  for (const p of terrainPoints) {
+    const frac = (p.x - firstPt.x) / totalX;
+    if (frac < trailStartFrac || frac > skierFrac) continue;
+    const mx = pad + frac * drawW;
+    const my = pad + ((p.y - minY) / rangeY) * drawH;
+    if (trailFirst) { mctx.moveTo(mx, my); trailFirst = false; }
+    else mctx.lineTo(mx, my);
+  }
+
+  // Skier dot (pulsing)
+  const pulse = 1 + Math.sin(performance.now() / 200) * 0.3;
+  mctx.beginPath();
+  mctx.arc(smx, smy - 2, 3 * pulse, 0, Math.PI * 2);
+  mctx.fillStyle = skier.crashed ? '#ff4444' : '#4af';
+  mctx.fill();
+  mctx.strokeStyle = '#fff';
+  mctx.lineWidth = 0.8;
+  mctx.stroke();
+
+  // Progress percentage
+  const pct = Math.min(100, (skierFrac / ((finishX - firstPt.x) / totalX) * 100)).toFixed(0);
+  mctx.fillStyle = 'rgba(255,255,255,0.6)';
+  mctx.font = '9px monospace';
+  mctx.textAlign = 'right';
+  mctx.fillText(`${pct}%`, MW - pad, MH - 2);
+  mctx.textAlign = 'left';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  FINISH LINE RENDERING
+// ═══════════════════════════════════════════════════════════════
+function drawFinishLine(camX, camY) {
+  const sx = finishX - camX + W * 0.3;
+  if (sx < -50 || sx > W + 50) return;
+  const terrain = getTerrainAt(finishX);
+  const sy = terrain.y - camY + H * 0.5;
+
+  // Pole
+  ctx.strokeStyle = '#ddd';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(sx, sy - 80);
+  ctx.stroke();
+
+  // Checkered banner
+  const bannerW = 30, bannerH = 20;
+  const bx = sx, by = sy - 80;
+  const cellSize = 5;
+  for (let row = 0; row < bannerH / cellSize; row++) {
+    for (let col = 0; col < bannerW / cellSize; col++) {
+      ctx.fillStyle = (row + col) % 2 === 0 ? '#111' : '#fff';
+      ctx.fillRect(bx + col * cellSize, by + row * cellSize, cellSize, cellSize);
+    }
+  }
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(bx, by, bannerW, bannerH);
+
+  // "FINISH" text
+  ctx.fillStyle = '#ffd700';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
+  ctx.fillText('FINISH', sx + bannerW / 2, by - 4);
+  ctx.shadowBlur = 0;
+  ctx.textAlign = 'left';
+}
+function updateHUD() {
+  const speedKmh = (skier.speed * 0.15).toFixed(0);
+  const dist = (runStats.distance * 0.05).toFixed(0);
+
+  let hudHTML = `Speed: ${speedKmh} km/h<br>Distance: ${dist}m<br>Time: ${runTimer.toFixed(1)}s`;
+  if (braking && skier.onGround) hudHTML += '<br><span style="color:#ff6">⛷ BRAKING</span>';
+  if (!skier.onGround && !skier.crashed) {
+    hudHTML += `<br><span style="color:#6ff">🦅 AIR ${skier.airTime.toFixed(1)}s</span>`;
+    const flips = Math.abs(skier.totalRotation) / (Math.PI * 2);
+    const fullFlips = Math.floor(flips);
+    const direction = skier.totalRotation > 0 ? 'F' : 'B';
+    if (flips > 0.3) {
+      const flipColor = fullFlips >= 2 ? '#ff0' : fullFlips >= 1 ? '#f6f' : '#f6f';
+      hudHTML += `<br><span style="color:${flipColor};font-size:16px;font-weight:bold">`;
+      hudHTML += `↻ ${fullFlips > 0 ? fullFlips + direction + ' ' : ''}${(flips * 360).toFixed(0)}°</span>`;
+    }
+    // Projected score
+    const projScore = Math.floor(skier.airTime * cfg.airtimePoints * 10 + fullFlips * cfg.flipPoints);
+    if (projScore > 10) {
+      hudHTML += `<br><span style="color:#aaf;font-size:11px">~${projScore} pts</span>`;
+    }
+  }
+  if (skiDetached) {
+    hudHTML += `<br><span style="color:#f44">⚠ SKIS DETACHED!</span>`;
+  }
+  hudEl.innerHTML = hudHTML;
+
+  // Score display
+  const comboStr = score.combo > 1 ? ` <span style="color:#ff6">×${score.combo.toFixed(1)}</span>` : '';
+  scoreEl.innerHTML = `Score: ${score.total}${comboStr}<br>Jumps: ${runStats.jumps} · Flips: ${runStats.totalFlips}`;
+
+  // Goal HUD
+  const scen = SCENARIOS[selectedScenario];
+  const v = scen.victory;
+  const goalHud = document.getElementById('goal-hud');
+  const pctDone = Math.min(100, (skier.x / finishX * 100)).toFixed(0);
+  let goalColor = '#aaa';
+  if (score.total >= v.goldScore) goalColor = '#ffd700';
+  else if (score.total >= v.silverScore) goalColor = '#c0c0c0';
+  else if (score.total >= v.scoreGoal) goalColor = '#cd7f32';
+  goalHud.innerHTML = `<span style="color:${goalColor}">🏁 ${pctDone}% — Score: ${score.total} / ${v.goldScore} 🥇</span>`;
+
+  // Trick messages
+  let trickHTML = '';
+  for (let i = trickMessages.length - 1; i >= 0; i--) {
+    const m = trickMessages[i];
+    m.life -= 1 / 60;
+    m.y -= 0.5;
+    if (m.life <= 0) { trickMessages.splice(i, 1); continue; }
+    const alpha = Math.min(1, m.life);
+    const scale = m.life > 2 ? 1.2 : 1;
+    // Color based on landing quality
+    let textColor = '#ffd700';
+    if (m.landingQuality === 'perfect') textColor = '#44ffaa';
+    else if (m.landingQuality === 'smooth') textColor = '#88ddff';
+    else if (m.landingQuality === 'hard') textColor = '#ff8844';
+    else if (m.landingQuality === 'hint') textColor = '#aaccff';
+    const fontSize = m.landingQuality === 'hint' ? 13 : 16 + Math.min(m.score * 0.05, 10);
+    trickHTML += `<div style="opacity:${alpha};transform:translateY(${m.y}px) scale(${scale});margin:4px 0">` +
+      `<span style="color:${textColor};font:bold ${fontSize}px sans-serif;text-shadow:2px 2px 4px rgba(0,0,0,0.7)">${m.text}</span>` +
+      (m.score > 0 ? `<span style="color:#fff;font:bold 14px sans-serif;margin-left:8px">+${m.score}</span>` : '') +
+      (m.combo > 1 ? `<span style="color:#ff6;font:12px sans-serif;margin-left:4px">×${m.combo.toFixed(1)}</span>` : '') +
+      `</div>`;
+  }
+  trickEl.innerHTML = trickHTML;
+
+  instrEl.innerHTML = gameState === 'playing' && !skier.crashed
+    ? 'Mouse: posture · Click: brake · Space: jump · R: restart · Esc: pause'
+    : '';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  COMMENTARY & TRAINING HINTS
+// ═══════════════════════════════════════════════════════════════
+function updateCommentary(dt) {
+  for (let i = commentaryMessages.length - 1; i >= 0; i--) {
+    const m = commentaryMessages[i];
+    m.life -= dt;
+    m.y += m.vy * dt;
+    if (m.life <= 0) commentaryMessages.splice(i, 1);
+  }
+}
+
+function drawCommentary() {
+  const sx = skier.x - cam.x + W * 0.3;
+  const sy = skier.y - cam.y + H * 0.5;
+  for (const m of commentaryMessages) {
+    const alpha = Math.min(1, m.life);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = `bold ${Math.floor(18 * m.scale)}px sans-serif`;
+    ctx.fillStyle = m.color;
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(0,0,0,0.7)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(m.text, sx + m.x, sy + m.y);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+}
+
+function updateTrainingHints(dt) {
+  if (!trainingHints) return;
+  for (const hint of trainingHints) {
+    if (!hint.shown && runTimer >= hint.triggerTime) {
+      hint.shown = true;
+      trickMessages.push({
+        text: hint.text,
+        score: 0,
+        combo: 1,
+        life: 4.0,
+        y: 60,
+        landingQuality: 'hint',
+      });
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  GAME LOOP
+// ═══════════════════════════════════════════════════════════════
+let lastTime = 0;
+
+function gameLoop(time) {
+  const rawDt = (time - lastTime) / 1000;
+  lastTime = time;
+  const dt = Math.min(rawDt, 0.05);
+
+  if (gameState === 'playing' && !paused) {
+    if (!skier.crashed) runTimer += dt;
+    updatePhysics(dt);
+    updateDetachedSkis(dt);
+    updateParticles(dt);
+    updateCamera(dt);
+    checkVictory();
+    const c = getCamOffset();
+    updateSnowflakes(dt, c.x, c.y);
+
+    // Draw
+    drawSky(c.x, c.y);
+    drawMountains(c.x);
+    drawTerrain(c.x, c.y);
+    drawFinishLine(c.x, c.y);
+    drawTrees(c.x, c.y);
+    drawSnowflakes(c.x, c.y);
+    drawParticles(c.x, c.y);
+    drawDetachedSkis(c.x, c.y);
+    drawSpeedLines(c.x, c.y);
+    drawSkier(c.x, c.y);
+    drawMinimap();
+    updateCommentary(dt);
+    drawCommentary();
+    updateTrainingHints(dt);
+    updateHUD();
+  } else if (gameState === 'victory') {
+    // Keep rendering the scene behind the victory overlay
+    updateCamera(dt);
+    const c = getCamOffset();
+    drawSky(c.x, c.y);
+    drawMountains(c.x);
+    drawTerrain(c.x, c.y);
+    drawFinishLine(c.x, c.y);
+    drawTrees(c.x, c.y);
+    drawSnowflakes(c.x, c.y);
+    drawSkier(c.x, c.y);
+    drawMinimap();
+  } else if (gameState === 'menu') {
+    const t = time / 1000;
+    drawSky(t * 20, 0);
+    drawMountains(t * 20);
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
+</script>
 </body>
 </html>
