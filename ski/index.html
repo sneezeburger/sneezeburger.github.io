@@ -1234,10 +1234,11 @@ function initLinks() {
     {x:  2.3, y:-20.0},   // hip area top-right
     {x:  2.0, y:-15.5},   // upper thigh right
     {x: -0.5, y:-14.5},   // upper thigh inner
-    {x:  1.2, y:  1.8},   // knee right
-    {x: -1.0, y:  3.7},   // knee bottom right
-    {x: -5.7, y:  3.4},   // knee bottom left
-    {x: -7.3, y: -0.3},   // calf left
+    {x:  3.0, y: -2.0},   // knee front-upper
+    {x:  4.5, y:  3.0},   // knee front-lower (widened for boot overlap)
+    {x: -2.0, y:  5.5},   // knee bottom (extended down)
+    {x: -7.0, y:  4.0},   // knee back-lower
+    {x: -8.5, y: -0.3},   // calf left
     {x: -9.6, y: -9.7},   // mid-thigh left
     {x:-12.9, y:-15.0},   // upper thigh left
     {x:-14.2, y:-15.1},   // upper thigh far left
@@ -1384,8 +1385,9 @@ function computeTargetAngles() {
   const ankle = Math.max(JOINTS[1].minA, Math.min(JOINTS[1].maxA, ankleTarget));
 
   // Hip: original lerp(-130,20,my) + lerp(20,-20,mx), negated for Y-down
-  // X influence doubled (80° range instead of 40°) for more responsive lean
-  const hipTarget = (110 - 150 * my + 80 * mx) * DEG;
+  // X influence 50% boosted (60° range vs original 40°) for responsive lean
+  // Base offset adjusted to keep neutral at same position
+  const hipTarget = (100 - 150 * my + 60 * mx) * DEG;
   const hip = Math.max(JOINTS[2].minA, Math.min(JOINTS[2].maxA, hipTarget));
 
   // Shoulder: original lerp(20,70,my), negated for Y-down
@@ -2261,6 +2263,17 @@ function drawSkier(camX, camY) {
     ctx.restore();
   }
   drawLinkPolygon(links[1], camX, camY, 1); // leg/thigh (behind boot)
+  // Draw knee joint cover (circle at ankle pivot to smooth thigh-boot transition)
+  {
+    const jx = links[0].pos.x + ox;
+    const jy = links[0].pos.y + oy;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(jx, jy, 6, 0, Math.PI * 2);
+    ctx.fillStyle = LINK_COLORS[1]; // match thigh color
+    ctx.fill();
+    ctx.restore();
+  }
   // Draw boot/calf on foot link (in front of thigh)
   if (!skiDetached && links[0].bootPts) {
     const bootOx = -camX + W * 0.3;
