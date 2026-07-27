@@ -1380,14 +1380,13 @@ function computeTargetAngles() {
   const my = 1 - Math.max(0, Math.min(1, mouseY));  // inverted: 1=top(stand), 0=bottom(crouch)
   const mx = Math.max(0, Math.min(1, mouseX));       // 0=left, 1=right
 
-  // Ankle: original lerp(100,0,my) + lerp(60,0,mx), negated for Y-down
-  const ankleTarget = (-160 + 100 * my + 60 * mx) * DEG;
+  // Ankle: negated for Y-down, forward-biased so center mouse = upright
+  const ankleTarget = (-140 + 100 * my + 60 * mx) * DEG;
   const ankle = Math.max(JOINTS[1].minA, Math.min(JOINTS[1].maxA, ankleTarget));
 
-  // Hip: original lerp(-130,20,my) + lerp(20,-20,mx), negated for Y-down
-  // X influence 50% boosted (60° range vs original 40°) for responsive lean
-  // Base offset adjusted to keep neutral at same position
-  const hipTarget = (100 - 150 * my + 60 * mx) * DEG;
+  // Hip: negated for Y-down, X influence 50% boosted (60° vs original 40°)
+  // Forward-biased so center mouse = upright stance
+  const hipTarget = (120 - 150 * my + 60 * mx) * DEG;
   const hip = Math.max(JOINTS[2].minA, Math.min(JOINTS[2].maxA, hipTarget));
 
   // Shoulder: original lerp(20,70,my), negated for Y-down
