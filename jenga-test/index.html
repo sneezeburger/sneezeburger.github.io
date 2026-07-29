@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jenga Tower - Physics Simulation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1a2e; }
+        canvas { display: block; position: absolute; top: 0; left: 0; }
+        #info {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #f0e6d3;
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 14px;
+            background: rgba(0,0,0,0.6);
+            padding: 10px 20px;
+            border-radius: 8px;
+            pointer-events: none;
+            text-align: center;
+            z-index: 10;
+        }
+        #reset-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(180, 120, 60, 0.8);
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            z-index: 10;
+            transition: background 0.2s;
+        }
+        #reset-btn:hover { background: rgba(200, 140, 70, 1); }
+        #gyro-btn {
+            position: absolute;
+            bottom: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(60, 120, 180, 0.8);
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            z-index: 10;
+            transition: background 0.2s;
+            display: none;
+        }
+        #gyro-btn:hover { background: rgba(80, 140, 200, 1); }
+        #gyro-btn.active { background: rgba(60, 180, 100, 0.8); }
+        .desktop-only { display: inline; }
+        .mobile-only { display: none; }
+        @media (pointer: coarse) {
+            .desktop-only { display: none; }
+            .mobile-only { display: inline; }
+            #gyro-btn { display: block; }
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <span class="desktop-only">Click a block to select · Drag to pull it out · Scroll to zoom · Right-drag to rotate</span>
+        <span class="mobile-only">Tap a block to grab · Tilt to move it · Tap again to release</span>
+    </div>
+    <button id="reset-btn" onclick="resetTower()">Reset Tower</button>
+    <button id="gyro-btn" onclick="requestGyro()">Enable Tilt Controls</button>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // cannon-es via dynamic import
+        const CANNON = await import('https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/+esm');
+
+        // ============ CONSTANTS ============
+        const BLOCK_WIDTH = 1.5;
+        const BLOCK_HEIGHT = 0.5;
+        const BLOCK_DEPTH = 0.5;
+        const LAYERS = 18;
+        const BLOCKS_PER_LAYER = 3;
+        const BLOCK_GAP = 0.02;
+
+        // ============ SCENE SETUP ============
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+        scene.fog = new THREE.Fog(0x1a1a2e, 20, 50);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(8, 10, 12);
+        camera.lookAt(0, 4, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        document.body.appendChild(renderer.domElement);
+
+        // ============ LIGHTING ============
+        const ambientLight = new THREE.AmbientLight(0xffd4a0, 0.4);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2);
+        dirLight.position.set(5, 15, 8);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.set(2048, 2048);
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 40;
+        dirLight.shadow.camera.left = -10;
+        dirLight.shadow.camera.right = 10;
+        dirLight.shadow.camera.top = 15;
+        dirLight.shadow.camera.bottom = -5;
+        dirLight.shadow.bias = -0.001;
+        scene.add(dirLight);
+
+        const fillLight = new THREE.DirectionalLight(0xa0c4ff, 0.3);
+        fillLight.position.set(-5, 5, -5);
+        scene.add(fillLight);
+
+        const pointLight = new THREE.PointLight(0xff9944, 0.5, 20);
+        pointLight.position.set(-3, 8, 4);
+        scene.add(pointLight);
+
+        // ============ ORBIT CONTROLS ============
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 4.5, 0);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.minDistance = 5;
+        controls.maxDistance = 30;
+        controls.maxPolarAngle = Math.PI * 0.85;
+        controls.mouseButtons = {
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.ROTATE
+        };
+        controls.enablePan = false;
+        controls.update();
+
+        // ============ PHYSICS WORLD ============
+        const world = new CANNON.World({
+            gravity: new CANNON.Vec3(0, -9.82, 0)
+        });
+        world.broadphase = new CANNON.SAPBroadphase(world);
+        world.solver.iterations = 20;
+        world.solver.tolerance = 0.001;
+        world.defaultContactMaterial.friction = 0.6;
+        world.defaultContactMaterial.restitution = 0.05;
+
+        const woodMaterial = new CANNON.Material('wood');
+        const groundMaterial = new CANNON.Material('ground');
+        const woodWoodContact = new CANNON.ContactMaterial(woodMaterial, woodMaterial, {
+            friction: 0.7,
+            restitution: 0.02
+        });
+        const woodGroundContact = new CANNON.ContactMaterial(woodMaterial, groundMaterial, {
+            friction: 0.8,
+            restitution: 0.05
+        });
+        world.addContactMaterial(woodWoodContact);
+        world.addContactMaterial(woodGroundContact);
+
+        // ============ GROUND ============
+        const groundBody = new CANNON.Body({
+            type: CANNON.Body.STATIC,
+            shape: new CANNON.Plane(),
+            material: groundMaterial
+        });
+        groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+        world.addBody(groundBody);
+
+        // Visual ground
+        const groundGeo = new THREE.PlaneGeometry(40, 40);
+        const groundMat = new THREE.MeshStandardMaterial({
+            color: 0x2a2a3e,
+            roughness: 0.9,
+            metalness: 0.1
+        });
+        const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+        groundMesh.rotation.x = -Math.PI / 2;
+        groundMesh.receiveShadow = true;
+        scene.add(groundMesh);
+
+        // Table surface
+        const tableGeo = new THREE.CylinderGeometry(4, 4.2, 0.3, 32);
+        const tableMat = new THREE.MeshStandardMaterial({
+            color: 0x4a3728,
+            roughness: 0.7,
+            metalness: 0.05
+        });
+        const tableMesh = new THREE.Mesh(tableGeo, tableMat);
+        tableMesh.position.y = 0.15;
+        tableMesh.receiveShadow = true;
+        tableMesh.castShadow = true;
+        scene.add(tableMesh);
+
+        // Table physics (static box)
+        const tableBody = new CANNON.Body({
+            type: CANNON.Body.STATIC,
+            shape: new CANNON.Cylinder(4, 4.2, 0.3, 16),
+            material: groundMaterial
+        });
+        tableBody.position.set(0, 0.15, 0);
+        world.addBody(tableBody);
+
+        // ============ WOOD TEXTURE (PROCEDURAL) ============
+        function createWoodTexture(hueShift = 0) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+
+            // Base wood color
+            const baseH = 28 + hueShift;
+            const baseS = 55 + Math.random() * 15;
+            const baseL = 45 + Math.random() * 10;
+            ctx.fillStyle = `hsl(${baseH}, ${baseS}%, ${baseL}%)`;
+            ctx.fillRect(0, 0, 256, 64);
+
+            // Wood grain lines
+            for (let i = 0; i < 30; i++) {
+                const y = Math.random() * 64;
+                const alpha = 0.05 + Math.random() * 0.1;
+                ctx.strokeStyle = `rgba(60, 30, 10, ${alpha})`;
+                ctx.lineWidth = 0.5 + Math.random() * 2;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                for (let x = 0; x < 256; x += 10) {
+                    ctx.lineTo(x, y + Math.sin(x * 0.02) * 3 + (Math.random() - 0.5) * 2);
+                }
+                ctx.stroke();
+            }
+
+            // Subtle noise
+            for (let i = 0; i < 500; i++) {
+                const x = Math.random() * 256;
+                const y = Math.random() * 64;
+                const alpha = Math.random() * 0.05;
+                ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+                ctx.fillRect(x, y, 2, 1);
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }
+
+        // ============ BLOCK CREATION ============
+        const blocks = []; // { mesh, body }
+        const blockGeometry = new THREE.BoxGeometry(BLOCK_WIDTH, BLOCK_HEIGHT, BLOCK_DEPTH);
+        // Add slight bevel with edges
+        const edgesGeo = new THREE.EdgesGeometry(blockGeometry);
+
+        // Micrometer-scale imperfections per block
+        const IMPERFECTION = 0.008; // ~8mm max variation
+
+        function createBlock(x, y, z, rotateY) {
+            // Unique per-block size variation
+            const dw = (Math.random() - 0.5) * IMPERFECTION * 2;
+            const dh = (Math.random() - 0.5) * IMPERFECTION * 2;
+            const dd = (Math.random() - 0.5) * IMPERFECTION * 2;
+            const w = BLOCK_WIDTH + dw;
+            const h = BLOCK_HEIGHT + dh;
+            const d = BLOCK_DEPTH + dd;
+
+            const geo = new THREE.BoxGeometry(w, h, d);
+            const edgeGeo = new THREE.EdgesGeometry(geo);
+
+            const texture = createWoodTexture(Math.random() * 10 - 5);
+            const material = new THREE.MeshStandardMaterial({
+                map: texture,
+                roughness: 0.75,
+                metalness: 0.02,
+                color: new THREE.Color().setHSL(0.08 + Math.random() * 0.03, 0.5 + Math.random() * 0.2, 0.5 + Math.random() * 0.1)
+            });
+
+            const mesh = new THREE.Mesh(geo, material);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.position.set(x, y, z);
+            if (rotateY) mesh.rotation.y = Math.PI / 2;
+            scene.add(mesh);
+
+            // Edge highlight
+            const edgeMat = new THREE.LineBasicMaterial({ color: 0x2a1a0a, transparent: true, opacity: 0.15 });
+            const edges = new THREE.LineSegments(edgeGeo, edgeMat);
+            mesh.add(edges);
+
+            // Physics body with matching imperfect size
+            const halfExtents = new CANNON.Vec3(w / 2, h / 2, d / 2);
+            const shape = new CANNON.Box(halfExtents);
+            const body = new CANNON.Body({
+                mass: 1,
+                shape: shape,
+                material: woodMaterial,
+                linearDamping: 0.3,
+                angularDamping: 0.5
+            });
+            body.position.set(x, y, z);
+            if (rotateY) {
+                body.quaternion.setFromEuler(0, Math.PI / 2, 0);
+            }
+            // Start as sleeping for stable tower
+            body.sleepSpeedLimit = 0.1;
+            body.sleepTimeLimit = 1;
+            world.addBody(body);
+
+            const block = { mesh, body };
+            mesh.userData.blockRef = block;
+            blocks.push(block);
+            return block;
+        }
+
+        // Pre-compute tower layout
+        const towerLayout = [];
+        const tableTop = 0.3;
+        function buildTower() {
+            for (let layer = 0; layer < LAYERS; layer++) {
+                const rotated = layer % 2 === 1;
+                const y = tableTop + BLOCK_HEIGHT / 2 + layer * BLOCK_HEIGHT;
+
+                for (let i = 0; i < BLOCKS_PER_LAYER; i++) {
+                    const offset = (i - 1) * (BLOCK_DEPTH + BLOCK_GAP);
+                    let x, z;
+                    if (!rotated) {
+                        x = 0;
+                        z = offset;
+                    } else {
+                        x = offset;
+                        z = 0;
+                    }
+                    if (blocks.length < LAYERS * BLOCKS_PER_LAYER) {
+                        // First build: create blocks
+                        if (towerLayout.length < LAYERS * BLOCKS_PER_LAYER) {
+                            towerLayout.push({ x, y, z, rotated });
+                        }
+                        createBlock(x, y, z, rotated);
+                    }
+                }
+            }
+        }
+
+        buildTower();
+
+        // Let tower settle
+        for (let i = 0; i < 120; i++) {
+            world.step(1 / 60);
+        }
+        // Put all to sleep
+        blocks.forEach(b => {
+            b.body.sleep();
+        });
+
+        // ============ INTERACTION ============
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let selectedBlock = null;
+        let isDragging = false;
+        let dragConstraint = null;
+        let dragPlane = new THREE.Plane();
+        let dragOffset = new THREE.Vector3();
+        let intersectPoint = new THREE.Vector3();
+        let highlightedMesh = null;
+
+        // Highlight material
+        const highlightColor = new THREE.Color(0xffdd88);
+
+        function getBlockMeshes() {
+            return blocks.map(b => b.mesh);
+        }
+
+        function getMouseNDC(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            return {
+                x: ((event.clientX - rect.left) / rect.width) * 2 - 1,
+                y: -((event.clientY - rect.top) / rect.height) * 2 + 1
+            };
+        }
+
+        function onMouseMove(event) {
+            const ndc = getMouseNDC(event);
+            mouse.x = ndc.x;
+            mouse.y = ndc.y;
+
+            if (isDragging && selectedBlock) {
+                raycaster.setFromCamera(mouse, camera);
+                if (raycaster.ray.intersectPlane(dragPlane, intersectPoint)) {
+                    const targetPos = intersectPoint.sub(dragOffset);
+                    const body = selectedBlock.body;
+                    body.wakeUp();
+                    const force = new CANNON.Vec3(
+                        (targetPos.x - body.position.x) * 50,
+                        (targetPos.y - body.position.y) * 50,
+                        (targetPos.z - body.position.z) * 50
+                    );
+                    body.velocity.set(
+                        force.x * 0.3,
+                        force.y * 0.3,
+                        force.z * 0.3
+                    );
+                }
+            } else {
+                // Hover highlight
+                raycaster.setFromCamera(mouse, camera);
+                const meshes = getBlockMeshes();
+                const hits = raycaster.intersectObjects(meshes, false);
+                if (highlightedMesh && highlightedMesh !== (selectedBlock && selectedBlock.mesh)) {
+                    if (highlightedMesh.material && highlightedMesh.material.emissive) {
+                        highlightedMesh.material.emissive.setHex(0x000000);
+                    }
+                }
+                if (hits.length > 0) {
+                    highlightedMesh = hits[0].object;
+                    if (highlightedMesh.material && highlightedMesh.material.emissive) {
+                        highlightedMesh.material.emissive.setHex(0x331800);
+                    }
+                    renderer.domElement.style.cursor = 'pointer';
+                } else {
+                    highlightedMesh = null;
+                    renderer.domElement.style.cursor = 'default';
+                }
+            }
+        }
+
+        function onMouseDown(event) {
+            if (event.button !== 0) return;
+
+            const ndc = getMouseNDC(event);
+            mouse.x = ndc.x;
+            mouse.y = ndc.y;
+
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(getBlockMeshes(), false);
+
+            if (hits.length > 0) {
+                const hit = hits[0];
+                const block = hit.object.userData.blockRef;
+                if (!block) return;
+
+                selectedBlock = block;
+                isDragging = true;
+                controls.enabled = false;
+
+                // Wake up the block and nearby blocks
+                block.body.wakeUp();
+                block.body.mass = 0.5; // lighter while dragging
+
+                // Setup drag plane (facing camera, through hit point)
+                const camDir = new THREE.Vector3();
+                camera.getWorldDirection(camDir);
+                dragPlane.setFromNormalAndCoplanarPoint(camDir.negate(), hit.point);
+                dragOffset.copy(hit.point).sub(new THREE.Vector3(
+                    block.body.position.x,
+                    block.body.position.y,
+                    block.body.position.z
+                ));
+
+                // Visual feedback
+                if (hit.object.material && hit.object.material.emissive) {
+                    hit.object.material.emissive.setHex(0x442200);
+                }
+            }
+        }
+
+        function onMouseUp(event) {
+            if (event.button !== 0) return;
+
+            if (selectedBlock) {
+                selectedBlock.body.mass = 1;
+                selectedBlock.body.updateMassProperties();
+                selectedBlock.mesh.material.emissive.setHex(0x000000);
+                selectedBlock = null;
+            }
+            isDragging = false;
+            controls.enabled = true;
+        }
+
+        renderer.domElement.addEventListener('pointerdown', onMouseDown);
+        renderer.domElement.addEventListener('pointermove', onMouseMove);
+        renderer.domElement.addEventListener('pointerup', onMouseUp);
+
+        // Touch support (drag-based, disabled when gyro is active)
+        renderer.domElement.addEventListener('touchstart', (e) => {
+            if (gyroEnabled) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+            onMouseDown({ button: 0, clientX: touch.clientX, clientY: touch.clientY });
+        }, { passive: false });
+
+        renderer.domElement.addEventListener('touchmove', (e) => {
+            if (gyroEnabled) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            onMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
+        }, { passive: false });
+
+        renderer.domElement.addEventListener('touchend', (e) => {
+            if (gyroEnabled) return;
+            onMouseUp({ button: 0 });
+        });
+
+        // ============ GYROSCOPE / TILT CONTROLS ============
+        let gyroEnabled = false;
+        let gyroCalibration = { beta: 0, gamma: 0 };
+        let gyroData = { beta: 0, gamma: 0 };
+        let gyroGrabbed = false;
+
+        window.requestGyro = async function() {
+            const btn = document.getElementById('gyro-btn');
+
+            // iOS requires explicit permission
+            if (typeof DeviceOrientationEvent !== 'undefined' &&
+                typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    const perm = await DeviceOrientationEvent.requestPermission();
+                    if (perm !== 'granted') {
+                        btn.textContent = 'Permission Denied';
+                        return;
+                    }
+                } catch (e) {
+                    btn.textContent = 'Permission Error';
+                    return;
+                }
+            }
+
+            if (!gyroEnabled) {
+                gyroEnabled = true;
+                btn.textContent = 'Tilt Active (Tap to Calibrate)';
+                btn.classList.add('active');
+
+                // Calibrate: current orientation = neutral
+                gyroCalibration.beta = gyroData.beta;
+                gyroCalibration.gamma = gyroData.gamma;
+
+                window.addEventListener('deviceorientation', (e) => {
+                    if (e.beta !== null) gyroData.beta = e.beta;
+                    if (e.gamma !== null) gyroData.gamma = e.gamma;
+                });
+            } else {
+                // Re-calibrate on subsequent taps
+                gyroCalibration.beta = gyroData.beta;
+                gyroCalibration.gamma = gyroData.gamma;
+                btn.textContent = 'Recalibrated ✓';
+                setTimeout(() => { btn.textContent = 'Tilt Active (Tap to Calibrate)'; }, 1000);
+            }
+        };
+
+        // On mobile: tap to grab, tilt to move, tap again to release
+        renderer.domElement.addEventListener('touchstart', (e) => {
+            if (!gyroEnabled || resetState) return;
+
+            const touch = e.touches[0];
+            const ndc = getMouseNDC({ clientX: touch.clientX, clientY: touch.clientY });
+            mouse.x = ndc.x;
+            mouse.y = ndc.y;
+
+            if (gyroGrabbed && selectedBlock) {
+                // Second tap: release the block
+                selectedBlock.body.mass = 1;
+                selectedBlock.body.updateMassProperties();
+                if (selectedBlock.mesh.material && selectedBlock.mesh.material.emissive) {
+                    selectedBlock.mesh.material.emissive.setHex(0x000000);
+                }
+                selectedBlock = null;
+                gyroGrabbed = false;
+                isDragging = false;
+                // Recalibrate on release
+                gyroCalibration.beta = gyroData.beta;
+                gyroCalibration.gamma = gyroData.gamma;
+                return;
+            }
+
+            // First tap: grab a block
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(getBlockMeshes(), false);
+            if (hits.length > 0) {
+                e.preventDefault();
+                const hit = hits[0];
+                const block = hit.object.userData.blockRef;
+                if (!block) return;
+
+                selectedBlock = block;
+                gyroGrabbed = true;
+                isDragging = true;
+                block.body.wakeUp();
+                block.body.mass = 0.5;
+
+                if (hit.object.material && hit.object.material.emissive) {
+                    hit.object.material.emissive.setHex(0x442200);
+                }
+
+                // Calibrate: current tilt = neutral for this grab
+                gyroCalibration.beta = gyroData.beta;
+                gyroCalibration.gamma = gyroData.gamma;
+            }
+        }, { passive: false });
+
+        // Apply gyro forces in animation loop
+        function applyGyroForces() {
+            if (!gyroEnabled || !gyroGrabbed || !selectedBlock || resetState) return;
+
+            const body = selectedBlock.body;
+            body.wakeUp();
+
+            // Delta from calibration (degrees), clamped
+            const deltaBeta = Math.max(-45, Math.min(45, gyroData.beta - gyroCalibration.beta));
+            const deltaGamma = Math.max(-45, Math.min(45, gyroData.gamma - gyroCalibration.gamma));
+
+            // Map tilt to force: gamma = left/right (X), beta = forward/back (Z)
+            const sensitivity = 0.4;
+            const forceX = (deltaGamma / 45) * sensitivity;
+            const forceZ = (deltaBeta / 45) * sensitivity;
+
+            // Apply as velocity nudge (gentler than raw force)
+            body.velocity.x += forceX;
+            body.velocity.z += forceZ;
+
+            // Dampen to prevent runaway
+            body.velocity.x *= 0.92;
+            body.velocity.z *= 0.92;
+            body.angularVelocity.scale(0.9, body.angularVelocity);
+        }
+
+        // ============ WINDOW RESIZE ============
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ============ RESET ANIMATION ============
+        let resetState = null; // null | { phase, startTime, snapshots, wobbleSeeds }
+
+        window.resetTower = function() {
+            if (resetState) return; // already resetting
+
+            selectedBlock = null;
+            isDragging = false;
+            controls.enabled = true;
+
+            // Snapshot current positions and compute targets
+            const snapshots = blocks.map((block, i) => {
+                const layout = towerLayout[i];
+                const targetQuat = new THREE.Quaternion();
+                if (layout.rotated) {
+                    const euler = new THREE.Euler(0, Math.PI / 2, 0);
+                    targetQuat.setFromEuler(euler);
+                }
+                return {
+                    // Start transform (where block is now)
+                    startPos: block.mesh.position.clone(),
+                    startQuat: block.mesh.quaternion.clone(),
+                    // Target transform (tower position)
+                    targetPos: new THREE.Vector3(layout.x, layout.y, layout.z),
+                    targetQuat: targetQuat,
+                };
+            });
+
+            // Random seeds for wobble uniqueness per block
+            const wobbleSeeds = blocks.map(() => ({
+                freqX: 2 + Math.random() * 3,
+                freqY: 1.5 + Math.random() * 2,
+                freqZ: 2 + Math.random() * 3,
+                ampX: 0.02 + Math.random() * 0.04,
+                ampY: 0.03 + Math.random() * 0.05,
+                ampZ: 0.02 + Math.random() * 0.04,
+                rotFreq: 1 + Math.random() * 2,
+                rotAmp: 0.03 + Math.random() * 0.06,
+                phase: Math.random() * Math.PI * 2,
+            }));
+
+            // Disable physics for all blocks during animation
+            blocks.forEach(b => {
+                b.body.velocity.setZero();
+                b.body.angularVelocity.setZero();
+                b.body.force.setZero();
+                b.body.torque.setZero();
+                b.body.type = CANNON.Body.KINEMATIC;
+                if (b.mesh.material && b.mesh.material.emissive) {
+                    b.mesh.material.emissive.setHex(0x000000);
+                }
+            });
+
+            resetState = {
+                phase: 'levitate', // 'levitate' then 'lerp'
+                startTime: performance.now() / 1000,
+                snapshots,
+                wobbleSeeds,
+                levitateDuration: 1.0,
+                lerpDuration: 1.0,
+            };
+        };
+
+        function updateResetAnimation(time) {
+            if (!resetState) return;
+
+            const elapsed = time - resetState.startTime;
+            const { snapshots, wobbleSeeds, levitateDuration, lerpDuration } = resetState;
+
+            if (resetState.phase === 'levitate') {
+                const t = Math.min(elapsed / levitateDuration, 1);
+
+                for (let i = 0; i < blocks.length; i++) {
+                    const s = snapshots[i];
+                    const w = wobbleSeeds[i];
+                    const mesh = blocks[i].mesh;
+                    const body = blocks[i].body;
+
+                    // Wobble around start position
+                    const wt = elapsed + w.phase;
+                    const wx = Math.sin(wt * w.freqX * Math.PI * 2) * w.ampX;
+                    const wy = Math.sin(wt * w.freqY * Math.PI * 2) * w.ampY;
+                    const wz = Math.sin(wt * w.freqZ * Math.PI * 2) * w.ampZ;
+
+                    mesh.position.set(
+                        s.startPos.x + wx,
+                        s.startPos.y + wy + t * 0.5, // drift upward slightly
+                        s.startPos.z + wz
+                    );
+
+                    // Gentle rotation wobble
+                    const rotWobble = Math.sin(wt * w.rotFreq * Math.PI * 2) * w.rotAmp;
+                    mesh.quaternion.copy(s.startQuat);
+                    mesh.rotateX(rotWobble * 0.5);
+                    mesh.rotateZ(rotWobble * 0.3);
+
+                    body.position.set(mesh.position.x, mesh.position.y, mesh.position.z);
+                    body.quaternion.set(mesh.quaternion.x, mesh.quaternion.y, mesh.quaternion.z, mesh.quaternion.w);
+                }
+
+                if (t >= 1) {
+                    // Snapshot levitate end positions as new start for lerp
+                    for (let i = 0; i < blocks.length; i++) {
+                        snapshots[i].lerpStartPos = blocks[i].mesh.position.clone();
+                        snapshots[i].lerpStartQuat = blocks[i].mesh.quaternion.clone();
+                    }
+                    resetState.phase = 'lerp';
+                    resetState.startTime = performance.now() / 1000;
+                }
+
+            } else if (resetState.phase === 'lerp') {
+                const rawT = Math.min(elapsed / lerpDuration, 1);
+                // Smooth ease-in-out
+                const t = rawT < 0.5
+                    ? 4 * rawT * rawT * rawT
+                    : 1 - Math.pow(-2 * rawT + 2, 3) / 2;
+
+                for (let i = 0; i < blocks.length; i++) {
+                    const s = snapshots[i];
+                    const mesh = blocks[i].mesh;
+                    const body = blocks[i].body;
+
+                    mesh.position.lerpVectors(s.lerpStartPos, s.targetPos, t);
+                    mesh.quaternion.slerpQuaternions(s.lerpStartQuat, s.targetQuat, t);
+
+                    body.position.set(mesh.position.x, mesh.position.y, mesh.position.z);
+                    body.quaternion.set(mesh.quaternion.x, mesh.quaternion.y, mesh.quaternion.z, mesh.quaternion.w);
+                }
+
+                if (rawT >= 1) {
+                    // Finalize: restore physics
+                    blocks.forEach((b, i) => {
+                        const layout = towerLayout[i];
+                        b.body.type = CANNON.Body.DYNAMIC;
+                        b.body.velocity.setZero();
+                        b.body.angularVelocity.setZero();
+                        b.body.position.set(layout.x, layout.y, layout.z);
+                        b.body.quaternion.set(0, 0, 0, 1);
+                        if (layout.rotated) {
+                            b.body.quaternion.setFromEuler(0, Math.PI / 2, 0);
+                        }
+                        b.body.mass = 1;
+                        b.body.updateMassProperties();
+                        b.mesh.position.copy(b.body.position);
+                        b.mesh.quaternion.copy(b.body.quaternion);
+                    });
+
+                    // Quick settle and sleep
+                    for (let i = 0; i < 60; i++) {
+                        world.step(1 / 60);
+                    }
+                    blocks.forEach(b => b.body.sleep());
+
+                    resetState = null;
+                }
+            }
+        }
+
+        // ============ ANIMATION LOOP ============
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = Math.min(clock.getDelta(), 1 / 30);
+            const now = performance.now() / 1000;
+
+            if (resetState) {
+                // Animate reset (physics paused)
+                updateResetAnimation(now);
+            } else {
+                applyGyroForces();
+                world.step(1 / 60, delta, 3);
+
+                // Sync meshes with physics
+                for (const block of blocks) {
+                    block.mesh.position.copy(block.body.position);
+                    block.mesh.quaternion.copy(block.body.quaternion);
+                }
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
