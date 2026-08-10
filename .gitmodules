@@ -4,3 +4,6 @@
 [submodule "tr-808"]
 	path = tr-808
 	url = git@github.com:sneezeburger/tr-808.git
+[submodule "tb-303"]
+	path = tb-303
+	url = git@github.com:sneezeburger/tb-303.git
