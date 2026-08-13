@@ -7,3 +7,6 @@
 [submodule "tb-303"]
 	path = tb-303
 	url = git@github.com:sneezeburger/tb-303.git
+[submodule "reapearth"]
+	path = reapearth
+	url = git@github.com:sneezeburger/reapearth.git
