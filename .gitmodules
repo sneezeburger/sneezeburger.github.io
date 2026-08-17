@@ -10,3 +10,6 @@
 [submodule "reapearth"]
 	path = reapearth
 	url = git@github.com:sneezeburger/reapearth.git
+[submodule "atc"]
+	path = atc
+	url = git@github.com:sneezeburger/atc.git
