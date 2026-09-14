@@ -13,3 +13,6 @@
 [submodule "atc"]
 	path = atc
 	url = git@github.com:sneezeburger/atc.git
+[submodule "particle-forge"]
+	path = particle-forge
+	url = https://github.com/sneezeburger/particle-forge
