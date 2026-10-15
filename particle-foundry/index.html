@@ -182,7 +182,7 @@ body .lil-gui .title { font-family: var(--f-display); font-weight: 500; letter-s
       <p class="eyebrow">Particle physics sandbox</p>
       <h1>Particle Foundry</h1>
     </div>
-    <button id="collapse" class="icon-btn" aria-expanded="true" aria-controls="hud-body" title="Collapse panel">â</button>
+    <button id="collapse" class="icon-btn" aria-expanded="true" aria-controls="hud-body" title="Collapse panel">–</button>
   </header>
 
   <nav class="tabs" role="group" aria-label="Simulation mode">
@@ -198,12 +198,12 @@ body .lil-gui .title { font-family: var(--f-display); font-weight: 500; letter-s
     <dl class="stats">
       <div><dt>Particles</dt><dd id="st-n">0</dd></div>
       <div><dt>Frame rate</dt><dd id="st-fps">0<span class="u">fps</span></dd></div>
-      <div><dt>kT <small>pxÂ²/sÂ²</small></dt><dd id="st-kt">0</dd></div>
+      <div><dt>kT <small>px²/s²</small></dt><dd id="st-kt">0</dd></div>
       <div><dt>Mean speed</dt><dd id="st-v">0<span class="u">px/s</span></dd></div>
     </dl>
 
     <section class="chart" aria-label="Speed distribution histogram">
-      <div class="chart-head"><span>Speed distribution</span><span class="legend" id="mb-legend"><i></i>MaxwellâBoltzmann</span></div>
+      <div class="chart-head"><span>Speed distribution</span><span class="legend" id="mb-legend"><i></i>Maxwell–Boltzmann</span></div>
       <canvas id="hist"></canvas>
       <div class="axis"><span>0</span><span id="hist-max">0 px/s</span></div>
     </section>
@@ -227,7 +227,7 @@ body .lil-gui .title { font-family: var(--f-display); font-weight: 500; letter-s
   <span><kbd>Wheel</kbd>tool radius</span>
   <span><kbd>Space</kbd>pause</span>
   <span><kbd>R</kbd>reset</span>
-  <span><kbd>1â4</kbd>mode</span>
+  <span><kbd>1–4</kbd>mode</span>
   <span><kbd>H</kbd>hide panels</span>
 </footer>
 
@@ -255,7 +255,7 @@ const MODES = {
   gravity: { label: 'Gravity', count: 1200, max: 1600, tool: 1200,
              blurb: 'Every body pulls on every other in a direct N-body sum. Spin a disk around a heavy core, collide two galaxies, or let a cold cloud collapse.' },
   gas:     { label: 'Ideal Gas', count: 1800, max: 4000, tool: 3000,
-             blurb: 'Hard disks colliding elastically. Every disk starts at the same speed; watch the histogram relax onto the MaxwellâBoltzmann curve within seconds.' },
+             blurb: 'Hard disks colliding elastically. Every disk starts at the same speed; watch the histogram relax onto the Maxwell–Boltzmann curve within seconds.' },
 };
 
 const S = {
@@ -453,7 +453,7 @@ function stepPlasma(h) {
   for (let i = 0; i < n; i++) {
     const m = M[i];
     let vx = VX[i] + AX[i] * h, vy = VY[i] + AY[i] * h;
-    if (B !== 0) { // exact rotation for the Lorentz force q v Ã B, B along z
+    if (B !== 0) { // exact rotation for the Lorentz force q v × B, B along z
       const th = -Q[i] * B / m * h, cs = Math.cos(th), sn = Math.sin(th);
       const rx = vx * cs - vy * sn; vy = vx * sn + vy * cs; vx = rx;
     }
@@ -714,7 +714,7 @@ function computeStats() {
     vs += Math.sqrt(v2); v2s += v2;
     if (M[i] === 1) { ke += 0.5 * v2; cnt++; }
   }
-  stats.kT = cnt ? ke / cnt : 0; // 2D equipartition: <Â½mvÂ²> = kT
+  stats.kT = cnt ? ke / cnt : 0; // 2D equipartition: <½mv²> = kT
   stats.vmean = n ? vs / n : 0;
   stats.vrms = n ? Math.sqrt(v2s / n) : 0;
   const target = 2.2 * stats.vrms;
@@ -739,7 +739,7 @@ function drawHist() {
   }
   const showMB = S.mode === 'gas';
   const kT = stats.kT;
-  const mb = v => cnt1 * bw * (v / kT) * Math.exp(-v * v / (2 * kT)); // 2D MaxwellâBoltzmann, m = 1
+  const mb = v => cnt1 * bw * (v / kT) * Math.exp(-v * v / (2 * kT)); // 2D Maxwell–Boltzmann, m = 1
   let peak = 1;
   for (let b = 0; b < HB; b++) peak = Math.max(peak, hist[b]);
   if (showMB && kT > 0) peak = Math.max(peak, mb(Math.sqrt(kT)));
@@ -839,7 +839,7 @@ function buildModeFolder() {
     fMode.add(S, 'bField', -12, 12, 0.1).name('Magnetic field Bz');
     fMode.add(S, 'eField', -1, 1, 0.01).name('Electric field Ex');
     fMode.add(S, 'plasmaTemp', 0, 8000, 50).name('Temperature kT');
-    fMode.add(S, 'plasmaDamping', 0, 3, 0.05).name('Bath coupling Î³');
+    fMode.add(S, 'plasmaDamping', 0, 3, 0.05).name('Bath coupling γ');
   } else if (S.mode === 'gravity') {
     fMode.add(S, 'scenario', { 'Spiral disk': 'disk', 'Galaxy collision': 'collision', 'Cold cloud collapse': 'cloud' }).name('Scenario').onChange(reset);
     fMode.add(S, 'G', 0.1, 3, 0.05).name('Gravity G');
@@ -849,9 +849,9 @@ function buildModeFolder() {
     fMode.add(S, 'gasScenario', { 'Single speed': 'mono', 'Hot | cold': 'hotcold', 'Free expansion': 'expansion', 'Brownian motion': 'brownian' }).name('Scenario').onChange(reset);
     fMode.add(S, 'gasRadius', 1.5, 6, 0.25).name('Disk radius').onFinishChange(reset);
     fMode.add(S, 'gasSpeed', 40, 400, 5).name('Start speed').onFinishChange(reset);
-    fMode.add(S, 'gasGravity', 0, 1, 0.01).name('Gravity â');
-    fMode.add({ f: () => scaleSpeeds(1.2) }, 'f').name('Heat  Ã1.2 speed');
-    fMode.add({ f: () => scaleSpeeds(0.8) }, 'f').name('Cool  Ã0.8 speed');
+    fMode.add(S, 'gasGravity', 0, 1, 0.01).name('Gravity ↓');
+    fMode.add({ f: () => scaleSpeeds(1.2) }, 'f').name('Heat  ×1.2 speed');
+    fMode.add({ f: () => scaleSpeeds(0.8) }, 'f').name('Cool  ×0.8 speed');
   }
 }
 function scaleSpeeds(k) { for (let i = 0; i < n; i++) { VX[i] *= k; VY[i] *= k; } }
@@ -885,7 +885,7 @@ document.getElementById('btn-reset').addEventListener('click', reset);
 const collapseBtn = document.getElementById('collapse'), hudBody = document.getElementById('hud-body');
 function setCollapsed(c) {
   hudBody.hidden = c;
-  collapseBtn.textContent = c ? '+' : 'â';
+  collapseBtn.textContent = c ? '+' : '–';
   collapseBtn.setAttribute('aria-expanded', String(!c));
   collapseBtn.title = c ? 'Expand panel' : 'Collapse panel';
 }
