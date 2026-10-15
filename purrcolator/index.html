@@ -1,0 +1,1151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Purrcolator</title>
+<meta name="description" content="A virtual cat café: pet the cats, toss treats, wave the feather wand, serve customers and earn purrs.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Caveat:wght@600;700&family=Nunito:wght@400;600;700;800&display=swap">
+<style>
+/* Layout: the café scene fills the window as a letterboxed stage; a toolbar floats top-left, the purr meter sits under it, and the cat roster docks right (a drawer on phones). Espresso-dark text on oat-milk panels, teal accent. */
+:root {
+  --panel: rgba(252, 248, 240, 0.95);
+  --ink: #2b211b;
+  --muted: #74675c;
+  --line: rgba(43, 33, 27, 0.14);
+  --teal: #1f7a74;
+  --mustard: #e2a72e;
+  --rose: #d9577a;
+  --f-display: 'Young Serif', Georgia, serif;
+  --f-chalk: 'Caveat', 'Comic Sans MS', cursive;
+  --f-body: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --g: 16px;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+[hidden] { display: none !important; }
+body { overflow: hidden; background: #3a2c24; color: var(--ink); font: 14px/1.4 var(--f-body); }
+canvas#cafe { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 8px 26px rgba(20, 10, 5, 0.28); }
+
+.bar { position: fixed; top: calc(var(--g) + env(safe-area-inset-top, 0px)); left: var(--g); right: calc(310px + 2 * var(--g)); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 14px; }
+.brand { margin-right: auto; display: flex; flex-direction: column; }
+.brand h1 { margin: 0; font: 400 25px/1 var(--f-display); color: #3d2a1f; }
+.brand p { margin: 3px 0 0; font-size: 12px; color: var(--muted); }
+.seg { display: inline-flex; padding: 3px; gap: 2px; background: rgba(43, 33, 27, 0.06); border-radius: 12px; }
+.seg button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 0; border-radius: 9px; background: transparent; font-weight: 700; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.seg button:hover { color: var(--ink); background: rgba(255, 255, 255, 0.7); }
+.seg button[aria-checked="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(20, 10, 5, 0.2); }
+.seg kbd { font: 700 10px/1 var(--f-body); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; }
+.ico { width: 16px; height: 16px; flex: none; }
+.btn { padding: 7px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-weight: 700; font-size: 13px; }
+.btn.primary { background: var(--teal); border-color: var(--teal); color: #fff; }
+.btn[aria-pressed="true"] { border-color: var(--teal); color: var(--teal); }
+
+/* the purr meter (yes, it is the frame-rate counter) */
+.meter { position: fixed; bottom: calc(var(--g) + env(safe-area-inset-bottom, 0px)); left: var(--g); display: flex; align-items: center; gap: 12px; padding: 8px 12px; }
+.meter .big { display: flex; flex-direction: column; align-items: center; min-width: 54px; }
+.meter .big b { font: 800 24px/1 var(--f-body); color: var(--teal); font-variant-numeric: tabular-nums; }
+.meter .big span { font: 800 9.5px/1.2 var(--f-body); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.meter dl { margin: 0; display: grid; grid-template-columns: auto auto; gap: 1px 12px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.meter dt { color: var(--muted); }
+.meter dd { margin: 0; font-weight: 800; text-align: right; }
+#pps-graph { width: 100px; height: 34px; display: block; }
+
+.hint { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--g) + env(safe-area-inset-bottom, 0px)); margin: 0; padding: 7px 14px; border-radius: 999px; background: rgba(43, 33, 27, 0.82); color: #fbf3e6; font-size: 12.5px; font-weight: 700; max-width: calc(100vw - 2 * var(--g)); text-align: center; pointer-events: none; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); top: calc(var(--g) + 150px + env(safe-area-inset-top, 0px)); margin: 0; padding: 9px 16px; border-radius: 12px; background: #2b211b; color: #fbf3e6; font-weight: 700; font-size: 14px; max-width: min(520px, calc(100vw - 2 * var(--g))); text-align: center; transition: opacity 0.35s; pointer-events: none; }
+
+.roster { position: fixed; top: calc(var(--g) + env(safe-area-inset-top, 0px)); right: var(--g); bottom: calc(var(--g) + env(safe-area-inset-bottom, 0px)); width: 310px; display: flex; flex-direction: column; overflow: hidden; }
+.roster-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
+.roster-head h2 { margin: 0; flex: 1; font: 400 19px/1.1 var(--f-display); }
+.roster-head h2 span { display: inline-block; margin-left: 6px; padding: 2px 8px; font: 800 12px/1.3 var(--f-body); color: #fff; background: var(--teal); border-radius: 999px; vertical-align: 3px; }
+#drawer { display: none; }
+.cats { list-style: none; margin: 0; padding: 8px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.cat { display: grid; grid-template-columns: 62px 1fr; gap: 4px 10px; padding: 8px; border-radius: 12px; border: 1px solid transparent; cursor: pointer; }
+.cat:hover { background: rgba(43, 33, 27, 0.04); }
+.cat.sel { border-color: var(--teal); background: rgba(31, 122, 116, 0.07); }
+.cat canvas { width: 62px; height: 48px; grid-row: span 2; border-radius: 9px; background: linear-gradient(#efe2c9, #e2cfa9); }
+.cat .who strong { font: 400 15.5px/1.15 var(--f-display); display: block; }
+.cat .who em { font-style: normal; font-size: 12px; color: var(--muted); }
+.cat .doing { font-size: 12px; font-weight: 800; color: var(--teal); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bars { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.bars label { display: flex; flex-direction: column; gap: 3px; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.bars i { display: block; height: 6px; border-radius: 3px; background: rgba(43, 33, 27, 0.1); position: relative; overflow: hidden; }
+.bars i::after { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--v, 50%); background: var(--c); border-radius: 3px; transition: width 0.3s; }
+.roster-foot { padding: 12px 14px 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.roster-foot .row { display: flex; gap: 8px; }
+.roster-foot .row .btn { flex: 1; }
+
+.modal { position: fixed; inset: 0; display: grid; place-items: center; padding: var(--g); background: rgba(30, 20, 14, 0.45); }
+.modal .panel { width: min(520px, 100%); max-height: calc(100% - 2 * var(--g)); overflow-y: auto; padding: 20px 22px; }
+.modal h2 { margin: 0 0 4px; font: 400 24px/1.15 var(--f-display); }
+.modal p.sub { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+.shop { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
+.shop li { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.shop strong { font: 400 16px/1.2 var(--f-display); }
+.shop span { grid-column: 1; font-size: 12.5px; color: var(--muted); }
+.shop .btn { grid-row: 1 / span 2; grid-column: 2; min-width: 92px; }
+.shop .btn:disabled { opacity: 0.5; cursor: default; }
+table.check { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 14px; }
+table.check th { text-align: left; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding-bottom: 6px; }
+table.check td { padding: 7px 0; border-top: 1px solid var(--line); vertical-align: top; }
+table.check td.n { text-align: right; font-weight: 800; padding-right: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.chip { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; background: rgba(31, 122, 116, 0.12); color: var(--teal); white-space: nowrap; }
+.chip.warn { background: rgba(226, 167, 46, 0.18); color: #9a6a0a; }
+
+@media (max-width: 920px) {
+  .bar { right: var(--g); }
+  .brand p { display: none; }
+  .seg .lbl { display: none; }
+  .seg kbd { display: none; }
+  .roster { top: auto; left: var(--g); width: auto; max-height: 60%; }
+  .roster.closed .cats, .roster.closed .roster-foot { display: none; }
+  .roster.closed .roster-head { border-bottom: 0; }
+  #drawer { display: inline-block; }
+  .hint { display: none; }
+  .meter { bottom: auto; top: calc(var(--g) + 112px + env(safe-area-inset-top, 0px)); padding: 6px 10px; }
+  .meter dl { display: none; }
+  #pps-graph { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .bars i::after, .toast { transition: none; } }
+</style>
+</head>
+<body>
+<canvas id="cafe" aria-label="The cat café. Press and hold a cat to pet it."></canvas>
+
+<header class="bar panel">
+  <div class="brand">
+    <h1>The Purrcolator</h1>
+    <p>Cat café &amp; coffee · 14 Larkspur Lane, round the corner</p>
+  </div>
+  <div class="seg" role="radiogroup" aria-label="What your pointer does">
+    <button type="button" role="radio" data-tool="pet" id="t-pet" aria-checked="true"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><ellipse cx="8" cy="10" rx="4" ry="3.6" fill="#e8a3a3"/><circle cx="3.6" cy="6" r="1.7" fill="#e8a3a3"/><circle cx="6.5" cy="3.8" r="1.7" fill="#e8a3a3"/><circle cx="9.5" cy="3.8" r="1.7" fill="#e8a3a3"/><circle cx="12.4" cy="6" r="1.7" fill="#e8a3a3"/></svg><span class="lbl">Pet</span><kbd>1</kbd></button>
+    <button type="button" role="radio" data-tool="treat" id="t-treat" aria-checked="false"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8c2-4 7-4 9 0-2 4-7 4-9 0z" fill="#c98a4b"/><path d="M11 8l4-3v6z" fill="#c98a4b"/></svg><span class="lbl">Treat</span><kbd>2</kbd></button>
+    <button type="button" role="radio" data-tool="laser" id="t-laser" aria-checked="false"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="#e2252b"/><circle cx="8" cy="8" r="6" fill="none" stroke="#e2252b" stroke-opacity=".35" stroke-width="2"/></svg><span class="lbl">Laser</span><kbd>3</kbd></button>
+    <button type="button" role="radio" data-tool="feather" id="t-feather" aria-checked="false"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 14L10 6" stroke="#7a5a3a" stroke-width="1.4"/><path d="M9 7c0-4 3-6 6-6-1 3-3 6-6 6z" fill="#3fa6a0"/></svg><span class="lbl">Feather wand</span><kbd>4</kbd></button>
+  </div>
+  <button type="button" class="btn" id="sound" aria-pressed="false">Sound off</button>
+</header>
+
+<aside class="meter panel" aria-label="Purr meter">
+  <div class="big"><b id="m-pps">0.0</b><span>pps</span></div>
+  <dl>
+    <dt>Purrs</dt><dd id="m-purrs">0</dd>
+    <dt>Naps</dt><dd id="m-naps">0</dd>
+    <dt>Customers</dt><dd id="m-cust">0</dd>
+    <dt>Cups lost</dt><dd id="m-cups">0</dd>
+  </dl>
+  <canvas id="pps-graph" aria-label="Purrs per second over the last minute"></canvas>
+</aside>
+
+<p class="hint" id="hint">Press and hold a cat to pet it. Purring earns purrs; happy customers tip.</p>
+<p class="toast" id="toast" style="opacity:0"></p>
+
+<aside class="roster panel" id="roster">
+  <div class="roster-head">
+    <h2>On shift<span id="count">0</span></h2>
+    <button type="button" class="btn" id="drawer" aria-expanded="true" aria-controls="cats">Hide</button>
+  </div>
+  <ul class="cats" id="cats"></ul>
+  <div class="roster-foot">
+    <div class="row">
+      <button type="button" class="btn primary" id="open-shop">Shop &amp; adopt</button>
+      <button type="button" class="btn" id="open-check">Cat comfort check</button>
+    </div>
+  </div>
+</aside>
+
+<div class="modal" id="shop-modal" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="shop-title">
+    <h2 id="shop-title">The shop</h2>
+    <p class="sub">You have <b id="shop-purrs">0</b> purrs. Earn more from purring cats and tips.</p>
+    <ul class="shop" id="shop-list"></ul>
+    <button type="button" class="btn" data-close>Done</button>
+  </div>
+</div>
+<div class="modal" id="check-modal" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="check-title">
+    <h2 id="check-title">Cat comfort check</h2>
+    <p class="sub">Every cat is checked against the same limits as our roller coasters. The cats have reviewed the methodology and found it beneath them.</p>
+    <table class="check"><thead><tr><th>Measure</th><th style="text-align:right;padding-right:10px">Today</th><th>Limit</th></tr></thead><tbody id="check-rows"></tbody></table>
+    <button type="button" class="btn" data-close>Close</button>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+/* ================= helpers ================= */
+const TAU = Math.PI * 2;
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[(Math.random() * a.length) | 0];
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const $ = id => document.getElementById(id);
+function shade(hex, amt) {
+  const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  const t = amt < 0 ? 0 : 255, p = Math.abs(amt);
+  r = Math.round((t - r) * p + r); g = Math.round((t - g) * p + g); b = Math.round((t - b) * p + b);
+  return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+}
+function mulberry(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+const store = { get(k, d) { try { const v = localStorage.getItem('purrcolator:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('purrcolator:' + k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } } };
+
+/* ================= world ================= */
+const WW = 1600, WH = 900, WALL = 360;
+const cv = $('cafe'), ctx = cv.getContext('2d');
+const bg = document.createElement('canvas'), bgx = bg.getContext('2d');
+let DPR = 1, S = 1, OX = 0, OY = 0, CW = 0, CH = 0, NARROW = false;
+const VIEW = { camX: 800, aw: 0, pan: null };
+function placeView() { OX = WW * S <= VIEW.aw ? (VIEW.aw - WW * S) / 2 : clamp(VIEW.aw / 2 - VIEW.camX * S, VIEW.aw - WW * S, 0); }
+const depth = y => 0.72 + 0.42 * clamp((y - WALL) / (WH - WALL), 0, 1);
+const FLOOR = { x0: 70, x1: 1560, y0: 395, y1: 875 };
+const onFloor = (x, y) => { x = clamp(x, FLOOR.x0, FLOOR.x1); y = clamp(y, FLOOR.y0, FLOOR.y1); if (x < 440 && y < 500) y = 500; return { x, y }; };
+let time = 0, uid = 0;
+
+const TABLES = [
+  { x: 640, y: 560, seats: [{ dx: -78, face: 1 }, { dx: 78, face: -1 }] },
+  { x: 990, y: 600, seats: [{ dx: -78, face: 1 }, { dx: 78, face: -1 }] },
+  { x: 720, y: 790, seats: [{ dx: -80, face: 1 }, { dx: 80, face: -1 }] },
+  { x: 1120, y: 800, seats: [{ dx: -80, face: 1 }, { dx: 80, face: -1 }] },
+];
+const SKEL = { x: 1390, y: 520, table: { x: 1460, y: 525 } };
+const SEATS = [];
+TABLES.forEach((t, ti) => t.seats.forEach((s, si) => SEATS.push({ id: `${ti}-${si}`, table: t, x: t.x + s.dx, y: t.y + 4, face: s.face, who: null, cup: null })));
+const BOWLS = { x: 500, y: 840 };
+const MOUSEHOLE = { x: 1015, y: WALL - 2 };
+const state = {
+  purrs: store.get('purrs', 20), owned: store.get('owned', { box: 1 }), adopted: store.get('adopted', []),
+  naps: 0, served: 0, cupsLost: 0, petSeconds: 0, swats: 0, zoomies: 0, counterEvictions: 0, maxRoll: 0,
+  tool: 'pet', sound: false,
+};
+let ppsHist = new Float32Array(60), ppsHi = 0, earnedThisSec = 0, ppsShown = 0;
+function earn(n, x, y) { state.purrs += n; earnedThisSec += n; if (x != null) float(`+${n}`, x, y, '#1f7a74'); store.set('purrs', Math.round(state.purrs)); }
+
+/* ================= cats ================= */
+const COATS = {
+  calico: { base: '#f7f1e6', patches: ['#e08a3a', '#2a2420'], eyes: '#c9a227', label: 'Calico' },
+  greyTabby: { base: '#9c9a96', stripe: '#5e5b57', eyes: '#7fbf4d', label: 'Grey tabby' },
+  orangeTabby: { base: '#e39a4b', stripe: '#b8642a', belly: '#f6dcb6', eyes: '#d8a12a', label: 'Orange tabby' },
+  black: { base: '#25221f', eyes: '#e2c23a', label: 'Black' },
+  tuxedo: { base: '#26231f', white: true, eyes: '#8bc34a', label: 'Tuxedo' },
+  siamese: { base: '#efe3cf', points: '#5a4436', eyes: '#5aa7e0', label: 'Siamese' },
+  tortie: { base: '#2e241e', patches: ['#c8702e', '#8a4a22'], eyes: '#d8a12a', label: 'Tortoiseshell' },
+  white: { base: '#f6f4ef', eyes: '#5aa7e0', oddEye: '#d8a12a', label: 'White, odd-eyed' },
+  brownTabby: { base: '#8a6a4a', stripe: '#4e3826', belly: '#d8c2a0', eyes: '#7fbf4d', label: 'Brown tabby' },
+  ginger: { base: '#e8a35a', belly: '#f8e2c2', eyes: '#c9a227', label: 'Ginger', fat: true },
+};
+const ROSTER = [
+  { name: 'Mochi', coat: 'calico', trait: 'Lap magnet', lap: 1.0, play: 0.4, speed: 1, quip: 'Has a standing reservation on the skeleton.' },
+  { name: 'Froude', coat: 'greyTabby', trait: 'Always 5.1× faster', lap: 0.3, play: 0.9, speed: 5.1 ** 0.5, quip: 'Scale model of a much larger cat.' },
+  { name: 'Biscotti', coat: 'orangeTabby', trait: 'Food-motivated', lap: 0.6, play: 0.5, speed: 0.9, quip: 'Will sit for treats. Will also sit without treats, resentfully.' },
+  { name: 'Pixel', coat: 'black', trait: 'Knocks things off tables', lap: 0.4, play: 0.7, speed: 1.05, quip: 'Gravity is a hypothesis he tests hourly.' },
+  { name: 'Sir Pounce', coat: 'tuxedo', trait: 'Laser professional', lap: 0.3, play: 1.0, speed: 1.15, quip: 'Undefeated. Has never caught the dot.' },
+  { name: 'Clementine', coat: 'siamese', trait: 'Opinions about petting', lap: 0.5, play: 0.5, speed: 1, petLimit: 7, quip: 'Lateral cuddle limit: 0.5 g. Strictly enforced.' },
+];
+const ADOPTABLE = [
+  { name: 'Clothoid', coat: 'tortie', trait: 'Takes corners gradually', lap: 0.6, play: 0.6, speed: 1, quip: 'Curvature ramps in smoothly. So does affection.' },
+  { name: 'Heartline', coat: 'white', trait: 'Perfectly balanced', lap: 0.8, play: 0.4, speed: 1, quip: 'Leans into every turn so you feel nothing.' },
+  { name: 'Matchbox', coat: 'brownTabby', trait: 'Fits in anything', lap: 0.5, play: 0.8, speed: 1.1, small: true, quip: 'Formerly rode a coaster through a kitchen. Will not discuss it.' },
+  { name: 'Waffles II', coat: 'ginger', trait: 'Professional napper', lap: 0.9, play: 0.2, speed: 0.75, quip: 'Named after a pug he once met at a dog park.' },
+];
+const cats = [];
+class Cat {
+  constructor(def, x, y) {
+    Object.assign(this, def); this.id = ++uid; this.c = COATS[def.coat];
+    this.x = x; this.y = y; this.z = 0; this.vx = 0; this.vy = 0; this.face = Math.random() < 0.5 ? -1 : 1;
+    this.state = 'idle'; this.t = rand(0.5, 2); this.pose = 'stand'; this.ph = rand(0, 6); this.tailPh = rand(0, 6);
+    this.blink = 0; this.blinkT = rand(1, 4); this.hunger = rand(10, 40); this.energy = rand(50, 90); this.affection = rand(40, 70);
+    this.perch = null; this.target = null; this.jump = null; this.bubble = null; this.puff = 0; this.petT = 0; this.happy = 0;
+    const r = mulberry(this.id * 977 + def.name.length);
+    this.spots = Array.from({ length: 7 }, () => ({ x: r() * 2 - 1, y: r() * 2 - 1, r: 0.25 + r() * 0.35, c: (this.c.patches || ['#000'])[(r() * 2) | 0] }));
+    this.size = def.small ? 0.78 : def.fat ? 1.12 : 1;
+  }
+  get k() { return depth(this.y) * this.size; }
+  say(text, dur = 1.8) { this.bubble = { text, t: dur }; if (/!|Mrrp|Meow|Mew/.test(text)) meow(this.size); }
+  activity() {
+    const s = this.state, p = this.perch;
+    if (s === 'petted') return 'Being petted (purring)';
+    if (s === 'sleep') return p ? `Napping ${p.where}` : 'Napping';
+    if (s === 'loaf') return p ? `Loafing ${p.where}` : 'Loafing';
+    if (s === 'lap') return p && p.who ? `On ${p.who.name}'s lap` : 'On a lap';
+    return ({ idle: 'Thinking about it', walk: 'Patrolling', go: 'On the way somewhere', groom: 'Grooming', eat: 'Eating', laser: 'Chasing the red dot', feather: 'Batting the feather', treat: 'Going for a treat', window: 'Judging a dog', stalk: 'Stalking the mousehole', knock: 'Pushing a cup', counter: 'On the counter (not allowed)', zoom: 'Zoomies', box: 'Sitting in a box', yarn: 'Playing with yarn', fish: 'Watching the fish', arrive: 'Arriving in a carrier' })[s] || 'Being a cat';
+  }
+}
+function addCat(def, entering) {
+  const c = entering ? new Cat(def, 1490, 470) : new Cat(def, rand(500, 1400), rand(520, 840));
+  if (entering) { c.state = 'arrive'; c.t = 1.2; c.say('Mrrp?'); }
+  cats.push(c); return c;
+}
+
+/* ================= perches and furniture ================= */
+const PERCHES = [];
+function perch(where, x, y, z, opts = {}) { const p = { where, x, y, z, cat: null, ...opts }; PERCHES.push(p); return p; }
+perch('on the bookshelf', 1262, WALL + 6, 248, { high: true });
+for (const x of [600, 735, 940, 1075]) perch('on the window sill', x, WALL + 4, 62, { window: true });
+perch('on the counter', 330, 470, 152, { counter: true });
+perch("on the skeleton's lap", SKEL.x + 8, SKEL.y + 3, 52, { skeleton: true });
+TABLES.forEach(t => perch('on a table', t.x, t.y + 2, 74, { table: t }));
+const ITEMS = [];   // boxes, yarn, cat tree, fish tank
+function placeItems() {
+  ITEMS.length = 0;
+  for (let i = PERCHES.length - 1; i >= 0; i--) if (PERCHES[i].item) PERCHES.splice(i, 1);
+  const boxSpots = [[880, 830], [300, 720], [1300, 860], [560, 700]];
+  for (let b = 0; b < Math.min(4, state.owned.box || 0); b++) { const [x, y] = boxSpots[b]; const it = { kind: 'box', x, y }; ITEMS.push(it); perch('in a cardboard box', x, y + 2, 0, { item: it, box: true }); }
+  if (state.owned.tree) { const it = { kind: 'tree', x: 1460, y: 760 }; ITEMS.push(it); for (const [dx, z] of [[-30, 105], [32, 190], [-14, 278]]) perch('up the cat tree', it.x + dx, it.y + 1, z, { item: it, high: true }); }
+  if (state.owned.fish) ITEMS.push({ kind: 'fish', x: 150, y: 470 });
+  if (state.owned.yarn) { YARN.x = 820; YARN.y = 700; YARN.on = true; }
+}
+const YARN = { on: false, x: 820, y: 700, vx: 0, vy: 0, spin: 0 };
+
+/* ================= customers ================= */
+const customers = [];
+const NAMES = ['Priya', 'Tom', 'Ana', 'Jules', 'Marcus', 'Wen', 'Fatima', 'Ola', 'Sam', 'Rosa', 'Hiro', 'Bea'];
+const ORDERS = ['a Cascade cold brew', 'a Crumb Run cortado', 'a flat white', 'a Particle Foam latte', 'a chai', 'a Heartline hot chocolate', 'a Matchbox mocha'];
+const QUIPS = ['Is that cat riding a matchbox?', 'Does the skeleton work here?', "I'm only here for the cats.", 'Can I get a Cascade cold brew, extra drop?', 'Why is the Wi-Fi password about roll rates?', 'That grey one just did a lap in 2 seconds.', 'The black cat is looking at my cup.', 'I heard the mouse commutes to a roller coaster.'];
+function spawnCustomer() {
+  const free = SEATS.filter(s => !s.who); if (!free.length) return;
+  const seat = pick(free);
+  const p = { id: ++uid, name: pick(NAMES), x: 1490, y: 470, seat, state: 'enter', t: 0, order: pick(ORDERS), shirt: pick(['#3f6e8c', '#b5523b', '#4e7a4a', '#7a5a9a', '#c99a3e', '#2f3e46']), hair: pick(['#2b1d14', '#6b4a2e', '#d9a25b', '#111', '#8a3a2a', '#bbb']), skin: pick(['#f1cfb4', '#e3b48f', '#c48a62', '#8d5a3b', '#5e3a26']), happy: 0.4, stay: rand(45, 75), bubble: null, phase: rand(0, 6) };
+  seat.who = p; customers.push(p); state.served++;
+}
+
+/* ================= events ================= */
+const street = { walkers: [], dog: null };
+let laser = null, feather = null, treats = [], floats = [], hearts = [], cupsFalling = [];
+const mouse = { state: 'hidden', t: rand(20, 35), x: 0 };
+let barista = { brewing: 0, say: null, sayT: 0, queue: [] };
+let dogTimer = rand(25, 40), custTimer = 3;
+const TOASTS = [];
+let toastT = 0;
+function toast(msg, dur = 3.2) { const t = $('toast'); t.textContent = msg; t.style.opacity = 1; toastT = dur; }
+function float(text, x, y, col = '#2b211b') { floats.push({ text, x, y, t: 1.4, col }); }
+
+/* ================= sound (optional, synthesized) ================= */
+let AC = null, purrNode = null;
+function ac() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; } } return AC; }
+function meow(size = 1) {
+  if (!state.sound || !ac()) return;
+  const a = AC, t = a.currentTime, o = a.createOscillator(), f = a.createBiquadFilter(), g = a.createGain(), f0 = 520 / size;
+  o.type = 'sawtooth'; o.frequency.setValueAtTime(f0 * 0.8, t); o.frequency.linearRampToValueAtTime(f0 * 1.35, t + 0.15); o.frequency.exponentialRampToValueAtTime(f0 * 0.7, t + 0.45);
+  f.type = 'bandpass'; f.frequency.setValueAtTime(900, t); f.frequency.linearRampToValueAtTime(1600, t + 0.2); f.frequency.linearRampToValueAtTime(700, t + 0.45); f.Q.value = 3;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+  o.connect(f).connect(g).connect(a.destination); o.start(t); o.stop(t + 0.55);
+}
+function setPurr(on) {
+  if (!state.sound || !ac()) { if (purrNode) { purrNode.g.gain.setTargetAtTime(0, AC.currentTime, 0.1); } return; }
+  if (!purrNode) {
+    const a = AC, len = a.sampleRate * 2, b = a.createBuffer(1, len, a.sampleRate), d = b.getChannelData(0);
+    let last = 0; for (let i = 0; i < len; i++) { last = (last + 0.03 * (Math.random() * 2 - 1)) / 1.03; d[i] = last * 4 * (0.6 + 0.4 * Math.sin(i / a.sampleRate * TAU * 26)); }
+    const s = a.createBufferSource(); s.buffer = b; s.loop = true; const f = a.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 220; const g = a.createGain(); g.gain.value = 0;
+    s.connect(f).connect(g).connect(a.destination); s.start(); purrNode = { g };
+  }
+  purrNode.g.gain.setTargetAtTime(on ? 0.5 : 0, AC.currentTime, 0.15);
+}
+
+/* ================= background (cached) ================= */
+function chalk(g, text, x, y, size, col = 'rgba(245,242,232,0.92)', align = 'left') { g.font = `700 ${size}px Caveat, 'Comic Sans MS', cursive`; g.fillStyle = col; g.textAlign = align; g.textBaseline = 'alphabetic'; g.fillText(text, x, y); }
+function drawBackground() {
+  const g = bgx;
+  g.setTransform(DPR * S, 0, 0, DPR * S, 0, 0);
+  g.clearRect(0, 0, WW, WH);
+  // back wall: sage plaster above deep-teal panelling
+  g.fillStyle = '#b9c7a8'; g.fillRect(0, 0, WW, WALL);
+  const r = mulberry(3);
+  for (let k = 0; k < 2200; k++) { g.fillStyle = r() < 0.5 ? 'rgba(0,0,0,0.035)' : 'rgba(255,255,255,0.05)'; g.fillRect(r() * WW, r() * WALL, 2, 2); }
+  g.fillStyle = '#245b5a'; g.fillRect(0, 238, WW, WALL - 238);
+  g.fillStyle = '#2e6c6a'; for (let x = 20; x < WW; x += 110) { rr(g, x, 252, 90, 92, 6); g.fill(); }
+  g.fillStyle = '#e9e1cf'; g.fillRect(0, 232, WW, 8); g.fillRect(0, WALL - 14, WW, 14);
+  // windows onto the street (the street itself is drawn live)
+  for (const [x0, x1] of WINDOWS) {
+    g.fillStyle = '#f2ebdd'; g.fillRect(x0 - 14, 46, x1 - x0 + 28, 252);
+    g.clearRect(x0, 60, x1 - x0, 228);
+    g.fillStyle = '#f2ebdd'; g.fillRect((x0 + x1) / 2 - 5, 60, 10, 228); g.fillRect(x0, 168, x1 - x0, 8);
+    g.fillStyle = '#dccfb6'; g.fillRect(x0 - 26, 288, x1 - x0 + 52, 12); g.fillStyle = 'rgba(0,0,0,0.15)'; g.fillRect(x0 - 26, 300, x1 - x0 + 52, 4);
+    // awning-stripe valance
+    for (let k = 0; k < (x1 - x0 + 40) / 20; k++) { g.fillStyle = k % 2 ? '#f2ebdd' : '#1f7a74'; g.beginPath(); g.moveTo(x0 - 20 + k * 20, 34); g.lineTo(x0 + k * 20, 34); g.lineTo(x0 + k * 20, 52); g.arc(x0 - 10 + k * 20, 52, 10, 0, Math.PI); g.fill(); }
+  }
+  // chalkboard menu (inside jokes live here)
+  g.fillStyle = '#6b4a2e'; rr(g, 50, 36, 360, 196, 10); g.fill();
+  g.fillStyle = '#26302c'; rr(g, 62, 48, 336, 172, 6); g.fill();
+  for (let k = 0; k < 120; k++) { g.fillStyle = 'rgba(255,255,255,0.03)'; g.fillRect(62 + r() * 336, 48 + r() * 172, 30 * r(), 2); }
+  chalk(g, 'Menu', 230, 84, 34, '#f5d27a', 'center');
+  const menu = [['Cascade cold brew', 'drops 46 m', '4.50'], ['Crumb Run cortado', '√26 shots', '3.80'], ['Particle Foam latte', '', '4.20'], ['Heartline hot choc.', '0.05 g lateral', '3.60'], ['Matchbox mocha', 'fits in anything', '3.90']];
+  menu.forEach(([a, b, p], i) => { chalk(g, a, 76, 112 + i * 20, 20); if (b) chalk(g, b, 236, 112 + i * 20, 15, 'rgba(245,242,232,0.55)'); chalk(g, p, 384, 112 + i * 20, 20, 'rgba(245,242,232,0.92)', 'right'); });
+  chalk(g, 'Wi-Fi: ROLLRATE80', 76, 212, 17, '#9fd6cf');
+  // bookshelf
+  g.fillStyle = '#6b4a2e'; g.fillRect(1200, 112, 124, WALL - 112 + 4);
+  g.fillStyle = '#4e3522'; g.fillRect(1208, 120, 108, WALL - 128);
+  for (let k = 0; k < 4; k++) {
+    const y = 120 + k * 58; g.fillStyle = '#6b4a2e'; g.fillRect(1208, y + 52, 108, 6);
+    let x = 1212; while (x < 1310) { const w = 8 + r() * 10, h = 32 + r() * 18; g.fillStyle = `hsl(${r() * 360},${35 + r() * 30}%,${35 + r() * 25}%)`; g.fillRect(x, y + 52 - h, w, h); x += w + 1; }
+  }
+  // poster from round the corner
+  g.fillStyle = '#efe6d2'; g.fillRect(1346, 70, 74, 104); g.fillStyle = '#2f6b5a'; g.fillRect(1352, 76, 62, 92);
+  g.strokeStyle = '#f5c542'; g.lineWidth = 2; g.beginPath(); g.moveTo(1356, 150); g.bezierCurveTo(1370, 90, 1384, 90, 1392, 140); g.bezierCurveTo(1398, 160, 1406, 120, 1410, 104); g.stroke();
+  g.fillStyle = '#8a8580'; g.beginPath(); g.ellipse(1380, 112, 6, 4, -0.5, 0, TAU); g.fill();
+  g.font = '400 7px "Young Serif", Georgia, serif'; g.fillStyle = '#f5c542'; g.textAlign = 'center'; g.fillText('THE CRUMB RUN', 1383, 159, 58); g.font = '700 5.5px Nunito, sans-serif'; g.fillText('NOW BOARDING', 1383, 166, 58);
+  // door with a firm sign
+  g.fillStyle = '#e9e1cf'; g.fillRect(1436, 120, 124, WALL - 120);
+  g.fillStyle = '#7a3e2e'; g.fillRect(1446, 130, 104, WALL - 130);
+  g.fillStyle = 'rgba(200,230,240,0.55)'; rr(g, 1460, 146, 76, 90, 6); g.fill();
+  g.fillStyle = '#fbf6ea'; rr(g, 1456, 246, 84, 44, 4); g.fill();
+  g.fillStyle = '#2b211b'; g.font = '800 10px Nunito, sans-serif'; g.textAlign = 'center'; g.fillText('NO DOGS', 1498, 262); g.font = '600 8.5px Nunito, sans-serif'; g.fillText('Yes, Biscuit,', 1498, 274); g.fillText('this means you.', 1498, 284);
+  g.fillStyle = '#d4af37'; g.beginPath(); g.arc(1460, 250, 4, 0, TAU); g.fill();
+  // mousehole in the skirting
+  g.fillStyle = '#1a120c'; g.beginPath(); g.moveTo(MOUSEHOLE.x - 13, WALL); g.lineTo(MOUSEHOLE.x - 13, WALL - 8); g.arc(MOUSEHOLE.x, WALL - 8, 13, Math.PI, 0); g.lineTo(MOUSEHOLE.x + 13, WALL); g.fill();
+  // floor: warm herringbone-ish planks with depth
+  const fg = g.createLinearGradient(0, WALL, 0, WH); fg.addColorStop(0, '#9a6a44'); fg.addColorStop(1, '#b8845a');
+  g.fillStyle = fg; g.fillRect(0, WALL, WW, WH - WALL);
+  for (let row = 0; row < 18; row++) {
+    const y0 = WALL + Math.pow(row / 18, 1.25) * (WH - WALL), y1 = WALL + Math.pow((row + 1) / 18, 1.25) * (WH - WALL);
+    g.fillStyle = 'rgba(60,30,10,0.3)'; g.fillRect(0, y0, WW, 1.2);
+    const off = (row % 2) * 70; for (let x = -off; x < WW; x += 140) { g.fillStyle = r() < 0.5 ? 'rgba(255,220,180,0.05)' : 'rgba(0,0,0,0.05)'; g.fillRect(x, y0, 140, y1 - y0); g.fillStyle = 'rgba(60,30,10,0.25)'; g.fillRect(x, y0, 1.2, y1 - y0); }
+  }
+  // rug
+  g.save(); g.translate(880, 700); g.scale(1, 0.32);
+  g.fillStyle = '#c4553b'; g.beginPath(); g.arc(0, 0, 300, 0, TAU); g.fill();
+  g.strokeStyle = '#f2d59a'; g.lineWidth = 14; g.beginPath(); g.arc(0, 0, 270, 0, TAU); g.stroke();
+  g.fillStyle = '#245b5a'; g.beginPath(); g.arc(0, 0, 160, 0, TAU); g.fill();
+  g.strokeStyle = '#f2d59a'; g.lineWidth = 8; for (let k = 0; k < 16; k++) { const a = k / 16 * TAU; g.beginPath(); g.ellipse(Math.cos(a) * 215, Math.sin(a) * 215, 22, 10, a, 0, TAU); g.stroke(); }
+  g.restore();
+  // counter, pastry case, espresso machine, tip jar
+  g.fillStyle = '#5b3a26'; g.fillRect(30, 380, 410, 100);
+  g.fillStyle = '#6e4630'; for (let x = 40; x < 430; x += 50) { rr(g, x, 392, 40, 78, 4); g.fill(); }
+  g.fillStyle = '#e9e1cf'; g.fillRect(22, 366, 426, 16);
+  g.fillStyle = 'rgba(210,235,240,0.55)'; rr(g, 240, 318, 150, 50, 6); g.fill(); g.strokeStyle = '#c9b48e'; g.lineWidth = 2; g.stroke();
+  const pastry = ['#d9a25b', '#b8642a', '#f2d59a', '#8a4a22', '#e9c28a'];
+  for (let k = 0; k < 7; k++) { g.fillStyle = pastry[k % 5]; g.beginPath(); g.ellipse(258 + k * 19, 352 - (k % 2) * 12, 9, 6, 0, 0, TAU); g.fill(); }
+  g.fillStyle = '#b8bcc2'; rr(g, 80, 296, 110, 72, 8); g.fill(); g.fillStyle = '#8a8f96'; g.fillRect(92, 306, 86, 14);
+  g.fillStyle = '#2b211b'; g.fillRect(104, 340, 20, 12); g.fillRect(146, 340, 20, 12);
+  g.fillStyle = '#d4af37'; g.beginPath(); g.arc(135, 315, 6, 0, TAU); g.fill();
+  g.fillStyle = 'rgba(220,240,245,0.6)'; rr(g, 400, 330, 30, 38, 6); g.fill();
+  g.fillStyle = '#c9a24f'; for (let k = 0; k < 6; k++) { g.beginPath(); g.arc(406 + (k % 3) * 9, 360 - (k > 2 ? 9 : 0), 4, 0, TAU); g.fill(); }
+  g.fillStyle = '#fbf6ea'; g.fillRect(398, 312, 34, 14); g.fillStyle = '#2b211b'; g.font = '700 6.5px Nunito, sans-serif'; g.textAlign = 'center'; g.fillText("CAT'S LAWYER", 415, 322);
+  // food & water bowls
+  for (const [dx, col] of [[-26, '#d9577a'], [26, '#3a78c9']]) { g.fillStyle = col; g.beginPath(); g.ellipse(BOWLS.x + dx, BOWLS.y, 22, 9, 0, 0, TAU); g.fill(); g.fillStyle = dx < 0 ? '#8a5a2a' : '#9fd0ef'; g.beginPath(); g.ellipse(BOWLS.x + dx, BOWLS.y - 2, 16, 5, 0, 0, TAU); g.fill(); }
+  g.fillStyle = '#fbf6ea'; g.font = '700 9px Nunito, sans-serif'; g.textAlign = 'center';
+}
+const WINDOWS = [[540, 800], [880, 1140]];
+
+/* ================= drawing: cats ================= */
+function drawCat(g, c) {
+  const k = c.k, C = c.c, base = C.base, dark = shade(base, -0.28);
+  const y = c.y - c.z * depth(c.y);
+  // shadow on the floor (or on the perch)
+  g.fillStyle = 'rgba(30,15,5,0.22)'; g.beginPath(); g.ellipse(c.x, c.y - (c.perch ? c.perch.z * depth(c.y) : 0) + 1, 30 * k, 6 * k, 0, 0, TAU); g.fill();
+  g.save(); g.translate(c.x, y); g.scale(c.face * k, k);
+  if (c.puff) g.scale(1 + c.puff * 0.08, 1 + c.puff * 0.12);
+  const P = c.pose, ph = c.ph, wag = Math.sin(c.tailPh);
+  const fillBody = (path) => {
+    g.fillStyle = base; path(); g.fill();
+    if (C.white) { g.save(); path(); g.clip(); g.fillStyle = '#f7f4ee'; g.beginPath(); g.ellipse(18, 4, 22, 26, 0, 0, TAU); g.fill(); g.restore(); }
+    if (C.belly) { g.save(); path(); g.clip(); g.fillStyle = C.belly; g.beginPath(); g.ellipse(4, 6, 30, 14, 0, 0, TAU); g.fill(); g.restore(); }
+    if (C.stripe) { g.save(); path(); g.clip(); g.strokeStyle = C.stripe; g.lineWidth = 4.5; g.lineCap = 'round'; for (let s = -40; s < 40; s += 11) { g.beginPath(); g.moveTo(s, -60); g.quadraticCurveTo(s + 6, -25, s - 2, 10); g.stroke(); } g.restore(); }
+    if (C.patches) { g.save(); path(); g.clip(); for (const s of c.spots) { g.fillStyle = s.c; g.beginPath(); g.ellipse(s.x * 30, -26 + s.y * 22, s.r * 26, s.r * 18, s.x, 0, TAU); g.fill(); } g.restore(); }
+    if (C.points) { g.save(); path(); g.clip(); const gr = g.createLinearGradient(-36, 0, 10, 0); gr.addColorStop(0, C.points); gr.addColorStop(1, 'rgba(90,68,54,0)'); g.fillStyle = gr; g.fillRect(-60, -80, 70, 100); g.restore(); }
+  };
+  const legCol = C.points || (C.white ? '#f7f4ee' : base);
+  const leg = (x, y0, len, a, col = legCol) => { g.strokeStyle = col; g.lineWidth = 7; g.lineCap = 'round'; g.beginPath(); g.moveTo(x, y0); g.lineTo(x + Math.sin(a) * len, y0 + Math.cos(a) * len); g.stroke(); };
+  const tailCol = C.points || (C.stripe ? base : base);
+  const tail = (x, y0, pts, w = 7) => { g.strokeStyle = tailCol; g.lineWidth = w + c.puff * 5; g.lineCap = 'round'; g.beginPath(); g.moveTo(x, y0); g.bezierCurveTo(...pts); g.stroke(); if (C.stripe) { g.strokeStyle = C.stripe; g.lineWidth = 2; g.setLineDash([3, 5]); g.beginPath(); g.moveTo(x, y0); g.bezierCurveTo(...pts); g.stroke(); g.setLineDash([]); } };
+  let hx = 34, hy = -44, headTilt = 0, eyesMode = 'open';
+  if (c.state === 'petted' || c.happy > 0.5) eyesMode = 'happy';
+  if (P === 'sleep') eyesMode = 'closed';
+  if (c.blink > 0) eyesMode = eyesMode === 'open' ? 'closed' : eyesMode;
+  if (P === 'stand' || P === 'walk' || P === 'crouch' || P === 'jump') {
+    const crouch = P === 'crouch' ? 1 : 0, mv = P === 'walk' ? 1 : 0, by = -30 + crouch * 12;
+    const swing = (o) => Math.sin(ph + o) * 0.5 * mv;
+    if (P !== 'jump') { leg(-20, by + 6, 24 - crouch * 10, swing(0), shade(legCol, -0.15)); leg(20, by + 6, 24 - crouch * 10, swing(Math.PI), shade(legCol, -0.15)); }
+    tail(-30, by - 4, P === 'crouch' ? [-50, by - 2 + wag * 4, -62, by + wag * 8, -74, by + 4 + wag * 10] : c.happy > 0.3 || mv ? [-46, by - 30, -56, by - 50 + wag * 4, -44 + wag * 6, by - 60] : [-50, by + 4, -60, by + 20, -68 + wag * 6, by + 14]);
+    if (P === 'jump') { g.save(); g.rotate(clamp(-c.jumpTilt || 0, -0.6, 0.6)); }
+    fillBody(() => { g.beginPath(); g.ellipse(0, by, 34, 15 - crouch * 2, 0, 0, TAU); });
+    if (P !== 'jump') { leg(-14, by + 6, 24 - crouch * 10, swing(Math.PI)); leg(24, by + 6, 24 - crouch * 10, swing(0)); }
+    else { leg(-24, by + 4, 22, 0.9); leg(26, by + 4, 22, -0.9); }
+    if (P === 'jump') g.restore();
+    hx = 34; hy = by - 14 + crouch * 6;
+  } else if (P === 'sit' || P === 'groom' || P === 'bat') {
+    tail(-14, -4, [-36, 2, -20, 6 + wag * 2, 18, 4]);
+    fillBody(() => { g.beginPath(); g.ellipse(-8, -20, 22, 20, 0, 0, TAU); g.ellipse(8, -36, 14, 24, 0.2, 0, TAU); });
+    leg(8, -24, 24, 0.05); leg(16, -24, 24, P === 'bat' ? -2.4 + Math.sin(time * 14) * 0.5 : P === 'groom' ? -2.6 : 0.05);
+    hx = 14; hy = -62; if (P === 'groom') { headTilt = 0.35; }
+  } else if (P === 'loaf' || P === 'box') {
+    tail(-24, -6, [-40, 0, -30, 8, 6, 6]);
+    fillBody(() => { g.beginPath(); g.ellipse(0, -16, 32, 17, 0, 0, TAU); });
+    g.fillStyle = legCol; g.beginPath(); g.ellipse(24, -2, 9, 4, 0, 0, TAU); g.fill();
+    hx = 24; hy = -34;
+  } else if (P === 'sleep') {
+    fillBody(() => { g.beginPath(); g.ellipse(0, -14, 28, 16, 0, 0, TAU); });
+    tail(-20, -4, [-26, 8, 10, 10, 26, 0], 8);
+    hx = 18; hy = -16; headTilt = 0.6;
+  } else if (P === 'belly') {
+    fillBody(() => { g.beginPath(); g.ellipse(0, -14, 32, 14, 0, 0, TAU); });
+    for (const [x, a] of [[-14, Math.PI - 0.4], [-4, Math.PI + 0.3], [12, Math.PI - 0.2], [22, Math.PI + 0.5]]) leg(x, -20, 18, a + Math.sin(time * 6 + x) * 0.2);
+    tail(-30, -10, [-46, -4, -50, 10, -40, 14]);
+    hx = 36; hy = -16; headTilt = -1.2;
+  }
+  // head
+  g.save(); g.translate(hx, hy); g.rotate(headTilt + (c.headTurn || 0) * 0.2);
+  const earCol = C.points || base;
+  for (const [ex, ez] of [[-9, -1], [7, 1]]) {
+    g.fillStyle = earCol; g.beginPath(); g.moveTo(ex - 7, -9); g.lineTo(ex - 1 + (c.puff ? -3 : 0), -26 + (c.puff ? 6 : 0)); g.lineTo(ex + 7, -9); g.fill();
+    g.fillStyle = '#e8a3a3'; g.beginPath(); g.moveTo(ex - 4, -10); g.lineTo(ex - 1, -20); g.lineTo(ex + 4, -10); g.fill();
+  }
+  g.fillStyle = base; g.beginPath(); g.ellipse(0, 0, 17, 15, 0, 0, TAU); g.fill();
+  if (C.patches) { g.save(); g.beginPath(); g.ellipse(0, 0, 17, 15, 0, 0, TAU); g.clip(); g.fillStyle = c.spots[0].c; g.beginPath(); g.ellipse(-8, -8, 12, 10, 0, 0, TAU); g.fill(); g.restore(); }
+  if (C.points) { g.fillStyle = C.points; g.beginPath(); g.ellipse(6, 4, 10, 9, 0, 0, TAU); g.fill(); }
+  if (C.white) { g.fillStyle = '#f7f4ee'; g.beginPath(); g.ellipse(8, 6, 8, 7, 0, 0, TAU); g.fill(); }
+  if (C.stripe) { g.strokeStyle = C.stripe; g.lineWidth = 2; g.beginPath(); g.moveTo(-4, -13); g.lineTo(-2, -6); g.moveTo(2, -14); g.lineTo(2, -7); g.moveTo(7, -13); g.lineTo(5, -6); g.stroke(); }
+  // eyes (slit pupils), nose, whiskers
+  for (const [ex, col] of [[2, C.eyes], [12, C.oddEye || C.eyes]]) {
+    if (eyesMode === 'open') {
+      g.fillStyle = col; g.beginPath(); g.ellipse(ex, -2, 3.6, 4, 0, 0, TAU); g.fill();
+      g.fillStyle = '#111'; g.beginPath(); g.ellipse(ex + 0.5, -2, c.state === 'laser' || c.state === 'stalk' ? 2.4 : 1.1, 3.4, 0, 0, TAU); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.8)'; g.beginPath(); g.arc(ex + 1.3, -3.4, 0.9, 0, TAU); g.fill();
+    } else { g.strokeStyle = '#2b211b'; g.lineWidth = 1.6; g.beginPath(); if (eyesMode === 'happy') { g.moveTo(ex - 3, -1); g.quadraticCurveTo(ex, -5, ex + 3, -1); } else { g.moveTo(ex - 3, -1); g.quadraticCurveTo(ex, 1.5, ex + 3, -1); } g.stroke(); }
+  }
+  g.fillStyle = '#e48a9a'; g.beginPath(); g.moveTo(13, 4); g.lineTo(17, 4); g.lineTo(15, 7); g.fill();
+  g.strokeStyle = 'rgba(40,30,25,0.6)'; g.lineWidth = 1; g.beginPath(); g.moveTo(15, 7); g.quadraticCurveTo(13, 10, 11, 9); g.moveTo(15, 7); g.quadraticCurveTo(17, 10, 19, 9); g.stroke();
+  g.strokeStyle = C.base === '#25221f' || C.base === '#26231f' || C.base === '#2e241e' ? 'rgba(240,240,240,0.7)' : 'rgba(60,50,40,0.5)';
+  for (const a of [-0.15, 0.05, 0.25]) { g.beginPath(); g.moveTo(16, 6); g.lineTo(34, 6 + a * 30); g.stroke(); }
+  g.restore();
+  g.restore();
+  if (P === 'sleep' && Math.random() < 0.012) floats.push({ text: 'z', x: c.x + 10 * c.face * k, y: y - 30 * k, t: 1.6, col: '#5a6a7a', z: true });
+}
+function drawBoxFront(g, it) {
+  const k = depth(it.y), w = 70 * k, h = 42 * k, x = it.x - w / 2, y = it.y - h;
+  g.fillStyle = '#c8a06a'; g.fillRect(x, y, w, h);
+  g.fillStyle = '#b58a55'; g.beginPath(); g.moveTo(x, y); g.lineTo(x - 10 * k, y - 14 * k); g.lineTo(x + w * 0.45, y - 10 * k); g.lineTo(x + w * 0.45, y); g.fill();
+  g.beginPath(); g.moveTo(x + w, y); g.lineTo(x + w + 10 * k, y - 14 * k); g.lineTo(x + w * 0.55, y - 10 * k); g.lineTo(x + w * 0.55, y); g.fill();
+  g.strokeStyle = 'rgba(80,50,20,0.4)'; g.lineWidth = 1.5; g.strokeRect(x, y, w, h);
+  g.fillStyle = 'rgba(60,40,20,0.55)'; g.font = `800 ${8 * k}px Nunito, sans-serif`; g.textAlign = 'center'; g.fillText('THIS SIDE UP ↑', it.x, y + h * 0.6);
+}
+function drawBoxBack(g, it) { const k = depth(it.y), w = 70 * k; g.fillStyle = '#9a7444'; g.fillRect(it.x - w / 2 + 2, it.y - 46 * k, w - 4, 8 * k); }
+function drawTree(g, it) {
+  const k = depth(it.y), x = it.x, y = it.y;
+  g.fillStyle = 'rgba(30,15,5,0.22)'; g.beginPath(); g.ellipse(x, y, 70 * k, 12 * k, 0, 0, TAU); g.fill();
+  g.fillStyle = '#e3d3b5'; for (const dx of [-30, 18]) { g.fillRect(x + dx * k - 7 * k, y - 290 * k, 14 * k, 290 * k); g.strokeStyle = 'rgba(120,90,50,0.35)'; g.lineWidth = 1; for (let yy = 0; yy < 290; yy += 6) { g.beginPath(); g.moveTo(x + dx * k - 7 * k, y - yy * k); g.lineTo(x + dx * k + 7 * k, y - yy * k - 3 * k); g.stroke(); } }
+  for (const [dx, z] of [[-30, 105], [32, 190], [-14, 278]]) { g.fillStyle = '#7a8fa6'; rr(g, x + dx * k - 34 * k, y - z * k - 8 * k, 68 * k, 12 * k, 5 * k); g.fill(); g.fillStyle = shade('#7a8fa6', -0.2); g.fillRect(x + dx * k - 32 * k, y - z * k + 3 * k, 64 * k, 4 * k); }
+  g.fillStyle = '#7a8fa6'; rr(g, x - 60 * k, y - 10 * k, 120 * k, 12 * k, 5 * k); g.fill();
+}
+function drawFish(g, it) {
+  const x = it.x, y = it.y - 152, w = 120, h = 70;
+  g.fillStyle = 'rgba(160,215,235,0.55)'; rr(g, x - w / 2, y - h, w, h, 6); g.fill(); g.strokeStyle = '#3a4a52'; g.lineWidth = 3; g.stroke();
+  g.fillStyle = '#c9b48e'; g.fillRect(x - w / 2 + 3, y - 10, w - 6, 8);
+  for (let f = 0; f < 3; f++) { const fx = x + Math.sin(time * 0.8 + f * 2) * 38, fy = y - 24 - f * 12 + Math.sin(time * 2 + f) * 3, dir = Math.cos(time * 0.8 + f * 2) > 0 ? 1 : -1; g.fillStyle = ['#f28c28', '#f2c14e', '#e8546f'][f]; g.beginPath(); g.ellipse(fx, fy, 8, 5, 0, 0, TAU); g.fill(); g.beginPath(); g.moveTo(fx - dir * 7, fy); g.lineTo(fx - dir * 13, fy - 4); g.lineTo(fx - dir * 13, fy + 4); g.fill(); }
+  g.strokeStyle = 'rgba(255,255,255,0.6)'; for (let b = 0; b < 3; b++) { const by = y - ((time * 20 + b * 25) % 60) - 8; g.beginPath(); g.arc(x + 30 + b * 4, by, 2, 0, TAU); g.stroke(); }
+}
+
+/* ================= drawing: people, furniture ================= */
+function drawTable(g, t) {
+  const k = depth(t.y), x = t.x, y = t.y;
+  g.fillStyle = 'rgba(30,15,5,0.2)'; g.beginPath(); g.ellipse(x, y + 4, 60 * k, 12 * k, 0, 0, TAU); g.fill();
+  g.fillStyle = '#3a2c24'; g.fillRect(x - 4 * k, y - 72 * k, 8 * k, 72 * k); g.beginPath(); g.ellipse(x, y, 26 * k, 6 * k, 0, 0, TAU); g.fill();
+  g.fillStyle = '#e9e1cf'; g.beginPath(); g.ellipse(x, y - 74 * k, 56 * k, 14 * k, 0, 0, TAU); g.fill();
+  g.fillStyle = '#d7ccb4'; g.beginPath(); g.ellipse(x, y - 72 * k, 56 * k, 14 * k, 0, 0, Math.PI); g.fill();
+  g.fillStyle = '#e9e1cf'; g.beginPath(); g.ellipse(x, y - 75 * k, 56 * k, 14 * k, 0, 0, TAU); g.fill();
+}
+function drawChair(g, s) {
+  const k = depth(s.y), x = s.x, y = s.y, f = -s.face;
+  g.strokeStyle = '#5b3a26'; g.lineWidth = 3 * k;
+  g.beginPath(); g.moveTo(x - 14 * k, y); g.lineTo(x - 12 * k, y - 44 * k); g.moveTo(x + 14 * k, y); g.lineTo(x + 12 * k, y - 44 * k); g.stroke();
+  g.fillStyle = '#6e4630'; g.fillRect(x - 18 * k, y - 48 * k, 36 * k, 6 * k);
+  g.fillRect(x + f * 16 * k - 3 * k, y - 98 * k, 6 * k, 52 * k);
+  g.fillRect(x + f * 16 * k - 3 * k, y - 98 * k, 6 * k, 6 * k);
+  for (let b = 0; b < 3; b++) g.fillRect(x + f * 16 * k - 2.5 * k, y - (90 - b * 14) * k, 5 * k, 4 * k);
+}
+function drawPerson(g, p) {
+  const sitting = p.state === 'sit' || p.state === 'leave0';
+  const s = p.seat, k = depth(sitting ? s.y : p.y), x = sitting ? s.x : p.x, y = sitting ? s.y : p.y, f = sitting ? s.face : p.face || 1;
+  g.save(); g.translate(x, y); g.scale(f * k, k);
+  if (!sitting) {
+    g.fillStyle = 'rgba(30,15,5,0.2)'; g.beginPath(); g.ellipse(0, 0, 24, 6, 0, 0, TAU); g.fill();
+    const sw = Math.sin(p.phase) * 0.4;
+    g.strokeStyle = '#2f3b45'; g.lineWidth = 10; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(0, -70); g.lineTo(Math.sin(sw) * 26, -2); g.moveTo(0, -70); g.lineTo(-Math.sin(sw) * 26, -2); g.stroke();
+    g.fillStyle = p.shirt; rr(g, -16, -138, 32, 72, 12); g.fill();
+    g.save(); g.translate(0, -150); headOf(g, p); g.restore();
+  } else {
+    g.strokeStyle = '#2f3b45'; g.lineWidth = 11; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(-6, -50); g.lineTo(26, -50); g.lineTo(28, -4); g.stroke();
+    g.fillStyle = p.shirt; rr(g, -20, -122, 32, 74, 12); g.fill();
+    g.strokeStyle = p.skin; g.lineWidth = 7; g.beginPath(); g.moveTo(2, -106); g.lineTo(30, -84); g.lineTo(48, -80); g.stroke();
+    g.save(); g.translate(-4, -136); headOf(g, p); g.restore();
+  }
+  g.restore();
+  if (sitting && s.cup) drawCup(g, s.table.x + s.face * -24 * depth(s.table.y), s.table.y - 76 * depth(s.table.y), depth(s.table.y), s.cup);
+}
+function headOf(g, p) {
+  g.fillStyle = p.skin; g.beginPath(); g.ellipse(0, 0, 15, 17, 0, 0, TAU); g.fill();
+  g.fillStyle = p.hair; g.beginPath(); g.ellipse(-3, -7, 16, 12, -0.2, Math.PI * 0.9, Math.PI * 2.15); g.fill();
+  g.fillStyle = '#2b211b'; g.beginPath(); g.arc(8, -2, 1.8, 0, TAU); g.fill();
+  g.strokeStyle = '#7a3a3a'; g.lineWidth = 1.5; g.beginPath(); p.happy > 0.6 ? g.arc(8, 5, 4, 0.2, Math.PI - 0.6) : (g.moveTo(5, 7), g.lineTo(11, 7)); g.stroke();
+}
+function drawCup(g, x, y, k, cup) {
+  if (cup.gone) return;
+  g.fillStyle = '#fbf8f2'; rr(g, x - 7 * k, y - 12 * k, 14 * k, 12 * k, 3 * k); g.fill();
+  g.strokeStyle = '#fbf8f2'; g.lineWidth = 2 * k; g.beginPath(); g.arc(x + 8 * k, y - 6 * k, 3.5 * k, -1.2, 1.2); g.stroke();
+  g.fillStyle = '#7a4a2a'; g.beginPath(); g.ellipse(x, y - 12 * k, 6 * k, 2 * k, 0, 0, TAU); g.fill();
+  if (cup.hot > 0) { g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 1.5; for (let q = 0; q < 2; q++) { g.beginPath(); g.moveTo(x - 2 + q * 4, y - 16 * k); g.quadraticCurveTo(x + Math.sin(time * 3 + q) * 4, y - 24 * k, x - 2 + q * 4, y - 32 * k); g.stroke(); } }
+}
+function drawSkeleton(g) {
+  const k = depth(SKEL.y), x = SKEL.x, y = SKEL.y;
+  drawChair(g, { x, y, face: 1 });
+  g.save(); g.translate(x, y); g.scale(k, k);
+  const bone = '#ece4cf';
+  g.strokeStyle = bone; g.lineWidth = 5; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(-4, -50); g.lineTo(26, -50); g.lineTo(28, -4); g.stroke();
+  g.lineWidth = 3; for (let r = 0; r < 5; r++) { g.beginPath(); g.ellipse(-4, -112 + r * 11, 14 - Math.abs(r - 2) * 1.5, 5, 0, 0, TAU); g.stroke(); }
+  g.lineWidth = 4; g.beginPath(); g.moveTo(-6, -128); g.lineTo(-4, -52); g.stroke();
+  g.lineWidth = 3.5; g.beginPath(); g.moveTo(0, -122); g.lineTo(26, -96); g.lineTo(46, -84); g.stroke();
+  // skull with a little chatter when clicked
+  const jaw = SKEL.chatter > 0 ? Math.abs(Math.sin(time * 30)) * 4 : 0;
+  g.fillStyle = bone; g.beginPath(); g.ellipse(-2, -148, 15, 16, 0, 0, TAU); g.fill();
+  g.fillRect(-4, -136 + jaw, 16, 7);
+  g.fillStyle = '#2b211b'; g.beginPath(); g.ellipse(5, -150, 3.6, 4.2, 0, 0, TAU); g.ellipse(12, -150, 2.8, 3.8, 0, 0, TAU); g.fill();
+  g.fillStyle = '#ff4a2a'; g.beginPath(); g.arc(5.5, -150, 1, 0, TAU); g.arc(12, -150, 0.9, 0, TAU); g.fill();
+  g.fillStyle = '#2b211b'; g.fillRect(9, -143, 2, 3);
+  g.restore();
+  // his table, empty cup, receipt
+  drawTable(g, { x: SKEL.table.x, y: SKEL.table.y });
+  const tk = depth(SKEL.table.y);
+  drawCup(g, SKEL.table.x - 18 * tk, SKEL.table.y - 76 * tk, tk, { hot: 0 });
+  g.fillStyle = '#fbf8f2'; g.save(); g.translate(SKEL.table.x + 16 * tk, SKEL.table.y - 80 * tk); g.rotate(0.2); g.fillRect(-8 * tk, -3 * tk, 18 * tk, 6 * tk); g.fillStyle = '#2b211b'; g.font = `700 ${4 * tk}px Nunito, sans-serif`; g.fillText('ORDER #1898', -7 * tk, 1 * tk); g.restore();
+}
+function drawBarista(g) {
+  const x = 230, y = 366;
+  g.save(); g.translate(x, y);
+  g.fillStyle = '#2f3e46'; rr(g, -22, -74, 44, 74, 14); g.fill();
+  g.fillStyle = '#1f7a74'; rr(g, -18, -56, 36, 56, 6); g.fill();
+  g.fillStyle = '#fbf6ea'; g.font = '800 7px Nunito, sans-serif'; g.textAlign = 'center'; g.fillText('PURRCOLATOR', 0, -40);
+  g.fillStyle = '#c48a62'; g.beginPath(); g.ellipse(0, -92, 16, 18, 0, 0, TAU); g.fill();
+  g.fillStyle = '#2b1d14'; g.beginPath(); g.ellipse(0, -102, 17, 10, 0, Math.PI, TAU); g.fill(); g.fillRect(-17, -102, 6, 18);
+  g.fillStyle = '#2b211b'; g.beginPath(); g.arc(-6, -92, 1.8, 0, TAU); g.arc(6, -92, 1.8, 0, TAU); g.fill();
+  g.strokeStyle = '#7a3a3a'; g.lineWidth = 1.5; g.beginPath(); g.arc(0, -86, 5, 0.3, Math.PI - 0.3); g.stroke();
+  const arm = barista.brewing > 0 ? Math.sin(time * 9) * 0.4 : 0;
+  g.strokeStyle = '#c48a62'; g.lineWidth = 7; g.lineCap = 'round'; g.beginPath(); g.moveTo(-18, -62); g.lineTo(-48 + arm * 10, -40); g.stroke();
+  g.restore();
+  if (barista.brewing > 0) { g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 2; for (let q = 0; q < 3; q++) { g.beginPath(); g.moveTo(115 + q * 14, 292); g.quadraticCurveTo(108 + q * 14 + Math.sin(time * 4 + q) * 6, 270, 118 + q * 14, 250); g.stroke(); } }
+}
+function drawStreet(g) {
+  for (const [x0, x1] of WINDOWS) {
+    g.save(); g.beginPath(); g.rect(x0, 60, x1 - x0, 228); g.clip();
+    const sky = g.createLinearGradient(0, 60, 0, 220); sky.addColorStop(0, '#9cc9e8'); sky.addColorStop(1, '#dcecf5'); g.fillStyle = sky; g.fillRect(x0, 60, x1 - x0, 228);
+    // the building across the street
+    g.fillStyle = '#c98a6a'; g.fillRect(x0, 92, x1 - x0, 150);
+    for (let wx = x0 + ((-x0) % 70 + 70) % 70; wx < x1; wx += 70) { g.fillStyle = '#5f7f96'; g.fillRect(wx + 12, 110, 34, 44); g.fillRect(wx + 12, 178, 34, 44); g.fillStyle = '#f2ebdd'; g.fillRect(wx + 10, 154, 38, 4); }
+    g.fillStyle = '#b9b2a6'; g.fillRect(x0, 242, x1 - x0, 46); g.fillStyle = '#8f887c'; g.fillRect(x0, 262, x1 - x0, 3);
+    for (const w of street.walkers) drawWalker(g, w);
+    if (street.dog) drawWalkDog(g, street.dog);
+    g.restore();
+  }
+}
+function drawWalker(g, w) {
+  g.save(); g.translate(w.x, 272); const s = Math.sin(w.ph) * 0.35;
+  g.strokeStyle = '#3a3a44'; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.moveTo(0, -36); g.lineTo(Math.sin(s) * 14, 0); g.moveTo(0, -36); g.lineTo(-Math.sin(s) * 14, 0); g.stroke();
+  g.fillStyle = w.col; rr(g, -9, -72, 18, 38, 7); g.fill();
+  g.fillStyle = w.skin; g.beginPath(); g.arc(0, -80, 8, 0, TAU); g.fill();
+  if (w.umbrella) { g.fillStyle = '#e8546f'; g.beginPath(); g.arc(0, -96, 20, Math.PI, TAU); g.fill(); }
+  g.restore();
+}
+function drawWalkDog(g, d) {
+  // Biscuit, golden retriever, Wagmore Park regular
+  g.save(); g.translate(d.x, 272); g.scale(d.dir, 1);
+  const s = Math.sin(d.ph) * 0.5;
+  g.strokeStyle = '#e3a94f'; g.lineWidth = 5; g.lineCap = 'round';
+  for (const [lx, o] of [[-14, 0], [14, Math.PI]]) { g.beginPath(); g.moveTo(lx, -16); g.lineTo(lx + Math.sin(s + o) * 7, 0); g.stroke(); }
+  g.beginPath(); g.moveTo(-20, -24); g.quadraticCurveTo(-34, -40 + Math.sin(time * 14) * 4, -38, -34); g.stroke();
+  g.fillStyle = '#e3a94f'; g.beginPath(); g.ellipse(0, -22, 22, 10, 0, 0, TAU); g.fill();
+  g.beginPath(); g.arc(24, -32, 9, 0, TAU); g.fill(); g.beginPath(); g.ellipse(32, -29, 6, 4, 0, 0, TAU); g.fill();
+  g.fillStyle = '#c98a36'; g.beginPath(); g.ellipse(19, -28, 4, 8, 0.3, 0, TAU); g.fill();
+  g.fillStyle = '#1f1a18'; g.beginPath(); g.arc(37, -30, 2, 0, TAU); g.fill(); g.beginPath(); g.arc(26, -35, 1.4, 0, TAU); g.fill();
+  g.fillStyle = '#ef7a8f'; g.fillRect(31, -26, 3, 5);
+  g.strokeStyle = '#d9443a'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(20, -26); g.quadraticCurveTo(40, -60, 52, -48); g.stroke();
+  g.restore();
+  drawWalker(g, { x: d.x + d.dir * 52, ph: d.ph, col: '#4e7a4a', skin: '#e3b48f' });
+}
+function drawMouse(g) {
+  if (mouse.state === 'hidden') return;
+  const out = mouse.state === 'peek' ? clamp(mouse.p, 0, 1) : mouse.state === 'run' ? 1 : clamp(mouse.p, 0, 1);
+  const x = mouse.state === 'run' ? mouse.x : MOUSEHOLE.x + out * 16, y = MOUSEHOLE.y;
+  g.save(); g.translate(x, y);
+  g.fillStyle = '#9a948e'; g.beginPath(); g.ellipse(0, -6, 9, 6, 0, 0, TAU); g.fill();
+  g.beginPath(); g.ellipse(8, -8, 5, 4, 0.3, 0, TAU); g.fill();
+  g.fillStyle = '#f0a3ad'; g.beginPath(); g.arc(5, -13, 3, 0, TAU); g.fill(); g.beginPath(); g.arc(12.5, -8, 1.3, 0, TAU); g.fill();
+  g.fillStyle = '#111'; g.beginPath(); g.arc(9.5, -9, 1, 0, TAU); g.fill();
+  g.strokeStyle = '#f0a3ad'; g.lineWidth = 1; g.beginPath(); g.moveTo(-8, -4); g.quadraticCurveTo(-18, -2, -20, -10); g.stroke();
+  // carrying a matchbox (commuting to the coaster round the corner)
+  g.fillStyle = '#b8262b'; g.fillRect(-6, -18, 12, 6); g.fillStyle = '#f2c14e'; g.fillRect(-5, -16, 10, 2);
+  g.restore();
+}
+
+/* ================= behaviour ================= */
+const feltWeight = c => c.size;
+function freePerch(filter) { return PERCHES.filter(p => !p.cat && filter(p)); }
+function goTo(c, x, y, after, perchTo) { const p = onFloor(x, y); c.target = { x: p.x, y: p.y, after, perchTo }; c.state = 'go'; }
+function leavePerch(c) { if (c.perch) { if (c.perch.cat === c) c.perch.cat = null; c.perch = null; } }
+function startJump(c, toZ, then) { c.jump = { from: c.z, to: toZ, t: 0, dur: 0.45 + Math.abs(toZ - c.z) / 700, then }; c.pose = 'jump'; }
+function choose(c) {
+  leavePerch(c);
+  const r = Math.random(), sun = sunbeam();
+  if (c.hunger > 70) return goTo(c, BOWLS.x - 26, BOWLS.y + 6, 'eat');
+  if (c.energy < 30 || r < 0.22) {
+    // nap: sunbeam > box > high perch > skeleton > floor
+    const boxes = freePerch(p => p.box), highs = freePerch(p => p.high), skel = freePerch(p => p.skeleton);
+    if (Math.random() < 0.5 && sun) return goTo(c, rand(sun.x0 + 40, sun.x1 - 40), rand(sun.y0 + 10, sun.y1 - 10), 'sleep');
+    if (boxes.length && Math.random() < 0.6) { const b = pick(boxes); return goTo(c, b.x, b.y, 'box', b); }
+    if (c.name === 'Mochi' && skel.length) return goTo(c, skel[0].x, skel[0].y, 'sleep', skel[0]);
+    if (highs.length && Math.random() < 0.5) { const h = pick(highs); return goTo(c, h.x, h.y, 'loaf', h); }
+    return goTo(c, rand(500, 1400), rand(560, 860), 'sleep');
+  }
+  if (r < 0.42) {
+    // visit a customer
+    const seated = customers.filter(p => p.state === 'sit' && !SEATS.find(s => s === p.seat && s.lapCat));
+    if (seated.length && Math.random() < 0.4 + c.lap * 0.5) { const p = pick(seated); return goTo(c, p.seat.x + 4, p.seat.y + 3, 'lap', { where: `on ${p.name}'s lap`, x: p.seat.x + 4, y: p.seat.y + 3, z: 52, who: p, lap: true }); }
+  }
+  if (c.name === 'Pixel' && r < 0.55) { const t = SEATS.find(s => s.cup && !s.cup.gone && s.who && s.who.state === 'sit'); if (t) { const tp = PERCHES.find(p => p.table === t.table && !p.cat); if (tp) return goTo(c, tp.x, tp.y, 'knock', tp); } }
+  if (r < 0.5 && Math.random() < 0.25) { const ct = freePerch(p => p.counter); if (ct.length) return goTo(c, ct[0].x, 500, 'counter', ct[0]); }
+  if (r < 0.6) { const sill = freePerch(p => p.window); if (sill.length) return goTo(c, sill[0].x, WALL + 40, 'loaf', pick(sill)); }
+  if (state.owned.fish && r < 0.66) return goTo(c, 180, 520, 'fish');
+  if (YARN.on && r < 0.74 && c.play > 0.4) return goTo(c, YARN.x - 40, YARN.y, 'yarn');
+  if (r < 0.8) { c.state = 'groom'; c.pose = 'groom'; c.t = rand(3, 6); return; }
+  if (c.name === 'Froude' && r < 0.9) { c.state = 'zoom'; c.t = rand(2.5, 4); state.zoomies++; c.say('!!', 1); return; }
+  if (r < 0.9) { c.state = 'sit'; c.pose = 'sit'; c.t = rand(2, 5); return; }
+  c.state = 'walk'; const p = onFloor(c.x + rand(-300, 300), c.y + rand(-120, 120)); c.target = { x: p.x, y: p.y };
+}
+function moveTo(c, x, y, speed, dt) {
+  const dx = x - c.x, dy = (y - c.y) * 1.4, d = Math.hypot(dx, dy);
+  if (d < 6) { c.vx = c.vy = 0; return true; }
+  const sp = speed * Math.min(1, d / 30);
+  c.vx = dx / d * sp; c.vy = dy / d * sp / 1.4;
+  c.x += c.vx * dt; c.y += c.vy * dt;
+  if (Math.abs(c.vx) > 4) c.face = c.vx > 0 ? 1 : -1;
+  c.ph += Math.hypot(c.vx, c.vy) * dt * 0.08;
+  return false;
+}
+function updateCat(c, dt) {
+  c.hunger = Math.min(100, c.hunger + dt * 0.5); c.energy = clamp(c.energy - dt * (c.state === 'zoom' || c.state === 'laser' ? 3 : 0.25), 0, 100);
+  c.affection = clamp(c.affection - dt * 0.15, 0, 100); c.happy = Math.max(0, c.happy - dt * 0.2);
+  c.tailPh += dt * (c.state === 'stalk' || c.state === 'laser' ? 9 : c.state === 'petted' ? 2 : 3);
+  c.blinkT -= dt; if (c.blinkT < 0) { c.blink = 0.12; c.blinkT = rand(2, 5); } c.blink = Math.max(0, c.blink - dt);
+  if (c.bubble) { c.bubble.t -= dt; if (c.bubble.t <= 0) c.bubble = null; }
+  c.puff = Math.max(0, c.puff - dt * 0.3);
+  // jumping up or down
+  if (c.jump) {
+    const j = c.jump; j.t += dt; const u = Math.min(1, j.t / j.dur);
+    c.z = lerp(j.from, j.to, u) + Math.sin(u * Math.PI) * (40 + Math.abs(j.to - j.from) * 0.15);
+    c.jumpTilt = (j.to - j.from > 0 ? 1 : -1) * Math.cos(u * Math.PI) * 0.5;
+    if (u >= 1) { c.z = j.to; c.jump = null; j.then && j.then(); }
+    return;
+  }
+  const sp = 90 * c.speed;
+  // stimuli take priority (unless asleep or being petted)
+  const awake = c.state !== 'sleep' && c.state !== 'petted' && c.state !== 'arrive';
+  if (awake && laser && c.play > 0.35 && c.z === 0 && c.state !== 'laser') { leavePerch(c); c.state = 'laser'; }
+  if (awake && feather && c.state !== 'feather' && Math.hypot(feather.x - c.x, feather.y + 60 - c.y) < 260 && c.z === 0 && c.play > 0.3) { leavePerch(c); c.state = 'feather'; }
+  switch (c.state) {
+    case 'arrive': c.t -= dt; c.pose = 'sit'; if (c.t <= 0) goTo(c, rand(900, 1300), rand(560, 800), null); break;
+    case 'idle': c.t -= dt; c.pose = 'stand'; if (c.t <= 0) choose(c); break;
+    case 'go': {
+      const T = c.target; c.pose = 'walk';
+      if (moveTo(c, T.x, T.y, sp, dt)) {
+        const P = T.perchTo;
+        if (P && (P.cat && P.cat !== c)) { c.state = 'idle'; c.t = 0.5; break; }
+        if (P) { P.cat = c; c.perch = P; }
+        if (P && P.z > 0) { c.x = P.x; c.y = P.y; startJump(c, P.z, () => arriveAt(c, T.after)); }
+        else { if (P) { c.x = P.x; c.y = P.y; } arriveAt(c, T.after); }
+      }
+      break;
+    }
+    case 'walk': c.pose = 'walk'; if (moveTo(c, c.target.x, c.target.y, sp * 0.7, dt)) { c.state = 'idle'; c.t = rand(1, 3); } break;
+    case 'sit': case 'groom': c.t -= dt; if (c.t <= 0) { c.state = 'idle'; c.t = 0.3; } break;
+    case 'loaf': case 'box': case 'sleep': case 'lap': {
+      c.t -= dt; c.energy = Math.min(100, c.energy + dt * (c.state === 'sleep' ? 6 : 3));
+      if (c.state === 'lap') { const w = c.perch && c.perch.who; if (!w || w.state !== 'sit') { getDown(c); break; } w.happy = Math.min(1, w.happy + dt * 0.08); if (Math.random() < dt * 0.4) hearts.push({ x: c.x, y: c.y - 110 * c.k, t: 1.2 }); }
+      if (c.perch && c.perch.skeleton && Math.random() < dt * 0.05) c.say('Mrrp.', 1.4);
+      if (c.t <= 0) getDown(c);
+      break;
+    }
+    case 'eat': c.pose = 'crouch'; c.t -= dt; c.hunger = Math.max(0, c.hunger - dt * 25); if (c.t <= 0 || c.hunger <= 0) { c.state = 'idle'; c.t = 0.5; } break;
+    case 'knock': {
+      c.pose = 'bat'; c.t -= dt;
+      const seat = SEATS.find(s => s.table === c.perch.table && s.cup && !s.cup.gone);
+      if (seat && c.t < 0.6 && !seat.cup.pushed) { seat.cup.pushed = true; c.face = seat.face < 0 ? 1 : -1; const tk = depth(seat.table.y); cupsFalling.push({ x: seat.table.x + seat.face * -24 * tk, y: seat.table.y - 76 * tk, vy: -60, vx: -seat.face * 90, floor: seat.table.y + 10, t: 0 }); seat.cup.gone = true; state.cupsLost++; if (seat.who) seat.who.bubble = { text: 'Hey!', t: 1.6 }; seat.who && (seat.who.happy = Math.max(0, seat.who.happy - 0.2)); barista.queue.push(seat); }
+      if (c.t <= 0 || !seat) getDown(c);
+      break;
+    }
+    case 'counter': c.pose = 'sit'; c.t -= dt; if (c.t < 1.2 && !c.shooed) { c.shooed = true; barista.say = `Off the counter, ${c.name}.`; barista.sayT = 2.2; state.counterEvictions++; } if (c.t <= 0) { c.shooed = false; getDown(c); } break;
+    case 'fish': c.pose = 'sit'; c.face = -1; c.t -= dt; if (c.t <= 0) { c.state = 'idle'; c.t = 0.4; } break;
+    case 'yarn': c.pose = 'bat'; c.face = YARN.x > c.x ? 1 : -1; if (Math.hypot(YARN.x - c.x, YARN.y - c.y) > 70) { c.pose = 'walk'; moveTo(c, YARN.x - c.face * 40, YARN.y, sp, dt); } else if (Math.random() < dt * 1.5) { YARN.vx = c.face * rand(80, 200); YARN.vy = rand(-60, 60); } c.t -= dt; if (c.t <= 0) { c.state = 'idle'; c.t = 0.5; } break;
+    case 'zoom': c.pose = 'walk'; c.t -= dt; if (!c.target || moveTo(c, c.target.x, c.target.y, sp * 3.2, dt)) { const p = onFloor(rand(200, 1500), rand(500, 860)); c.target = { x: p.x, y: p.y }; } if (c.t <= 0) { c.state = 'idle'; c.t = 1; c.target = null; } break;
+    case 'laser': {
+      if (!laser) { c.state = 'idle'; c.t = 0.6; break; }
+      const d = Math.hypot(laser.x - c.x, laser.y - c.y);
+      if (d < 50) { c.pose = 'crouch'; c.face = laser.x > c.x ? 1 : -1; if (Math.random() < dt * 2) { c.x += c.face * 40; c.say(pick(['!', '!!']), 0.6); } }
+      else { c.pose = 'walk'; moveTo(c, laser.x - c.face * 26, laser.y, sp * 2.2, dt); }
+      c.happy = Math.min(1, c.happy + dt * 0.1); break;
+    }
+    case 'feather': {
+      if (!feather) { c.state = 'idle'; c.t = 0.5; break; }
+      const fx = feather.x, fy = feather.y + 60, d = Math.hypot(fx - c.x, fy - c.y);
+      if (d < 60) { c.pose = 'bat'; c.face = fx > c.x ? 1 : -1; c.happy = Math.min(1, c.happy + dt * 0.3); if (Math.random() < dt * 0.6) earn(1, c.x, c.y - 90 * c.k); }
+      else { c.pose = 'walk'; moveTo(c, fx - (fx > c.x ? 40 : -40), fy, sp * 1.6, dt); }
+      break;
+    }
+    case 'treat': { const tr = c.treatTarget; if (!tr || tr.eaten) { c.state = 'idle'; c.t = 0.4; break; } c.pose = 'walk'; if (moveTo(c, tr.x - c.face * 24, tr.y, sp * 1.8, dt)) { tr.eaten = true; c.hunger = Math.max(0, c.hunger - 15); c.happy = 1; c.affection = Math.min(100, c.affection + 8); hearts.push({ x: c.x, y: c.y - 70 * c.k, t: 1.2 }); c.state = 'sit'; c.pose = 'sit'; c.t = 1.5; } break; }
+    case 'window': c.pose = 'sit'; c.t -= dt; c.puff = Math.max(c.puff, street.dog ? 1 : 0); if (c.t <= 0 && !street.dog) getDown(c); break;
+    case 'stalk': { c.pose = 'crouch'; c.face = MOUSEHOLE.x > c.x ? 1 : -1; if (mouse.state === 'hidden') { c.state = 'sit'; c.pose = 'sit'; c.t = 2; } break; }
+    case 'petted': c.pose = c.perch && c.perch.z > 0 ? 'loaf' : (c.name === 'Waffles II' || c.name === 'Mochi' ? 'belly' : 'sit'); break;
+  }
+  if (c.state !== 'go' && c.state !== 'zoom' && c.state !== 'walk' && c.state !== 'laser' && c.state !== 'feather' && c.state !== 'treat' && c.state !== 'yarn') { c.vx = c.vy = 0; }
+}
+function arriveAt(c, what) {
+  c.vx = c.vy = 0;
+  if (what === 'eat') { c.state = 'eat'; c.t = rand(3, 5); }
+  else if (what === 'sleep') { c.state = 'sleep'; c.pose = 'sleep'; c.t = rand(12, 25); state.naps++; }
+  else if (what === 'box') { c.state = 'box'; c.pose = 'box'; c.t = rand(10, 20); c.say(pick(['If it fits…', 'Mrrp.']), 1.4); }
+  else if (what === 'loaf') { c.state = 'loaf'; c.pose = 'loaf'; c.t = rand(8, 16); }
+  else if (what === 'lap') { c.state = 'lap'; c.pose = 'loaf'; c.t = rand(12, 22); c.face = c.perch.who.seat.face; c.perch.who.seat.lapCat = c; c.perch.who.bubble = { text: pick(['Oh! Hello.', 'I can never leave now.', 'Best café ever.']), t: 2 }; }
+  else if (what === 'knock') { c.state = 'knock'; c.t = 2.4; }
+  else if (what === 'counter') { c.state = 'counter'; c.t = 3; }
+  else if (what === 'fish') { c.state = 'fish'; c.t = rand(5, 9); }
+  else if (what === 'yarn') { c.state = 'yarn'; c.t = rand(5, 9); }
+  else if (what === 'window') { c.state = 'window'; c.pose = 'sit'; c.t = 4; }
+  else { c.state = 'idle'; c.t = rand(0.5, 2); }
+}
+function getDown(c) {
+  const P = c.perch;
+  if (P && P.who) P.who.seat.lapCat = null;
+  leavePerch(c);
+  if (c.z > 0) { startJump(c, 0, () => { const p = onFloor(c.x + c.face * 30, Math.max(c.y + 40, 470)); c.x = p.x; c.y = p.y; c.state = 'idle'; c.t = 0.5; }); c.state = 'idle'; }
+  else { c.state = 'idle'; c.t = rand(0.3, 1); }
+}
+
+/* ================= the sunbeam (not for sale) ================= */
+function sunbeam() {
+  const u = (time / 180) % 1, x0 = lerp(380, 1200, u);
+  return { x0, x1: x0 + 260, y0: 600, y1: 860, u };
+}
+function drawSunbeam(g) {
+  const s = sunbeam(), a = Math.sin(s.u * Math.PI) * 0.22;
+  g.fillStyle = `rgba(255,236,170,${a})`;
+  g.beginPath(); g.moveTo(s.x0 + 80, s.y0); g.lineTo(s.x1 + 80, s.y0); g.lineTo(s.x1, s.y1); g.lineTo(s.x0, s.y1); g.closePath(); g.fill();
+}
+
+/* ================= world update ================= */
+let lastPetEarn = 0;
+function update(dt) {
+  time += dt;
+  for (const c of cats) updateCat(c, dt);
+  // petting
+  if (pointer.petting) {
+    const c = pointer.petting; c.petT += dt; state.petSeconds += dt;
+    c.affection = Math.min(100, c.affection + dt * 6); c.happy = 1;
+    if (Math.random() < dt * 3) hearts.push({ x: c.x + rand(-10, 10), y: c.y - (c.z * depth(c.y)) - 80 * c.k, t: 1.2 });
+    lastPetEarn += dt; if (lastPetEarn > 1.2) { lastPetEarn = 0; earn(1, c.x, c.y - c.z * depth(c.y) - 100 * c.k); }
+    if (c.petLimit && c.petT > c.petLimit) { // petting-induced swat: Clementine's lateral cuddle limit
+      state.swats++; c.say('Hss.', 1.4); c.puff = 1; endPet(); getDown(c); toast(`${c.name} has reached her lateral cuddle limit (0.5 g).`, 3);
+    }
+  }
+  // customers
+  custTimer -= dt; if (custTimer <= 0) { custTimer = rand(7, 14); if (customers.filter(p => p.state !== 'gone').length < 6) spawnCustomer(); }
+  for (const p of customers) {
+    if (p.bubble) { p.bubble.t -= dt; if (p.bubble.t <= 0) p.bubble = null; }
+    p.phase += dt * 6;
+    if (p.state === 'enter') { const dx = p.seat.x - p.x, dy = p.seat.y - p.y, d = Math.hypot(dx, dy); p.face = dx > 0 ? 1 : -1; if (d < 4) { p.state = 'sit'; p.t = 0; p.bubble = { text: `${pick(['Hi! Could I get', 'One', 'May I have'])} ${p.order}?`, t: 2.6 }; barista.queue.push(p.seat); } else { const sp = 110; p.x += dx / d * sp * dt; p.y += dy / d * sp * dt; } }
+    else if (p.state === 'sit') {
+      p.t += dt; if (p.seat.cup) p.seat.cup.hot = Math.max(0, p.seat.cup.hot - dt * 0.02);
+      const nearCat = cats.some(c => Math.hypot(c.x - p.seat.x, c.y - p.seat.y) < 150);
+      if (nearCat) p.happy = Math.min(1, p.happy + dt * 0.02);
+      if (Math.random() < dt * 0.025) p.bubble = { text: pick(QUIPS), t: 3 };
+      if (p.t > p.stay) { p.state = 'leave'; const tip = Math.round(2 + p.happy * 10 + (p.seat.lapCat ? 5 : 0)); earn(tip, p.seat.x, p.seat.y - 150); p.bubble = { text: p.happy > 0.6 ? 'Best café in town.' : 'Thanks!', t: 1.8 }; if (p.seat.lapCat) getDown(p.seat.lapCat); p.x = p.seat.x; p.y = p.seat.y; }
+    } else if (p.state === 'leave') { const dx = 1490 - p.x, dy = 470 - p.y, d = Math.hypot(dx, dy); p.face = dx > 0 ? 1 : -1; if (d < 8) { p.state = 'gone'; p.seat.who = null; p.seat.cup = null; } else { p.x += dx / d * 120 * dt; p.y += dy / d * 120 * dt; } }
+  }
+  for (let i = customers.length - 1; i >= 0; i--) if (customers[i].state === 'gone') customers.splice(i, 1);
+  // barista serves the queue
+  if (barista.brewing > 0) { barista.brewing -= dt; if (barista.brewing <= 0) { const seat = barista.queue.shift(); if (seat && seat.who) seat.cup = { hot: 1 }; } }
+  else if (barista.queue.length) barista.brewing = 2.5;
+  if (barista.sayT > 0) barista.sayT -= dt;
+  // street life and Biscuit's walk
+  if (Math.random() < dt * 0.15 && street.walkers.length < 3) street.walkers.push({ x: Math.random() < 0.5 ? 500 : 1180, dir: 0, ph: 0, col: pick(['#3f6e8c', '#b5523b', '#7a5a9a', '#2f3e46']), skin: pick(['#f1cfb4', '#c48a62', '#8d5a3b']), umbrella: Math.random() < 0.15 });
+  for (const w of street.walkers) { if (!w.dir) w.dir = w.x < 800 ? 1 : -1; w.x += w.dir * 40 * dt; w.ph += dt * 6; }
+  street.walkers = street.walkers.filter(w => w.x > 480 && w.x < 1200);
+  dogTimer -= dt;
+  if (dogTimer <= 0 && !street.dog) {
+    dogTimer = rand(40, 60); street.dog = { x: 470, dir: 1, ph: 0 };
+    toast('Biscuit from Wagmore Park is walking past. The cats have filed a complaint.', 3.5);
+    for (const c of cats) if (c.state !== 'petted' && c.state !== 'sleep' && Math.random() < 0.8) { const s = freePerch(p => p.window); if (s.length) { leavePerch(c); goTo(c, s[0].x, WALL + 40, 'window', pick(s)); } else { c.puff = 1; c.say('Hss!', 1.2); } }
+  }
+  if (street.dog) { const d = street.dog; d.x += 70 * dt; d.ph += dt * 9; if (Math.random() < dt * 0.6) float('Woof!', d.x, 200, '#7a5a2a'); if (d.x > 1180) street.dog = null; }
+  // the commuting mouse
+  mouse.t -= dt;
+  if (mouse.state === 'hidden' && mouse.t <= 0) { mouse.state = 'peek'; mouse.p = 0; mouse.t = 4; for (const c of cats) if (c.state !== 'sleep' && c.state !== 'petted' && c.z === 0 && Math.random() < 0.5) { c.state = 'stalk'; c.x = clamp(c.x, MOUSEHOLE.x - 260, MOUSEHOLE.x + 260); goTo(c, MOUSEHOLE.x + rand(-120, 120), WALL + 70, null); c.state = 'go'; c.target.after = null; c.stalkAfter = true; } }
+  if (mouse.state === 'peek') { mouse.p = Math.min(1, mouse.p + dt * 2); if (mouse.t < 2.4 && mouse.t + dt >= 2.4) { toast('The mouse says he is only passing through. He has a coaster to catch.', 3); } if (mouse.t <= 0) { mouse.state = 'hidden'; mouse.t = rand(35, 60); } }
+  for (const c of cats) if (c.stalkAfter && c.state === 'idle') { c.stalkAfter = false; if (mouse.state !== 'hidden') { c.state = 'stalk'; } }
+  // treats, yarn, falling cups, floating text
+  for (const t of treats) { if (t.z > 0) { t.vz -= 900 * dt; t.z = Math.max(0, t.z + t.vz * dt); } }
+  treats = treats.filter(t => !t.eaten);
+  if (YARN.on) { YARN.x += YARN.vx * dt; YARN.y += YARN.vy * dt; YARN.vx *= Math.exp(-1.5 * dt); YARN.vy *= Math.exp(-1.5 * dt); YARN.spin += YARN.vx * dt * 0.05; const p = onFloor(YARN.x, YARN.y); if (p.x !== YARN.x) YARN.vx *= -0.6; if (p.y !== YARN.y) YARN.vy *= -0.6; YARN.x = p.x; YARN.y = p.y; }
+  for (const f of cupsFalling) { f.t += dt; f.vy += 900 * dt; f.x += f.vx * dt; f.y += f.vy * dt; if (f.y > f.floor && !f.done) { f.done = true; f.y = f.floor; f.vy = 0; f.vx = 0; float('clink', f.x, f.y - 20, '#7a5a3a'); } }
+  cupsFalling = cupsFalling.filter(f => f.t < 6);
+  for (const f of floats) { f.t -= dt; f.y -= dt * (f.z ? 18 : 30); if (f.z) f.x += Math.sin(f.t * 4) * 0.4; }
+  floats = floats.filter(f => f.t > 0);
+  for (const h of hearts) { h.t -= dt; h.y -= dt * 40; }
+  hearts = hearts.filter(h => h.t > 0);
+  if (SKEL.chatter > 0) SKEL.chatter -= dt;
+}
+
+/* ================= render ================= */
+function render() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#3a2c24'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(DPR * S, 0, 0, DPR * S, DPR * OX, DPR * OY);
+  drawStreet(ctx);
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, DPR * OX, DPR * OY); ctx.drawImage(bg, 0, 0); ctx.restore();
+  drawSunbeam(ctx);
+  for (const it of ITEMS) if (it.kind === 'fish') drawFish(ctx, it);
+  drawBarista(ctx);
+  drawMouse(ctx);
+  // depth-sorted scene
+  const items = [];
+  for (const t of TABLES) items.push({ y: t.y, d: () => drawTable(ctx, t) });
+  for (const s of SEATS) { if (!(s.who && s.who.state === 'sit')) items.push({ y: s.y - 2, d: () => drawChair(ctx, s) }); }
+  for (const p of customers) { const sit = p.state === 'sit'; items.push({ y: (sit ? p.seat.y : p.y) - 1, d: () => { if (sit) drawChair(ctx, p.seat); drawPerson(ctx, p); } }); }
+  items.push({ y: SKEL.y, d: () => drawSkeleton(ctx) });
+  for (const it of ITEMS) { if (it.kind === 'box') { items.push({ y: it.y - 1, d: () => drawBoxBack(ctx, it) }); items.push({ y: it.y + 1.5, d: () => drawBoxFront(ctx, it) }); } if (it.kind === 'tree') items.push({ y: it.y, d: () => drawTree(ctx, it) }); }
+  for (const c of cats) items.push({ y: c.y + (c.perch && c.perch.box ? 0.5 : c.z > 0 ? 0.6 : 0), d: () => drawCat(ctx, c) });
+  for (const t of treats) items.push({ y: t.y, d: () => { const k = depth(t.y); ctx.fillStyle = '#c98a4b'; ctx.beginPath(); ctx.ellipse(t.x, t.y - t.z - 3 * k, 6 * k, 3.5 * k, 0, 0, TAU); ctx.fill(); } });
+  if (YARN.on) items.push({ y: YARN.y, d: () => { const k = depth(YARN.y); ctx.fillStyle = '#d9577a'; ctx.beginPath(); ctx.arc(YARN.x, YARN.y - 12 * k, 12 * k, 0, TAU); ctx.fill(); ctx.strokeStyle = '#b23a5a'; ctx.lineWidth = 1.5; for (let q = 0; q < 3; q++) { ctx.beginPath(); ctx.arc(YARN.x, YARN.y - 12 * k, 10 * k, YARN.spin + q, YARN.spin + q + 1.8); ctx.stroke(); } ctx.beginPath(); ctx.moveTo(YARN.x - 10 * k, YARN.y - 4 * k); ctx.quadraticCurveTo(YARN.x - 40, YARN.y + 4, YARN.x - 60, YARN.y - 2); ctx.stroke(); } });
+  for (const f of cupsFalling) items.push({ y: f.floor, d: () => { const k = depth(f.floor); ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.done ? 1.4 : f.t * 8); drawCup(ctx, 0, 0, k, { hot: 0 }); ctx.restore(); } });
+  items.sort((a, b) => a.y - b.y);
+  for (const it of items) it.d();
+  // laser dot and feather wand
+  if (laser) { ctx.fillStyle = 'rgba(255,40,40,0.35)'; ctx.beginPath(); ctx.arc(laser.x, laser.y, 9, 0, TAU); ctx.fill(); ctx.fillStyle = '#ff2a2a'; ctx.beginPath(); ctx.arc(laser.x, laser.y, 4, 0, TAU); ctx.fill(); }
+  if (feather) {
+    const fx = feather.x, fy = feather.y, sw = Math.sin(time * 9) * 10;
+    ctx.strokeStyle = '#7a5a3a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(fx + 120, fy - 160); ctx.lineTo(fx, fy - 20); ctx.stroke();
+    ctx.strokeStyle = '#d9cfc0'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(fx, fy - 20); ctx.quadraticCurveTo(fx - 4 + sw * 0.3, fy, fx + sw, fy + 26); ctx.stroke();
+    ctx.fillStyle = '#3fa6a0'; ctx.save(); ctx.translate(fx + sw, fy + 30); ctx.rotate(sw * 0.03); ctx.beginPath(); ctx.ellipse(0, 0, 6, 16, 0, 0, TAU); ctx.fill(); ctx.fillStyle = '#e2a72e'; ctx.beginPath(); ctx.ellipse(4, 6, 4, 12, 0.4, 0, TAU); ctx.fill(); ctx.restore();
+  }
+  // hearts, floats, bubbles, tags
+  for (const h of hearts) { ctx.globalAlpha = Math.min(1, h.t); ctx.fillStyle = '#e8546f'; heart(ctx, h.x, h.y, 8); ctx.globalAlpha = 1; }
+  for (const f of floats) { ctx.globalAlpha = Math.min(1, f.t); ctx.fillStyle = f.col; ctx.font = f.z ? '700 18px Caveat, cursive' : '800 16px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(f.text, f.x, f.y); ctx.globalAlpha = 1; }
+  for (const c of cats) if (c.bubble) bubble(ctx, c.bubble.text, c.x, c.y - c.z * depth(c.y) - 95 * c.k);
+  for (const p of customers) if (p.bubble) { const sit = p.state === 'sit', k = depth(sit ? p.seat.y : p.y); bubble(ctx, p.bubble.text, sit ? p.seat.x : p.x, (sit ? p.seat.y : p.y) - 165 * k); }
+  if (barista.sayT > 0) bubble(ctx, barista.say, 230, 250);
+  if (SKEL.chatter > 0) bubble(ctx, SKEL.line, SKEL.x, SKEL.y - 175 * depth(SKEL.y));
+  const show = hovered || selected;
+  for (const c of cats) if (c === hovered || c === selected) tag(ctx, c.name, c.x, c.y - c.z * depth(c.y) + 14, c === selected);
+}
+function heart(g, x, y, s) { g.beginPath(); g.moveTo(x, y + s * 0.35); g.bezierCurveTo(x - s * 1.1, y - s * 0.35, x - s * 0.45, y - s * 1.1, x, y - s * 0.45); g.bezierCurveTo(x + s * 0.45, y - s * 1.1, x + s * 1.1, y - s * 0.35, x, y + s * 0.35); g.fill(); }
+function bubble(g, text, x, y) {
+  g.font = '700 14px Nunito, sans-serif'; const w = Math.min(320, g.measureText(text).width + 18), h = 26;
+  const bx = clamp(x - w / 2, 8, WW - w - 8);
+  g.fillStyle = '#fffdf8'; rr(g, bx, y - h, w, h, 13); g.fill(); g.strokeStyle = 'rgba(43,33,27,0.18)'; g.lineWidth = 1; g.stroke();
+  g.fillStyle = '#fffdf8'; g.beginPath(); g.moveTo(x - 5, y - 1); g.lineTo(x, y + 7); g.lineTo(x + 5, y - 1); g.fill();
+  g.fillStyle = '#2b211b'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, bx + w / 2, y - h / 2 + 1, w - 12); g.textBaseline = 'alphabetic';
+}
+function tag(g, name, x, y, sel) {
+  g.font = '800 12px Nunito, sans-serif'; const w = g.measureText(name).width + 14;
+  g.fillStyle = sel ? '#1f7a74' : 'rgba(43,33,27,0.82)'; rr(g, x - w / 2, y, w, 19, 9.5); g.fill();
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(name, x, y + 10); g.textBaseline = 'alphabetic';
+}
+
+/* ================= input ================= */
+const pointer = { x: 0, y: 0, down: false, petting: null };
+let hovered = null, selected = null;
+const toWorld = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left - OX) / S, y: (e.clientY - r.top - OY) / S }; };
+function catAt(x, y) {
+  let best = null;
+  for (const c of cats) { const k = c.k, cy = c.y - c.z * depth(c.y) - 30 * k; if (Math.abs(x - c.x) < 46 * k && Math.abs(y - cy) < 42 * k && (!best || c.y > best.y)) best = c; }
+  return best;
+}
+function startPet(c) {
+  pointer.petting = c; c.petT = 0;
+  if (c.state !== 'sleep' || Math.random() < 0.5) { c.prevState = c.state; if (!['loaf', 'box', 'lap', 'sleep'].includes(c.state)) { c.state = 'petted'; } else c.state = 'petted'; }
+  c.target = null; setPurr(true);
+  if (c.state === 'petted' && Math.random() < 0.4) c.say(pick(['Prrrr.', 'Mrrp!', '*slow blink*']), 1.4);
+}
+function endPet() { const c = pointer.petting; pointer.petting = null; setPurr(false); if (c && c.state === 'petted') { if (c.perch) { c.state = c.perch.box ? 'box' : 'loaf'; c.t = rand(4, 10); } else { c.state = 'sit'; c.pose = 'sit'; c.t = rand(1.5, 3); } } }
+cv.addEventListener('pointerdown', e => {
+  const p = toWorld(e); pointer.x = p.x; pointer.y = p.y; pointer.down = true; cv.setPointerCapture(e.pointerId);
+  if (state.sound) ac()?.resume?.();
+  const c = catAt(p.x, p.y);
+  if (c && state.tool === 'pet') { selectCat(c); startPet(c); return; }
+  if (Math.hypot(p.x - SKEL.x, p.y - (SKEL.y - 120 * depth(SKEL.y))) < 50) { SKEL.chatter = 2.4; SKEL.line = pick(['Still waiting on that latte. Ordered in 1898.', "Don't rush them. Good coffee takes time.", 'I came for the cats. I stayed for… well.', 'Rode a coaster yesterday. 4.25 g. Lovely.']); return; }
+  if (state.tool === 'treat') { const q = onFloor(p.x, p.y); const t = { x: q.x, y: q.y, z: 80, vz: 0, eaten: false }; treats.push(t); const near = cats.filter(c => c.state !== 'sleep' && c.state !== 'petted' && c.z === 0).sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(b.x - t.x, b.y - t.y)).slice(0, 3); for (const c of near) { leavePerch(c); c.state = 'treat'; c.treatTarget = t; } return; }
+  if (state.tool === 'pet' && NARROW) { VIEW.pan = { sx: e.clientX, cam: VIEW.camX }; return; }   // phones: drag empty floor to pan
+  if (state.tool === 'laser') { laser = onFloor(p.x, p.y); }
+  if (state.tool === 'feather') { feather = { x: p.x, y: p.y }; }
+  if (c && state.tool !== 'pet') selectCat(c);
+});
+cv.addEventListener('pointermove', e => {
+  const p = toWorld(e); pointer.x = p.x; pointer.y = p.y;
+  if (VIEW.pan) { VIEW.camX = clamp(VIEW.pan.cam - (e.clientX - VIEW.pan.sx) / S, 0, WW); placeView(); return; }
+  if (laser && pointer.down) laser = onFloor(p.x, p.y);
+  if (feather && pointer.down) feather = { x: p.x, y: p.y };
+  if (!pointer.down) { hovered = catAt(p.x, p.y); cv.style.cursor = hovered && state.tool === 'pet' ? 'grab' : state.tool === 'laser' ? 'crosshair' : 'default'; }
+});
+const up = () => { VIEW.pan = null; pointer.down = false; if (pointer.petting) endPet(); laser = null; feather = null; };
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+cv.addEventListener('pointerleave', () => { if (!pointer.down) hovered = null; });
+const HINTS = { pet: 'Press and hold a cat to pet it. Purring earns purrs; happy customers tip.', treat: 'Click the floor to toss a treat. The nearest cats will come.', laser: 'Hold and drag on the floor. Sir Pounce has never caught it.', feather: 'Hold and wave the wand near a cat.' };
+function setTool(t) { state.tool = t; document.querySelectorAll('[data-tool]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.tool === t))); $('hint').textContent = HINTS[t]; }
+document.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+window.addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea, select')) return;
+  const map = { 1: 'pet', 2: 'treat', 3: 'laser', 4: 'feather' }; if (map[e.key]) setTool(map[e.key]);
+  if (e.key === 'Escape') { closeModals(); selectCat(null); }
+});
+$('sound').addEventListener('click', () => { state.sound = !state.sound; $('sound').textContent = state.sound ? 'Sound on' : 'Sound off'; $('sound').setAttribute('aria-pressed', String(state.sound)); if (state.sound) { ac()?.resume?.(); meow(); } else setPurr(false); });
+
+/* ================= roster, shop, comfort check ================= */
+const list = $('cats');
+function portrait(cnv, c) {
+  const dpr = Math.min(2, devicePixelRatio || 1); cnv.width = 62 * dpr; cnv.height = 48 * dpr;
+  const g = cnv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const fake = Object.assign(Object.create(Object.getPrototypeOf(c)), c, { x: 28, y: WALL, z: 0, pose: 'loaf', state: 'idle', face: 1, bubble: null, perch: null, blink: 0, puff: 0, happy: 0 });
+  Object.defineProperty(fake, 'k', { value: 0.78 });
+  const saved = floats.length; g.save(); g.translate(0, 44 - WALL); drawCat(g, fake); g.restore(); floats.length = saved;
+}
+function buildRoster() {
+  list.innerHTML = ''; $('count').textContent = cats.length;
+  for (const c of cats) {
+    const li = document.createElement('li'); li.className = 'cat' + (c === selected ? ' sel' : ''); li.tabIndex = 0; li.setAttribute('role', 'button');
+    li.innerHTML = `<canvas aria-hidden="true"></canvas><div class="who"><strong></strong><em></em></div><div class="doing"></div>
+      <div class="bars"><label>Fed<i style="--c:#e2a72e"></i></label><label>Energy<i style="--c:#1f7a74"></i></label><label>Affection<i style="--c:#d9577a"></i></label></div>`;
+    li.querySelector('strong').textContent = c.name; li.querySelector('em').textContent = `${c.c.label} · ${c.trait}`;
+    li.title = c.quip;
+    portrait(li.querySelector('canvas'), c);
+    li.addEventListener('click', () => selectCat(selected === c ? null : c));
+    li.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); } });
+    c.li = li; list.appendChild(li);
+  }
+  refreshRoster();
+}
+function refreshRoster() {
+  for (const c of cats) { if (!c.li) continue; c.li.querySelector('.doing').textContent = c.activity(); const [a, b, d] = c.li.querySelectorAll('.bars i'); a.style.setProperty('--v', `${100 - c.hunger}%`); b.style.setProperty('--v', `${c.energy}%`); d.style.setProperty('--v', `${c.affection}%`); }
+}
+function selectCat(c) { selected = c; for (const o of cats) o.li && o.li.classList.toggle('sel', o === c); if (c) { c.li?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); toast(`${c.name}: ${c.quip}`, 3); } }
+const SHOP = [
+  { id: 'box', name: 'Cardboard box', desc: 'The most popular furniture in the café. Up to four.', price: 5, can: () => (state.owned.box || 0) < 4 },
+  { id: 'yarn', name: 'Ball of yarn', desc: 'Gets batted under the counter within a minute.', price: 8, can: () => !state.owned.yarn },
+  { id: 'tree', name: 'Deluxe cat tree', desc: 'Three platforms. Comes in a box the cats will prefer.', price: 40, can: () => !state.owned.tree },
+  { id: 'fish', name: 'Fish tank', desc: 'Goes on the counter. Television for cats.', price: 60, can: () => !state.owned.fish },
+  { id: 'adopt', name: 'Adopt a cat', desc: () => { const n = ADOPTABLE.find(a => !cats.some(c => c.name === a.name)); return n ? `${n.name} the ${COATS[n.coat].label.toLowerCase()} is waiting in a carrier. ${n.trait}.` : 'Every cat has a home here now.'; }, price: 50, can: () => ADOPTABLE.some(a => !cats.some(c => c.name === a.name)) },
+  { id: 'sun', name: 'Sunbeam', desc: 'Not for sale. The cats already own it.', price: null, can: () => false },
+];
+function renderShop() {
+  $('shop-purrs').textContent = Math.floor(state.purrs);
+  $('shop-list').innerHTML = '';
+  for (const it of SHOP) {
+    const li = document.createElement('li'), ok = it.can(), afford = it.price != null && state.purrs >= it.price;
+    li.innerHTML = `<strong></strong><span></span><button type="button" class="btn${ok && afford ? ' primary' : ''}"></button>`;
+    li.querySelector('strong').textContent = it.name;
+    li.querySelector('span').textContent = typeof it.desc === 'function' ? it.desc() : it.desc;
+    const b = li.querySelector('button');
+    b.textContent = it.price == null ? 'Not for sale' : !ok ? 'Owned' : `${it.price} purrs`;
+    b.disabled = !ok || !afford;
+    b.addEventListener('click', () => buy(it));
+    $('shop-list').appendChild(li);
+  }
+}
+function buy(it) {
+  if (!it.can() || state.purrs < it.price) return;
+  state.purrs -= it.price; store.set('purrs', Math.round(state.purrs));
+  if (it.id === 'adopt') { const d = ADOPTABLE.find(a => !cats.some(c => c.name === a.name)); state.adopted.push(d.name); store.set('adopted', state.adopted); addCat(d, true); buildRoster(); toast(`Welcome, ${d.name}. ${d.quip}`, 3.5); }
+  else {
+    state.owned[it.id] = it.id === 'box' ? (state.owned.box || 0) + 1 : 1;
+    if (it.id === 'tree') { state.owned.box = Math.min(4, (state.owned.box || 0) + 1); toast('The cat tree is up. The cats are sitting in the box it came in.', 3.5); }
+    store.set('owned', state.owned); placeItems();
+  }
+  renderShop();
+}
+function renderCheck() {
+  const rows = [
+    ['Peak lateral cuddle', `${(state.swats ? 0.5 : 0.05).toFixed(2)} g`, '0.5 g (Clementine)', state.swats ? `${state.swats} swat${state.swats > 1 ? 's' : ''}` : 'Within limit'],
+    ['Nap duty cycle', `${Math.round(cats.filter(c => c.state === 'sleep' || c.state === 'loaf' || c.state === 'box').length / Math.max(1, cats.length) * 100)}%`, '100%', 'Within limit'],
+    ['Belly-up roll rate', '180°/s', '80°/s full-size (×√26 for cats)', 'Within limit'],
+    ['Zoomies (Froude)', `${state.zoomies}`, 'No limit has ever held', state.zoomies ? 'Noted' : 'Pending'],
+    ['Cups knocked off tables', `${state.cupsLost}`, 'Pixel', state.cupsLost ? 'Expected' : 'Suspicious'],
+    ['Counter evictions', `${state.counterEvictions}`, 'Zero, in theory', state.counterEvictions ? 'Ongoing' : 'So far'],
+    ['Time spent petting', `${Math.round(state.petSeconds)} s`, 'None', 'Keep going'],
+    ["Skeleton's latte", 'Pending', 'Since 1898', 'Within limit'],
+  ];
+  $('check-rows').innerHTML = rows.map(([a, b, c, d]) => `<tr><td>${a}</td><td class="n">${b}</td><td>${c}<br><span class="chip${/swat|Ongoing|Suspicious/.test(d) ? ' warn' : ''}">${d}</span></td></tr>`).join('');
+}
+function openModal(id) { $(id).hidden = false; $(id).querySelector('button').focus(); }
+function closeModals() { for (const id of ['shop-modal', 'check-modal']) $(id).hidden = true; }
+$('open-shop').addEventListener('click', () => { renderShop(); openModal('shop-modal'); });
+$('open-check').addEventListener('click', () => { renderCheck(); openModal('check-modal'); });
+document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeModals));
+document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) closeModals(); }));
+const roster = $('roster'), drawerBtn = $('drawer');
+drawerBtn.addEventListener('click', () => { const c = roster.classList.toggle('closed'); drawerBtn.textContent = c ? 'Show' : 'Hide'; drawerBtn.setAttribute('aria-expanded', String(!c)); requestAnimationFrame(layout); });
+
+/* ================= purr meter (the FPS counter, repurposed) ================= */
+function drawPPS() {
+  const c = $('pps-graph'), w = c.clientWidth, h = c.clientHeight; if (!w) return;
+  const dpr = Math.min(2, devicePixelRatio || 1); if (c.width !== w * dpr) { c.width = w * dpr; c.height = h * dpr; }
+  const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  let mx = 2; for (const v of ppsHist) mx = Math.max(mx, v);
+  const bw = w / ppsHist.length;
+  for (let k = 0; k < ppsHist.length; k++) { const v = ppsHist[(ppsHi + k) % ppsHist.length], bh = v / mx * (h - 2); g.fillStyle = k === ppsHist.length - 1 ? '#1f7a74' : 'rgba(31,122,116,0.45)'; g.fillRect(k * bw, h - bh, Math.max(1, bw - 0.5), bh); }
+}
+let secT = 0, hudT = 0;
+function hud(dt) {
+  secT += dt; hudT += dt;
+  if (secT >= 1) { secT -= 1; ppsHist[ppsHi++ % ppsHist.length] = earnedThisSec; earnedThisSec = 0; let s = 0; for (let k = 1; k <= 10; k++) s += ppsHist[(ppsHi - k + ppsHist.length) % ppsHist.length]; ppsShown = s / 10; drawPPS(); }
+  if (hudT > 0.3) {
+    hudT = 0;
+    $('m-pps').textContent = ppsShown.toFixed(1); $('m-purrs').textContent = Math.floor(state.purrs).toLocaleString();
+    $('m-naps').textContent = state.naps; $('m-cust').textContent = state.served; $('m-cups').textContent = state.cupsLost;
+    refreshRoster();
+    if (!$('shop-modal').hidden) $('shop-purrs').textContent = Math.floor(state.purrs);
+  }
+  if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').style.opacity = 0; }
+}
+
+/* ================= layout & loop ================= */
+function layout() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  CW = innerWidth; CH = innerHeight; cv.width = Math.round(CW * DPR); cv.height = Math.round(CH * DPR);
+  const bar = document.querySelector('.bar').getBoundingClientRect(), ros = roster.getBoundingClientRect(), wide = CW > 920;
+  if (!wide) $('hint').textContent = 'Drag the floor to look around. Press and hold a cat to pet it.';
+  const top = bar.bottom + 8, right = wide ? ros.left - 12 : CW, bottom = wide ? CH : (roster.classList.contains('closed') ? ros.top - 8 : CH * 0.42);
+  const aw = Math.max(200, right - 0), ah = Math.max(160, bottom - top);
+  NARROW = !wide;
+  S = NARROW ? Math.min(ah / WH, aw / 900) : Math.min(aw / WW, ah / WH);
+  VIEW.aw = aw; OY = top + (ah - WH * S) / 2; placeView();
+  bg.width = Math.ceil(WW * S * DPR); bg.height = Math.ceil(WH * S * DPR);
+  drawBackground();
+}
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  update(dt); render(); hud(dt);
+  requestAnimationFrame(frame);
+}
+
+/* ================= boot ================= */
+for (const d of ROSTER) addCat(d, false);
+for (const n of state.adopted) { const d = ADOPTABLE.find(a => a.name === n); if (d) addCat(d, false); }
+cats[0].x = SKEL.x + 8; cats[0].y = SKEL.y + 3; { const p = PERCHES.find(q => q.skeleton); p.cat = cats[0]; cats[0].perch = p; cats[0].z = p.z; cats[0].state = 'sleep'; cats[0].pose = 'sleep'; cats[0].t = 20; }
+placeItems();
+spawnCustomer(); spawnCustomer();
+for (const p of customers) { p.state = 'sit'; p.x = p.seat.x; p.y = p.seat.y; p.seat.cup = { hot: 1 }; p.t = rand(0, 20); }
+if (innerWidth <= 920) { roster.classList.add('closed'); drawerBtn.textContent = 'Show'; drawerBtn.setAttribute('aria-expanded', 'false'); }
+layout(); buildRoster(); drawPPS();
+window.addEventListener('resize', () => requestAnimationFrame(layout));
+document.fonts?.ready?.then(() => { drawBackground(); buildRoster(); });
+requestAnimationFrame(t => { last = t; frame(t); });
+})();
+</script>
+</body>
+</html>
