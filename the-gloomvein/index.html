@@ -1,0 +1,1627 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Gloomvein</title>
+<meta name="description" content="A first-person minecart coaster through an abandoned mine: narrow timbered tunnels, a lava cavern, a crystal helix, a murky underground lake and a bat roost.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: full-bleed WebGL ride through caves; title plate top-left, controls top-right, instrument cluster in the bottom corners. Soot-black glass with ember accents. */
+:root {
+  --glass: rgba(12, 10, 9, 0.6);
+  --glass-strong: rgba(10, 8, 7, 0.9);
+  --brass: #e8893a;
+  --brass-dim: rgba(232, 137, 58, 0.32);
+  --cream: #f6ecd6;
+  --muted: #c4b49a;
+  --ok: #86d08f;
+  --warn: #f2b84b;
+  --bad: #ef6b5b;
+  --f-display: 'IM Fell English SC', Georgia, 'Times New Roman', serif;
+  --f-num: 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif;
+  --f-body: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --g: 16px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #050608; color: var(--cream); font: 14px/1.4 var(--f-body); }
+[hidden] { display: none !important; }
+canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+canvas#c:active { cursor: grabbing; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+.panel { background: var(--glass); border: 1px solid var(--brass-dim); border-radius: 12px; backdrop-filter: blur(10px) saturate(130%); -webkit-backdrop-filter: blur(10px) saturate(130%); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
+.hud-hidden .hud { display: none !important; }
+
+.title-plate { position: fixed; top: calc(var(--g) + env(safe-area-inset-top, 0px)); left: var(--g); padding: 12px 16px 12px; max-width: calc(100vw - 2 * var(--g)); }
+.eyebrow { margin: 0 0 2px; font: 600 10.5px/1.2 var(--f-body); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+.title-plate h1 { margin: 0; font: 700 26px/1.05 var(--f-display); letter-spacing: 0.06em; color: var(--brass); text-shadow: 0 1px 0 rgba(0,0,0,0.5); }
+.section { margin: 6px 0 0; font: 600 15px/1.2 var(--f-num); letter-spacing: 0.04em; color: var(--cream); display: flex; align-items: center; gap: 8px; }
+.section .bar { width: 120px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.12); overflow: hidden; }
+.section .bar i { display: block; height: 100%; width: 0; background: var(--brass); }
+
+.controls { position: fixed; top: calc(var(--g) + env(safe-area-inset-top, 0px)); right: var(--g); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: calc(100vw - 2 * var(--g)); }
+.controls button { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--brass-dim); background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font: 600 13px/1 var(--f-body); white-space: nowrap; }
+.controls button:hover { border-color: var(--brass); }
+.controls button[aria-pressed="true"], .controls button[aria-expanded="true"] { border-color: var(--brass); color: #fff4d6; background: rgba(60, 44, 20, 0.75); }
+.controls kbd { font: 600 10px/1 var(--f-num); color: var(--muted); border: 1px solid var(--brass-dim); border-radius: 4px; padding: 2px 4px; margin-left: 6px; }
+
+.perf { position: fixed; top: calc(var(--g) + 116px + env(safe-area-inset-top, 0px)); left: var(--g); display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+.perf-fps { display: flex; flex-direction: column; align-items: center; min-width: 44px; }
+.perf-fps b { font: 600 24px/1 var(--f-num); font-variant-numeric: tabular-nums; color: var(--ok); }
+.perf-fps span { font: 600 9.5px/1.2 var(--f-body); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.perf-nums { display: grid; grid-template-columns: auto auto; gap: 2px 12px; font: 500 12px/1.2 var(--f-num); font-variant-numeric: tabular-nums; color: #e8dcc2; }
+.perf-nums span { white-space: nowrap; }
+.perf-nums i { font-style: normal; color: var(--muted); }
+#perf-graph { width: 96px; height: 32px; display: block; }
+.perf-hidden .perf { display: none !important; }
+.check { position: fixed; top: calc(64px + env(safe-area-inset-top, 0px)); right: var(--g); width: 360px; max-width: calc(100vw - 2 * var(--g)); max-height: calc(100% - 300px); overflow-y: auto; padding: 14px 16px; background: var(--glass-strong); }
+.check h2 { margin: 0 0 4px; font: 700 15px/1.2 var(--f-display); letter-spacing: 0.06em; color: var(--brass); }
+.check p { margin: 0 0 10px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.check table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.check th { text-align: left; font: 600 10.5px/1.2 var(--f-body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 0 0 6px; }
+.check td { padding: 6px 0; border-top: 1px solid rgba(232, 137, 58, 0.15); }
+.check td.num { font: 600 15px/1 var(--f-num); font-variant-numeric: tabular-nums; text-align: right; padding-right: 10px; }
+.check td.lim { color: var(--muted); font: 500 13px/1 var(--f-num); text-align: right; padding-right: 10px; }
+.chip { display: inline-block; padding: 3px 7px; border-radius: 999px; font: 600 11px/1 var(--f-body); }
+.chip.ok { background: rgba(134, 208, 143, 0.18); color: var(--ok); }
+.chip.bad { background: rgba(239, 107, 91, 0.2); color: var(--bad); }
+
+.cluster { position: fixed; left: var(--g); right: var(--g); bottom: calc(var(--g) + env(safe-area-inset-bottom, 0px)); display: flex; gap: 12px; align-items: flex-end; pointer-events: none; }
+.cluster .spacer { flex: 1; }
+.cluster .left { display: flex; flex-direction: column; gap: 10px; }
+.cluster .panel { pointer-events: auto; padding: 12px 14px; }
+.gpanel { display: flex; gap: 12px; align-items: center; }
+#gmeter { width: 110px; height: 130px; display: block; }
+.readouts { margin: 0; display: grid; gap: 6px; }
+.readouts div { display: flex; flex-direction: column; gap: 1px; }
+.readouts dt { font: 600 10px/1.2 var(--f-body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.readouts dd { margin: 0; font: 600 22px/1 var(--f-num); font-variant-numeric: tabular-nums; }
+.readouts dd small { font-size: 12px; color: var(--muted); margin-left: 2px; }
+.speed { display: flex; gap: 18px; align-items: center; }
+.speed .readouts { grid-template-columns: repeat(3, auto); gap: 14px; }
+.big { display: flex; flex-direction: column; align-items: center; min-width: 110px; }
+.big b { font: 600 56px/0.9 var(--f-num); font-variant-numeric: tabular-nums; color: #fff6e0; }
+.big span { font: 600 11px/1.2 var(--f-body); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+.profile { display: flex; flex-direction: column; gap: 6px; width: 380px; }
+.profile .head { display: flex; justify-content: space-between; font: 600 10px/1.2 var(--f-body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.legend { display: inline-flex; gap: 10px; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 0; }
+#profile { width: 100%; height: 92px; display: block; }
+
+.toast { position: fixed; left: 50%; top: calc(110px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); margin: 0; padding: 8px 16px; border-radius: 999px; background: var(--glass-strong); border: 1px solid var(--brass-dim); font: 600 14px/1.2 var(--f-body); transition: opacity 0.4s; pointer-events: none; text-align: center; max-width: calc(100vw - 2 * var(--g)); }
+
+.intro { position: fixed; inset: 0; display: grid; place-items: center; padding: var(--g); background: radial-gradient(ellipse at center, rgba(10, 8, 5, 0.25), rgba(10, 8, 5, 0.65)); }
+.card { width: min(520px, 100%); padding: 26px 28px 24px; text-align: center; background: var(--glass-strong); }
+.card .eyebrow { margin-bottom: 6px; }
+.card h2 { margin: 0; font: 700 44px/1 var(--f-display); letter-spacing: 0.08em; color: var(--brass); text-wrap: balance; }
+.card .tag { margin: 10px auto 18px; max-width: 42ch; color: #e8dcc2; font-size: 15px; line-height: 1.5; }
+.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 0 0 20px; background: var(--brass-dim); border: 1px solid var(--brass-dim); border-radius: 10px; overflow: hidden; }
+.facts div { background: rgba(20, 15, 10, 0.92); padding: 10px 6px; display: flex; flex-direction: column; gap: 2px; }
+.facts b { font: 600 24px/1 var(--f-num); font-variant-numeric: tabular-nums; color: #fff6e0; }
+.facts span { font: 600 10px/1.2 var(--f-body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.board { padding: 12px 28px; border-radius: 12px; border: 1px solid var(--brass); background: linear-gradient(180deg, #e2bf73, #b98c3c); color: #2a1a08; font: 700 16px/1 var(--f-display); letter-spacing: 0.08em; box-shadow: 0 6px 18px rgba(0,0,0,0.35); }
+.board:disabled { opacity: 0.6; cursor: progress; }
+.fine { margin: 14px 0 0; font-size: 12.5px; color: var(--muted); }
+
+@media (max-width: 1100px) { .profile { width: 300px; } }
+@media (max-width: 860px) {
+  .profile { display: none !important; }
+  .title-plate h1 { font-size: 20px; }
+  .controls .lbl-long { display: none; }
+  .controls kbd { display: none; }
+  .check { top: auto; bottom: calc(190px + env(safe-area-inset-bottom, 0px)); }
+  #perf-graph { display: none; }
+}
+@media (max-width: 560px) {
+  #gmeter { display: none; }
+  .big b { font-size: 40px; }
+  .big { min-width: 80px; }
+  .readouts dd { font-size: 18px; }
+  .cluster { gap: 8px; }
+  .cluster .panel { padding: 10px; }
+  .speed .readouts { display: none; }
+  .cluster .left { flex-direction: row; }
+  .section .bar { display: none; }
+  .card h2 { font-size: 32px; }
+  .title-plate { padding: 8px 12px; }
+  .title-plate .eyebrow { display: none; }
+  .controls { top: calc(var(--g) + 76px + env(safe-area-inset-top, 0px)); left: var(--g); right: auto; justify-content: flex-start; }
+  .controls button { padding: 7px 10px; }
+  .toast { top: calc(140px + env(safe-area-inset-top, 0px)); }
+  .perf { top: calc(var(--g) + 160px + env(safe-area-inset-top, 0px)); padding: 6px 8px; }
+  .perf-nums span:nth-child(n+3) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="First-person minecart ride through caves. Drag to look around."></canvas>
+
+<header class="title-plate panel hud">
+  <p class="eyebrow">Abandoned Gloomvein Mine · sealed 1898</p>
+  <h1>The Gloomvein</h1>
+  <p class="section"><span id="sec">Lantern station</span><span class="bar"><i id="progress"></i></span></p>
+</header>
+
+<nav class="controls hud" aria-label="Ride controls">
+  <button type="button" id="btn-cam">Front cart<kbd>C</kbd></button>
+  <button type="button" id="btn-pause" aria-pressed="false">Pause<kbd>Space</kbd></button>
+  <button type="button" id="btn-sound" aria-pressed="false">Sound off<kbd>M</kbd></button>
+  <button type="button" id="btn-quality">Quality: Auto<kbd>Q</kbd></button>
+  <button type="button" id="btn-check" aria-expanded="false" aria-controls="check"><span class="lbl-long">Design </span>check</button>
+</nav>
+
+<aside class="perf panel hud" id="perf" aria-label="Performance">
+  <div class="perf-fps"><b id="p-fps">–</b><span>fps</span></div>
+  <div class="perf-nums"><span id="p-ms">– <i>ms</i></span><span id="p-res">– <i>res</i></span><span id="p-draw">– <i>draws</i></span><span id="p-tri">– <i>tris</i></span></div>
+  <canvas id="perf-graph" aria-label="Frame time over the last two seconds"></canvas>
+</aside>
+
+<section class="check panel hud" id="check" hidden aria-label="Ride design check">
+  <h2>Rider comfort check</h2>
+  <p>The track banks along the riders' heartline so sideways g goes to zero, curves ramp in gradually, and roll rate is capped. There are no mid-course brakes: the cart climbs 19 m out of the lava cavern, trading speed for height before the narrow S-bends, and the crystal helix descends 14 m per turn so its coils never cross.</p>
+  <table>
+    <thead><tr><th>Measure</th><th style="text-align:right;padding-right:10px">Ride</th><th style="text-align:right;padding-right:10px">Limit</th><th></th></tr></thead>
+    <tbody id="check-rows"></tbody>
+  </table>
+</section>
+
+<footer class="cluster hud">
+  <div class="left">
+  <div class="panel gpanel">
+    <canvas id="gmeter" aria-label="G-force meter: lateral across, vertical up"></canvas>
+    <dl class="readouts">
+      <div><dt>Vertical</dt><dd id="gv">1.00<small>g</small></dd></div>
+      <div><dt>Lateral</dt><dd id="gl">0.00<small>g</small></dd></div>
+      <div><dt>Fore / aft</dt><dd id="gf">0.00<small>g</small></dd></div>
+    </dl>
+  </div>
+  <div class="panel speed">
+    <div class="big"><b id="spd">0</b><span>km/h</span></div>
+    <dl class="readouts">
+      <div><dt id="alt-label">Depth</dt><dd id="alt">0<small>m</small></dd></div>
+      <div><dt>Bank</dt><dd id="bank">0<small>°</small></dd></div>
+      <div><dt>Roll rate</dt><dd id="rr">0<small>°/s</small></dd></div>
+    </dl>
+  </div>
+  </div>
+  <div class="spacer"></div>
+  <div class="panel profile">
+    <div class="head"><span>Track profile</span><span class="legend"><span><i style="background:#86d08f"></i>under 2 g</span><span><i style="background:#f2b84b"></i>2–3.5 g</span><span><i style="background:#ef6b5b"></i>over 3.5 g</span></span></div>
+    <canvas id="profile" aria-label="Height profile of the whole track with the train's position"></canvas>
+  </div>
+</footer>
+
+<p class="toast hud" id="toast" style="opacity:0"></p>
+
+<div class="intro" id="intro">
+  <div class="card panel">
+    <p class="eyebrow">Gloomvein Mine · sealed 1898 · reopened, unwisely</p>
+    <h2>The Gloomvein</h2>
+    <p class="tag">Ride an iron minecart down the old workings, through tunnels barely wider than the cart, past a lake of lava, around a crystal cavern and across water nobody has seen the bottom of.</p>
+    <div class="facts" id="facts">
+      <div><b id="f-height">–</b><span>Deepest point</span></div>
+      <div><b id="f-speed">–</b><span>Top speed</span></div>
+      <div><b id="f-g">–</b><span>Peak g</span></div>
+      <div><b id="f-len">–</b><span>Track length</span></div>
+      <div><b id="f-time">–</b><span>Ride time</span></div>
+      <div><b id="f-lat">–</b><span>Max lateral</span></div>
+    </div>
+    <button type="button" class="board" id="board" disabled>Carving the caves…</button>
+    <p class="fine">Drag to look around · <b>C</b> camera · <b>Space</b> pause · <b>Q</b> quality · <b>F</b> frame rate · <b>H</b> hide panels</p>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+// TRACK-BEGIN
+const G = 9.81;
+const DS = 0.25;              // sample spacing along the heartline (m)
+const HEARTLINE = 1.15;       // rider heartline height above rail centreline (m)
+const LIMITS = { vMax: 4.5, vMin: -0.5, lat: 0.5, rollRate: 80, decel: 0.6 };
+
+const START_Y = 0;
+const LAYOUT = { lift1: 48.785, drop: 13.694, hp: 4.361, lift2: 42.332, lake: 100.884, t1: 48.85, a: 64.004, fin: 14.785 };
+function layoutTrack(Lp) {
+  const dense = [[0, START_Y, 0]];
+  const marks = [];
+  let p = [0, START_Y, 0], yaw = 0, pitch = 0;
+  const D = Math.PI / 180;
+  function run(len, dP, dY, o = {}) {
+    len = Math.max(0.5, len);
+    const n = Math.max(1, Math.round(len / (DS / 2))), h = len / n;
+    const shape = o.shape ?? 1;
+    if (o.name) marks.push({ name: o.name, i: dense.length - 1, kind: o.kind || 'free', zone: o.zone, vmax: o.vmax });
+    for (let i = 0; i < n; i++) {
+      const u = (i + 0.5) / n, rf = o.ramp, w = rf ? (u < rf ? 0.5 - 0.5 * Math.cos(Math.PI * u / rf) : u > 1 - rf ? 0.5 - 0.5 * Math.cos(Math.PI * (1 - u) / rf) : 1) / (1 - rf) : shape * (1 - Math.cos(2 * Math.PI * u)) + (1 - shape);
+      pitch += dP * w / n; yaw += dY * w / n;
+      const c = Math.cos(pitch);
+      p = [p[0] + c * Math.cos(yaw) * h, p[1] + Math.sin(pitch) * h, p[2] + c * Math.sin(yaw) * h];
+      dense.push(p);
+    }
+  }
+  const at = () => p.slice();
+  const probe = {};
+  run(26, 0, 0, { name: 'Lantern station', kind: 'station', zone: 'station' });
+  run(46, 0, Lp.a * D, { name: 'Into the mine', kind: 'station', zone: 'tunnel', ramp: 0.35 });
+  run(8, 0, 0);
+  run(14, 24 * D, 0, { name: 'Chain lift', kind: 'lift', zone: 'shaft' });
+  run(Lp.lift1, 0, 0);
+  run(16, -24 * D, 0);
+  probe.crest1 = at();
+  run(4, 0, 0, { name: 'Crest', kind: 'free', zone: 'shaft' });
+  run(20, -52 * D, 0, { name: 'The plunge', zone: 'lava' });
+  run(Lp.drop, 0, 0);
+  run(46, 52 * D, 0);
+  probe.bottom1 = at();
+  run(130, 0, (180 - Lp.a) * D, { name: 'Lava lake turn', zone: 'lava', ramp: 0.3 });
+  run(20, 16 * D, 0, { name: 'Lava tunnel climb', zone: 'tunnel' });
+  run(Lp.t1, 0, 0);
+  run(20, -16 * D, 0);
+  probe.climbTop = at();
+  run(38, -8 * D, -50 * D, { name: 'Twisting tunnel', zone: 'tunnel' });
+  run(38, 8 * D, 50 * D);
+  run(24, -16 * D, 0, { name: 'Airtime bump', zone: 'tunnel' });
+  run(30, 32 * D, 0);
+  run(30, -32 * D, 0);
+  run(24, 16 * D, 0);
+  probe.helixStart = at();
+  run(14, -Lp.hp * D, 0, { name: 'Crystal helix', zone: 'crystal' });
+  run(230, 0, 450 * D, { ramp: 0.18 });
+  run(14, Lp.hp * D, 0);
+  run(8, 0, 0, { name: 'Flooded gallery', zone: 'tunnel' });
+  run(24, -6 * D, 0);
+  run(24, 6 * D, 0);
+  probe.lake = at();
+  run(Lp.lake, 0, 0, { name: 'Stillwater skim', zone: 'lake' });
+  run(90, 0, 90 * D, { name: 'Lakeside turn', zone: 'lake', ramp: 0.35 });
+  run(30, 30 * D, 0, { name: 'Bat roost lift', kind: 'lift', zone: 'roost' });
+  run(Lp.lift2, 0, 0);
+  run(16, -30 * D, 0);
+  probe.crest2 = at();
+  run(4, 0, 0, { name: 'Crest 2', kind: 'free', zone: 'roost' });
+  run(22, -18 * D, 0, { name: 'Final drop', zone: 'tunnel' });
+  run(22, 18 * D, 0);
+  run(Lp.fin, 0, 0, { name: 'Lantern gallery', zone: 'tunnel' });
+  run(14, 0, 0, { name: 'Brake run', kind: 'brake', zone: 'station' });
+  probe.end = at();
+  return { dense, marks, pitch, yaw, p, probe };
+}
+
+function buildTrack(Lp = LAYOUT) {
+  const { dense, marks, pitch, yaw } = layoutTrack(Lp);
+  const endDense = dense.length;
+
+  // Hermite connector back to the station start
+  const E = dense[dense.length - 1], dE = [Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw)];
+  const S = [0, START_Y, 0], dS = [1, 0, 0];
+  const gap = Math.hypot(S[0] - E[0], S[1] - E[1], S[2] - E[2]);
+  marks.push({ name: 'Return to station', i: dense.length - 1, kind: 'return', zone: 'station' });
+  const nC = Math.max(4, Math.round(gap / (DS / 2)));
+  for (let k = 1; k < nC; k++) {
+    const t = k / nC, t2 = t * t, t3 = t2 * t;
+    const h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2, m = gap;
+    dense.push([0, 1, 2].map(a => h00 * E[a] + h10 * m * dE[a] + h01 * S[a] + h11 * m * dS[a]));
+  }
+
+  // uniform arc-length resample (closed)
+  const cum = [0];
+  for (let i = 1; i <= dense.length; i++) {
+    const a = dense[i - 1], b = dense[i % dense.length];
+    cum.push(cum[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]));
+  }
+  const L = cum[dense.length], N = Math.floor(L / DS), ds = L / N;
+  const P = new Float64Array(N * 3);
+  let j = 0;
+  for (let i = 0; i < N; i++) {
+    const s = i * ds;
+    while (cum[j + 1] < s) j++;
+    const a = dense[j], b = dense[(j + 1) % dense.length], f = (s - cum[j]) / (cum[j + 1] - cum[j] || 1);
+    for (let k = 0; k < 3; k++) P[i * 3 + k] = a[k] + (b[k] - a[k]) * f;
+  }
+  const sections = marks.map(m => ({ name: m.name, kind: m.kind, zone: m.zone || 'tunnel', vmax: m.vmax, s: cum[m.i] }));
+  const idx = i => ((i % N) + N) % N;
+  const get = (A, i) => { i = idx(i); return [A[i * 3], A[i * 3 + 1], A[i * 3 + 2]]; };
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const scale = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+  const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+
+  // tangent and curvature vector
+  const T = new Float64Array(N * 3), Kv = new Float64Array(N * 3);
+  const hk = 4;
+  for (let i = 0; i < N; i++) {
+    const t = norm(sub(get(P, i + 2), get(P, i - 2)));
+    T.set(t, i * 3);
+    const a = get(P, i + hk), b = get(P, i), c = get(P, i - hk), hh = hk * ds;
+    T; Kv.set([(a[0] - 2 * b[0] + c[0]) / (hh * hh), (a[1] - 2 * b[1] + c[1]) / (hh * hh), (a[2] - 2 * b[2] + c[2]) / (hh * hh)], i * 3);
+  }
+
+  // speed profile
+  const secAt = s => { let k = 0; for (let q = 0; q < sections.length; q++) if (sections[q].s <= s) k = q; return sections[k]; };
+  const kind = new Array(N);
+  const secOfI = new Array(N);
+  for (let i = 0; i < N; i++) { secOfI[i] = secAt(i * ds); kind[i] = secOfI[i].kind; }
+  const MU = 0.011, CD = 0.00045, VLIFT = 6, VBRAKE = 6, VDRIVE = 5;
+  const V = new Float64Array(N);
+  let v = 0.4;
+  let brakeOn = false;
+  for (let i = 0; i < N; i++) {
+    V[i] = v;
+    const s = i * ds, dy = P[idx(i + 1) * 3 + 1] - P[i * 3 + 1], k = kind[i];
+    if (k === 'station') v = Math.min(VDRIVE, Math.sqrt(v * v + 2 * 1.0 * ds));
+    else if (k === 'lift') { const v2 = v * v - 2 * (G * dy + MU * G * ds); v = v <= VLIFT ? Math.min(VLIFT, Math.sqrt(v * v + 2 * 0.5 * ds)) : Math.max(VLIFT, Math.sqrt(Math.max(0, v2))); }
+    else {
+      let v2 = v * v + 2 * (-G * dy - MU * G * ds - CD * v * v * ds);
+      if (k === 'trim' && v2 > secOfI[i].vmax ** 2) v2 = Math.max(secOfI[i].vmax ** 2, v * v - 2 * 0.5 * G * ds);
+      if (k === 'brake' || k === 'return') {
+        if (v2 > VBRAKE * VBRAKE) v2 = Math.max(VBRAKE * VBRAKE, v * v - 2 * LIMITS.decel * 0.85 * G * ds);
+        else if (v > VDRIVE) v2 = Math.max(VDRIVE * VDRIVE, v * v - 2 * 1.5 * ds);   // ease from brake speed to the station tyres
+        else v2 = Math.min(VDRIVE * VDRIVE, Math.max(v2, (v * v) + 2 * 0.6 * ds));
+      }
+      v = Math.sqrt(Math.max(0.0001, v2));
+    }
+  }
+  // gentle stop at the platform end
+  for (let i = N - 1; i >= 0; i--) { const rem = (N - i) * ds; V[i] = Math.min(V[i], Math.sqrt(2 * 0.9 * rem) + 0.05); }
+
+  // reference frame: world "up" projected square to the track (no loops on this ride, so it never degenerates)
+  const U0 = new Float64Array(N * 3);
+  for (let i = 0; i < N; i++) { const t = get(T, i); U0.set(norm(sub([0, 1, 0], scale(t, t[1]))), i * 3); }
+
+  // specific force felt by the rider: f = a - g
+  const accel = i => {
+    const vi = V[i], dv2 = (V[idx(i + 1)] ** 2 - V[idx(i - 1)] ** 2) / (4 * ds);
+    const t = get(T, i), k = get(Kv, i);
+    return [t[0] * dv2 + k[0] * vi * vi, t[1] * dv2 + k[1] * vi * vi + G, t[2] * dv2 + k[2] * vi * vi];
+  };
+
+  // heartline roll: bank so that lateral g → 0, then limit roll rate
+  const fu = new Float64Array(N), fr = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    const t = get(T, i), u = get(U0, i), rr = cross(t, u), f = accel(i);
+    fu[i] = dot(f, u); fr[i] = dot(f, rr);
+  }
+  const gauss = (A, sigmaM, wrap = true) => {
+    const s = Math.max(1, Math.round(sigmaM / ds)), rad = s * 3, w = [];
+    for (let k = -rad; k <= rad; k++) w.push(Math.exp(-k * k / (2 * s * s)));
+    const tot = w.reduce((a, b) => a + b, 0), out = new Float64Array(N);
+    for (let i = 0; i < N; i++) { let acc = 0; for (let k = -rad; k <= rad; k++) acc += A[wrap ? idx(i + k) : Math.min(N - 1, Math.max(0, i + k))] * w[k + rad]; out[i] = acc / tot; }
+    return out;
+  };
+  const fuS = gauss(fu, 2.5, false), frS = gauss(fr, 2.5, false);
+  let phi = new Float64Array(N);
+  for (let i = 0; i < N; i++) phi[i] = Math.atan2(frS[i] * Math.sign(fuS[i] || 1), Math.abs(fuS[i]) + 1e-6);
+  const wMax = LIMITS.rollRate * 0.8 * Math.PI / 180;
+  for (let pass = 0; pass < 3; pass++) {
+    for (let i = 1; i < N; i++) { const lim = wMax * ds / Math.max(V[i], 0.5); phi[i] = Math.min(phi[i - 1] + lim, Math.max(phi[i - 1] - lim, phi[i])); }
+    for (let i = N - 2; i >= 0; i--) { const lim = wMax * ds / Math.max(V[i], 0.5); phi[i] = Math.min(phi[i + 1] + lim, Math.max(phi[i + 1] - lim, phi[i])); }
+  }
+  phi = gauss(phi, 1.2, false);
+
+  // final frames + g report
+  const U = new Float64Array(N * 3), R = new Float64Array(N * 3);
+  const gV = new Float64Array(N), gL = new Float64Array(N), gF = new Float64Array(N), roll = new Float64Array(N), rollRate = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    const t = get(T, i), u0 = get(U0, i), r0 = cross(t, u0), c = Math.cos(phi[i]), s = Math.sin(phi[i]);
+    const u = norm(add(scale(u0, c), scale(r0, s))), rr = cross(t, u);
+    U.set(u, i * 3); R.set(rr, i * 3);
+    const f = accel(i);
+    gV[i] = dot(f, u) / G; gL[i] = dot(f, rr) / G; gF[i] = -dot(f, t) / G;
+  }
+  for (let i = 0; i < N; i++) {
+    const u = get(U, i), rr = get(R, i);
+    roll[i] = Math.atan2(-rr[1], u[1]) * 180 / Math.PI; // bank seen against the horizon
+    rollRate[i] = (phi[idx(i + 1)] - phi[idx(i - 1)]) / (2 * ds) * V[i] * 180 / Math.PI;
+  }
+
+  // stats
+  let t = 0;
+  const st = { vMax: -9, vMin: 9, lat: 0, fwd: 0, rollRate: 0, speed: 0, height: 0, time: 0 };
+  for (let i = 0; i < N; i++) {
+    st.vMax = Math.max(st.vMax, gV[i]); st.vMin = Math.min(st.vMin, gV[i]);
+    st.lat = Math.max(st.lat, Math.abs(gL[i])); st.fwd = Math.max(st.fwd, Math.abs(gF[i]));
+    st.rollRate = Math.max(st.rollRate, Math.abs(rollRate[i])); st.speed = Math.max(st.speed, V[i]);
+    st.height = Math.max(st.height, P[i * 3 + 1]);
+    t += ds / Math.max(V[i], 0.3);
+  }
+  st.time = t;
+  return { N, ds, L, P, T, U, R, V, gV, gL, gF, roll, rollRate, sections, stats: st, gap, endDense };
+}
+// TRACK-END
+
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function mulberry(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const $ = id => document.getElementById(id);
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const hash1 = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+/* ===================== track ===================== */
+const TR = buildTrack();
+const { N, ds, L } = TR;
+const HL = HEARTLINE;
+function idxAt(s) { s = ((s % L) + L) % L; const x = s / ds, i = Math.floor(x) % N; return [i, (i + 1) % N, x - Math.floor(x)]; }
+function arrAt(A, s) { const [i, j, f] = idxAt(s); return A[i] + (A[j] - A[i]) * f; }
+function frameAt(s, F) {
+  const [i, j, f] = idxAt(s);
+  const l3 = (A, out) => out.set(A[i * 3] + (A[j * 3] - A[i * 3]) * f, A[i * 3 + 1] + (A[j * 3 + 1] - A[i * 3 + 1]) * f, A[i * 3 + 2] + (A[j * 3 + 2] - A[i * 3 + 2]) * f);
+  l3(TR.P, F.p); l3(TR.T, F.t).normalize(); l3(TR.U, F.u);
+  F.u.addScaledVector(F.t, -F.u.dot(F.t)).normalize();
+  F.r.crossVectors(F.t, F.u);
+  return F;
+}
+const newFrame = () => ({ p: new THREE.Vector3(), t: new THREE.Vector3(), u: new THREE.Vector3(), r: new THREE.Vector3() });
+const P3 = (A, i) => new THREE.Vector3(A[i * 3], A[i * 3 + 1], A[i * 3 + 2]);
+const secOf = s => { let k = TR.sections[0]; for (const x of TR.sections) if (x.s <= s) k = x; return k; };
+const secS = name => { const x = TR.sections.find(q => q.name === name); if (!x) throw new Error(`No track section named "${name}"`); return x.s; };
+const zoneAt = i => secOf(i * ds).zone;
+const ZONE = new Array(N); for (let i = 0; i < N; i++) ZONE[i] = zoneAt(i);
+
+// spatial grid of heartline samples (every metre) for clearance and placement
+const GRID = 6, grid = new Map();
+const STEP1 = Math.round(1 / ds);
+for (let i = 0; i < N; i += STEP1) { const k = (Math.floor(TR.P[i * 3] / GRID) + 1000) * 4096 + Math.floor(TR.P[i * 3 + 2] / GRID) + 1000; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(i); }
+function nearSamples(x, z, r, cb) {
+  const c = Math.ceil(r / GRID), cx = Math.floor(x / GRID) + 1000, cz = Math.floor(z / GRID) + 1000;
+  for (let a = -c; a <= c; a++) for (let b = -c; b <= c; b++) { const list = grid.get((cx + a) * 4096 + cz + b); if (list) for (const i of list) cb(i); }
+}
+function trackDist(x, y, z, r = 8) { let best = 1e9; nearSamples(x, z, r, i => { const d = Math.hypot(x - TR.P[i * 3], y - TR.P[i * 3 + 1], z - TR.P[i * 3 + 2]); if (d < best) best = d; }); return best; }
+
+/* ===================== noise ===================== */
+function h3(x, y, z) { let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(z, 2147483647); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
+function vn3(x, y, z) {
+  const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z), fx = x - ix, fy = y - iy, fz = z - iz;
+  const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy), uz = fz * fz * (3 - 2 * fz);
+  const l = (a, b, t) => a + (b - a) * t;
+  return l(l(l(h3(ix, iy, iz), h3(ix + 1, iy, iz), ux), l(h3(ix, iy + 1, iz), h3(ix + 1, iy + 1, iz), ux), uy),
+           l(l(h3(ix, iy, iz + 1), h3(ix + 1, iy, iz + 1), ux), l(h3(ix, iy + 1, iz + 1), h3(ix + 1, iy + 1, iz + 1), ux), uy), uz) * 2 - 1;
+}
+function fbm3(x, y, z, o = 3) { let s = 0, a = 0.5, f = 1; for (let k = 0; k < o; k++) { s += a * vn3(x * f + k * 13.1, y * f - k * 7.7, z * f + k * 3.3); f *= 2.07; a *= 0.5; } return s; }
+
+/* ===================== renderer, fog, post ===================== */
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+renderer.setSize(innerWidth, innerHeight, false);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+const FOG = new THREE.Color('#06070a');
+scene.background = FOG;
+scene.fog = new THREE.FogExp2(FOG, 0.016);
+const camera = new THREE.PerspectiveCamera(74, innerWidth / innerHeight, 0.05, 900);
+const hemi = new THREE.HemisphereLight('#5a6478', '#3a2414', 0.3);
+scene.add(hemi);
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.7, 0.5, 0.78);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+/* ===================== textures ===================== */
+function canvasTex(w, h, draw, opts = {}) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = opts.linear ? THREE.NoColorSpace : THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = renderer.capabilities.getMaxAnisotropy(); return t;
+}
+function noiseFill(g, w, h, base, amt, seed = 1) { const r = mulberry(seed); g.fillStyle = base; g.fillRect(0, 0, w, h); for (let k = 0; k < w * h / 14; k++) { g.fillStyle = r() < 0.5 ? `rgba(0,0,0,${amt * r()})` : `rgba(255,255,255,${amt * r() * 0.6})`; g.fillRect(r() * w, r() * h, 2, 2); } }
+const T = {};
+T.plank = canvasTex(512, 256, (g, w, h) => {
+  const r = mulberry(4); g.fillStyle = '#4a3020'; g.fillRect(0, 0, w, h);
+  for (let p = 0; p < 4; p++) { const y0 = p * h / 4; g.fillStyle = `rgba(${r() < 0.5 ? '0,0,0' : '255,200,150'},${0.05 + r() * 0.08})`; g.fillRect(0, y0, w, h / 4); for (let k = 0; k < 30; k++) { g.strokeStyle = 'rgba(20,10,4,0.35)'; g.lineWidth = 1 + r() * 1.5; g.beginPath(); const yy = y0 + r() * h / 4; g.moveTo(0, yy); for (let x = 0; x <= w; x += 16) g.lineTo(x, yy + Math.sin(x * 0.02 + k) * 2); g.stroke(); } g.fillStyle = 'rgba(10,5,2,0.8)'; g.fillRect(0, y0, w, 3); }
+});
+T.iron = canvasTex(256, 256, (g, w, h) => { noiseFill(g, w, h, '#3b3530', 0.35, 6); const r = mulberry(8); for (let k = 0; k < 60; k++) { g.fillStyle = `rgba(${140 + r() * 60},${60 + r() * 30},20,${0.15 + r() * 0.25})`; g.beginPath(); g.ellipse(r() * w, r() * h, 6 + r() * 20, 3 + r() * 10, r() * 3, 0, TAU); g.fill(); } });
+function paintSign(g, w, h) {
+  const r = mulberry(3); g.fillStyle = '#5a3a24'; g.fillRect(0, 0, w, h); for (let k = 0; k < 40; k++) { g.strokeStyle = 'rgba(20,10,4,0.3)'; g.beginPath(); const y = r() * h; g.moveTo(0, y); g.lineTo(w, y + r() * 8 - 4); g.stroke(); }
+  g.fillStyle = '#e8d6b0'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '92px "IM Fell English SC", Georgia, serif'; g.fillText('GLOOMVEIN MINE', w / 2, 110);
+  g.font = '40px "IM Fell English SC", Georgia, serif';
+  g.fillText('↑  Surface ……………… 140 m', w / 2, 230);
+  g.fillText('Purrcolator Café ………… 2 km  →', w / 2, 300);
+  g.fillText('←  The Crumb Run ……… 26 km (to scale)', w / 2, 370);
+  g.font = '32px "IM Fell English SC", Georgia, serif'; g.fillStyle = '#c9a07a'; g.fillText('Keep hands, feet & lanterns inside the cart', w / 2, 450);
+}
+T.sign = canvasTex(1024, 512, paintSign);
+function paintShift(g, w, h) { g.fillStyle = '#d8c8a4'; g.fillRect(0, 0, w, h); g.fillStyle = '#3a2410'; g.textAlign = 'center'; g.font = '30px "IM Fell English SC", Georgia, serif'; g.fillText('SHIFT ENDS', w / 2, 50); g.font = '44px "IM Fell English SC", Georgia, serif'; g.fillText('1898', w / 2, 100); }
+T.shift = canvasTex(256, 128, paintShift);
+
+/* ===================== the cave: signed distance field → surface ===================== */
+const CELL = 1.5;
+let FIELD = null;
+const ZONES = {};
+function zoneSamples(z) { const out = []; for (let i = 0; i < N; i += STEP1) if (ZONE[i] === z) out.push(i); return out; }
+function centroid(list) { const c = V3(0, 0, 0); for (const i of list) c.add(P3(TR.P, i)); return c.multiplyScalar(1 / list.length); }
+function defineZones() {
+  // lava cavern around the big banked turn; floor flattened under the lava
+  const turn = []; const a = secS('Lava lake turn'), b = secS('Lava tunnel climb'); for (let i = 0; i < N; i += STEP1) { const s = i * ds; if (s > a && s < b) turn.push(i); }
+  const lc = centroid(turn); let lr = 0; for (const i of turn) lr = Math.max(lr, Math.hypot(TR.P[i * 3] - lc.x, TR.P[i * 3 + 2] - lc.z));
+  ZONES.lava = { c: V3(lc.x, 0, lc.z), r: lr + 26, y0: -24, y1: 40, level: -21 };
+  const hx = []; const ha = secS('Crystal helix'), hb = secS('Flooded gallery'); for (let i = 0; i < N; i += STEP1) { const s = i * ds; if (s > ha && s < hb) hx.push(i); }
+  const hc = centroid(hx); let hr = 0; for (const i of hx) hr = Math.max(hr, Math.hypot(TR.P[i * 3] - hc.x, TR.P[i * 3 + 2] - hc.z));
+  let hy0 = 1e9, hy1 = -1e9; for (const i of hx) { hy0 = Math.min(hy0, TR.P[i * 3 + 1]); hy1 = Math.max(hy1, TR.P[i * 3 + 1]); }
+  ZONES.crystal = { c: V3(hc.x, (hy0 + hy1) / 2, hc.z), r: hr + 20, y0: hy0 - 18, y1: hy1 + 18, helixR: hr };
+  ZONES.lake = { samples: zoneSamples('lake'), level: TR.P[zoneSamples('lake')[10] * 3 + 1] - HL - 1.6 };
+  ZONES.roost = { samples: zoneSamples('roost') };
+  ZONES.station = { c: V3(-8, 1.5, 0), rx: 44, ry: 7.5, rz: 13, floor: -HL - 0.9 };
+}
+function alcove() {
+  const s = secS('Lantern gallery') + 12, i = Math.round(s / ds) % N, p = P3(TR.P, i), r = P3(TR.R, i), rh = V3(r.x, 0, r.z).normalize();
+  const floor = p.y - HL - 0.95;
+  return { p, r: rh, floor, c: V3(p.x - rh.x * 5, floor + 1.4, p.z - rh.z * 5), base: V3(p.x - rh.x * 4.6, floor, p.z - rh.z * 4.6) };
+}
+function buildField() {
+  let mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
+  for (let i = 0; i < N; i++) for (let a = 0; a < 3; a++) { mn[a] = Math.min(mn[a], TR.P[i * 3 + a]); mx[a] = Math.max(mx[a], TR.P[i * 3 + a]); }
+  const pad = [48, 22, 48];
+  mn = mn.map((v, a) => v - pad[a]); mx = mx.map((v, a) => v + pad[a] + (a === 1 ? 18 : 0));
+  mn[1] = Math.min(mn[1], ZONES.crystal.y0 - 6, ZONES.lava.y0 - 6);
+  const nx = Math.ceil((mx[0] - mn[0]) / CELL) + 1, ny = Math.ceil((mx[1] - mn[1]) / CELL) + 1, nz = Math.ceil((mx[2] - mn[2]) / CELL) + 1;
+  const F = new Float32Array(nx * ny * nz).fill(30);
+  const id = (i, j, k) => i + nx * (j + ny * k);
+  const box = (x0, y0, z0, x1, y1, z1, fn) => {
+    const i0 = Math.max(0, Math.floor((x0 - mn[0]) / CELL)), i1 = Math.min(nx - 1, Math.ceil((x1 - mn[0]) / CELL));
+    const j0 = Math.max(0, Math.floor((y0 - mn[1]) / CELL)), j1 = Math.min(ny - 1, Math.ceil((y1 - mn[1]) / CELL));
+    const k0 = Math.max(0, Math.floor((z0 - mn[2]) / CELL)), k1 = Math.min(nz - 1, Math.ceil((z1 - mn[2]) / CELL));
+    for (let k = k0; k <= k1; k++) for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const n = id(i, j, k); F[n] = fn(mn[0] + i * CELL, mn[1] + j * CELL, mn[2] + k * CELL, F[n]); }
+  };
+  // tunnels: a tube of spheres along the track with a flat floor where the track runs on the ground
+  for (let i = 0; i < N; i += STEP1) {
+    const z = ZONE[i], p = P3(TR.P, i), u = P3(TR.U, i);
+    const r = z === 'tunnel' ? 4.4 : z === 'shaft' ? 5.2 : z === 'roost' ? 8.5 : z === 'station' ? 5 : 6;
+    const c = p.clone().addScaledVector(u, z === 'roost' ? 2.5 : 0.5);
+    const floorY = (z === 'tunnel' || z === 'station') && u.y > 0.9 ? p.y - HL - 0.95 : null;
+    box(c.x - r - 2, c.y - r - 2, c.z - r - 2, c.x + r + 2, c.y + r + 2, c.z + r + 2, (x, y, zz, f) => {
+      let d = Math.hypot(x - c.x, y - c.y, zz - c.z) - r;
+      if (floorY !== null) d = Math.max(d, floorY - y);
+      return Math.min(f, d);
+    });
+  }
+  // station hall
+  const st = ZONES.station;
+  box(st.c.x - st.rx - 2, st.floor - 2, st.c.z - st.rz - 2, st.c.x + st.rx + 2, st.c.y + st.ry + 2, st.c.z + st.rz + 2, (x, y, z, f) => {
+    const q = Math.hypot((x - st.c.x) / st.rx, (y - st.c.y) / st.ry, (z - st.c.z) / st.rz);
+    return Math.min(f, Math.max((q - 1) * st.ry, st.floor - y));
+  });
+  // the lava cavern: a vast dome with a rock pillar the track bends around
+  const lv = ZONES.lava;
+  box(lv.c.x - lv.r - 4, lv.y0 - 4, lv.c.z - lv.r - 4, lv.c.x + lv.r + 4, lv.y1 + 4, lv.c.z + lv.r + 4, (x, y, z, f) => {
+    const cy = (lv.y0 + lv.y1) / 2, ry = (lv.y1 - lv.y0) / 2;
+    const q = Math.hypot((x - lv.c.x) / lv.r, (y - cy) / ry, (z - lv.c.z) / lv.r);
+    let d = Math.max((q - 1) * Math.min(lv.r, ry), lv.level - 1.5 - y);
+    const pr = 7 + 3 * Math.exp(-(((y - lv.level) / 6) ** 2)) + 2 * Math.exp(-(((y - lv.y1 + 6) / 8) ** 2));
+    d = Math.max(d, pr - Math.hypot(x - lv.c.x, z - lv.c.z));   // the pillar is rock
+    return Math.min(f, d);
+  });
+  // the crystal cavern: a tall drum around the helix
+  const cr = ZONES.crystal;
+  box(cr.c.x - cr.r - 4, cr.y0 - 4, cr.c.z - cr.r - 4, cr.c.x + cr.r + 4, cr.y1 + 4, cr.c.z + cr.r + 4, (x, y, z, f) => {
+    const cy = (cr.y0 + cr.y1) / 2, ry = (cr.y1 - cr.y0) / 2;
+    const q = Math.hypot((x - cr.c.x) / cr.r, ((y - cy) / ry) ** 3 * 0.9, (z - cr.c.z) / cr.r);
+    return Math.min(f, Math.max((q - 1) * 14, cr.y0 + 2 - y));
+  });
+  // the lake: wide low hall along the skim, floor deep under the water
+  for (const i of ZONES.lake.samples) {
+    const p = P3(TR.P, i), r = 17;
+    box(p.x - r - 2, p.y - 12, p.z - r - 2, p.x + r + 2, p.y + r, p.z + r + 2, (x, y, z, f) => {
+      const d = Math.hypot((x - p.x), (y - p.y - 3) * 1.6, (z - p.z)) - r;
+      return Math.min(f, Math.max(d, ZONES.lake.level - 5 - y));
+    });
+  }
+  // rocky noise near every surface
+  for (let n = 0; n < F.length; n++) {
+    if (Math.abs(F[n]) > 5) continue;
+    const i = n % nx, j = Math.floor(n / nx) % ny, k = Math.floor(n / (nx * ny));
+    const x = mn[0] + i * CELL, y = mn[1] + j * CELL, z = mn[2] + k * CELL;
+    F[n] += fbm3(x * 0.07, y * 0.09, z * 0.07, 3) * 3.2 + vn3(x * 0.3, y * 0.3, z * 0.3) * 0.7;
+  }
+  // an alcove off the lantern gallery for the miner who never clocked out
+  { const a = alcove(), m = V3(a.p.x, a.c.y + 0.3, a.p.z);   // a wide mouth from the tunnel into the alcove, then the room itself
+    box(Math.min(a.c.x, m.x) - 5, a.c.y - 5, Math.min(a.c.z, m.z) - 5, Math.max(a.c.x, m.x) + 5, a.c.y + 5, Math.max(a.c.z, m.z) + 5, (x, y, z, f) => {
+      const vx = a.c.x - m.x, vz = a.c.z - m.z, t = clamp(((x - m.x) * vx + (z - m.z) * vz) / (vx * vx + vz * vz), 0, 1);
+      const dSeg = Math.hypot(x - (m.x + vx * t), (y - a.c.y - 0.3) * 1.15, z - (m.z + vz * t)) - 2.8;
+      const dRoom = Math.hypot(x - a.c.x, (y - a.c.y) * 1.15, z - a.c.z) - 3.4;
+      return Math.min(f, Math.max(Math.min(dSeg, dRoom), a.floor - y));
+    }); }
+  // keep a clear envelope around the riders whatever the noise did
+  for (let i = 0; i < N; i += STEP1) {
+    const p = P3(TR.P, i), u = P3(TR.U, i), c = p.clone().addScaledVector(u, 0.4), r = 3.0;
+    box(c.x - r - 1, c.y - r - 1, c.z - r - 1, c.x + r + 1, c.y + r + 1, c.z + r + 1, (x, y, z, f) => Math.min(f, Math.hypot(x - c.x, y - c.y, z - c.z) - r));
+  }
+  FIELD = { F, nx, ny, nz, mn, id };
+}
+function sampleF(x, y, z) {
+  const { F, nx, ny, nz, mn } = FIELD;
+  const fx = (x - mn[0]) / CELL, fy = (y - mn[1]) / CELL, fz = (z - mn[2]) / CELL;
+  const i = Math.floor(fx), j = Math.floor(fy), k = Math.floor(fz);
+  if (i < 0 || j < 0 || k < 0 || i >= nx - 1 || j >= ny - 1 || k >= nz - 1) return 30;
+  const u = fx - i, v = fy - j, w = fz - k, A = (a, b, c) => F[(i + a) + nx * ((j + b) + ny * (k + c))];
+  const l = (a, b, t) => a + (b - a) * t;
+  return l(l(l(A(0, 0, 0), A(1, 0, 0), u), l(A(0, 1, 0), A(1, 1, 0), u), v), l(l(A(0, 0, 1), A(1, 0, 1), u), l(A(0, 1, 1), A(1, 1, 1), u), v), w);
+}
+function gradF(x, y, z, out) { const e = 0.6; return out.set(sampleF(x + e, y, z) - sampleF(x - e, y, z), sampleF(x, y + e, z) - sampleF(x, y - e, z), sampleF(x, y, z + e) - sampleF(x, y, z - e)).normalize(); }
+function rayToRock(x, y, z, dy, maxD = 80) { for (let t = 0; t < maxD; t += 0.4) { if (sampleF(x, y + dy * t, z) > 0) return y + dy * t; } return null; }
+
+// naive surface nets: one vertex per surface cell, one quad per sign-changing edge
+const CAVE_CHUNKS = [];
+function buildCaveMesh() {
+  const { F, nx, ny, nz, mn } = FIELD, cellIdx = new Int32Array((nx - 1) * (ny - 1) * (nz - 1)).fill(-1);
+  const pos = [], ci = (i, j, k) => i + (nx - 1) * (j + (ny - 1) * k), at = (i, j, k) => F[i + nx * (j + ny * k)];
+  const corners = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
+  const edges = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+  const val = new Float32Array(8);
+  for (let k = 0; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    let mask = 0;
+    for (let c = 0; c < 8; c++) { const [a, b, d] = corners[c]; val[c] = at(i + a, j + b, k + d); if (val[c] < 0) mask |= 1 << c; }
+    if (mask === 0 || mask === 255) continue;
+    let sx = 0, sy = 0, sz = 0, cnt = 0;
+    for (const [a, b] of edges) {
+      const va = val[a], vb = val[b]; if ((va < 0) === (vb < 0)) continue;
+      const t = va / (va - vb), ca = corners[a], cb = corners[b];
+      sx += ca[0] + (cb[0] - ca[0]) * t; sy += ca[1] + (cb[1] - ca[1]) * t; sz += ca[2] + (cb[2] - ca[2]) * t; cnt++;
+    }
+    cellIdx[ci(i, j, k)] = pos.length / 3;
+    pos.push(mn[0] + (i + sx / cnt) * CELL, mn[1] + (j + sy / cnt) * CELL, mn[2] + (k + sz / cnt) * CELL);
+  }
+  const tris = [];
+  const quad = (a, b, c, d, nx0, ny0, nz0) => {
+    if (a < 0 || b < 0 || c < 0 || d < 0) return;
+    const ax = pos[a * 3], ay = pos[a * 3 + 1], az = pos[a * 3 + 2];
+    const ux = pos[b * 3] - ax, uy = pos[b * 3 + 1] - ay, uz = pos[b * 3 + 2] - az, vx = pos[c * 3] - ax, vy = pos[c * 3 + 1] - ay, vz = pos[c * 3 + 2] - az;
+    const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+    if (cx * nx0 + cy * ny0 + cz * nz0 >= 0) tris.push(a, b, c, a, c, d); else tris.push(a, c, b, a, d, c);
+  };
+  for (let k = 1; k < nz - 1; k++) for (let j = 1; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
+    const v0 = at(i, j, k), in0 = v0 < 0;
+    const sg = in0 ? -1 : 1;   // face toward the open side
+    if ((at(i + 1, j, k) < 0) !== in0) quad(cellIdx[ci(i, j - 1, k - 1)], cellIdx[ci(i, j, k - 1)], cellIdx[ci(i, j, k)], cellIdx[ci(i, j - 1, k)], sg, 0, 0);
+    if ((at(i, j + 1, k) < 0) !== in0) quad(cellIdx[ci(i - 1, j, k - 1)], cellIdx[ci(i - 1, j, k)], cellIdx[ci(i, j, k)], cellIdx[ci(i, j, k - 1)], 0, sg, 0);
+    if ((at(i, j, k + 1) < 0) !== in0) quad(cellIdx[ci(i - 1, j - 1, k)], cellIdx[ci(i, j - 1, k)], cellIdx[ci(i, j, k)], cellIdx[ci(i - 1, j, k)], 0, 0, sg);
+  }
+  // per-vertex: fine rock relief along the normal, colour bands, lava glow, crystal veins
+  const nV = pos.length / 3, P = new Float32Array(pos), Nn = new Float32Array(nV * 3), C = new Float32Array(nV * 3), GL = new Float32Array(nV * 3), g = V3(0, 0, 0);
+  const rockA = new THREE.Color('#3b342e'), rockB = new THREE.Color('#5a4a3c'), rockC = new THREE.Color('#2a2a2e'), wet = new THREE.Color('#1c2624'), moss = new THREE.Color('#2f3a26'), c = new THREE.Color();
+  const lv = ZONES.lava, cr = ZONES.crystal, lakeY = ZONES.lake.level;
+  for (let v = 0; v < nV; v++) {
+    let x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2];
+    gradF(x, y, z, g); const nxv = -g.x, nyv = -g.y, nzv = -g.z;
+    const bump = vn3(x * 0.9, y * 0.9, z * 0.9) * 0.22 + vn3(x * 2.3, y * 2.3, z * 2.3) * 0.08;
+    if (trackDist(x, y, z, 6) > 3.6) { x += nxv * bump; y += nyv * bump; z += nzv * bump; }
+    P[v * 3] = x; P[v * 3 + 1] = y; P[v * 3 + 2] = z; Nn[v * 3] = nxv; Nn[v * 3 + 1] = nyv; Nn[v * 3 + 2] = nzv;
+    const band = Math.sin(y * 0.55 + fbm3(x * 0.03, 0, z * 0.03, 2) * 6) * 0.5 + 0.5, n2 = vn3(x * 0.4, y * 0.4, z * 0.4) * 0.5 + 0.5;
+    c.copy(rockA).lerp(rockB, band * 0.7).lerp(rockC, n2 * 0.4);
+    if (nyv > 0.6) c.lerp(new THREE.Color('#4a3e34'), 0.3);
+    if (y < lakeY + 2.5 && y > lakeY - 6) c.lerp(wet, 0.6).lerp(moss, smooth(lakeY + 2.5, lakeY, y) * 0.5);
+    C[v * 3] = c.r; C[v * 3 + 1] = c.g; C[v * 3 + 2] = c.b;
+    // emissive: lava light on the lower walls, glowing amethyst veins in the crystal cavern
+    const dl = Math.hypot(x - lv.c.x, z - lv.c.z);
+    if (dl < lv.r + 6) { const k = Math.exp(-Math.max(0, y - lv.level) / 7) * smooth(lv.r + 6, lv.r - 10, dl); GL[v * 3] += 1.2 * k; GL[v * 3 + 1] += 0.32 * k; GL[v * 3 + 2] += 0.05 * k; }
+    const dc = Math.hypot(x - cr.c.x, z - cr.c.z);
+    if (dc < cr.r + 6 && y > cr.y0 - 4 && y < cr.y1 + 4) { const vein = smooth(0.55, 0.75, Math.abs(vn3(x * 0.18, y * 0.35, z * 0.18))); GL[v * 3] += 0.45 * vein; GL[v * 3 + 1] += 0.12 * vein; GL[v * 3 + 2] += 0.9 * vein; }
+  }
+  // chunk the surface so the camera and the headlamp shadow can cull it
+  const CH = 40, buckets = new Map();
+  for (let t = 0; t < tris.length; t += 3) {
+    const a = tris[t], key = Math.floor(P[a * 3] / CH) * 1e6 + Math.floor(P[a * 3 + 1] / CH) * 1e3 + Math.floor(P[a * 3 + 2] / CH);
+    if (!buckets.has(key)) buckets.set(key, []); buckets.get(key).push(tris[t], tris[t + 1], tris[t + 2]);
+  }
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0.05 });
+  mat.onBeforeCompile = sh => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 glow;\nvarying vec3 vGlow;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = glow;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vGlow;\nuniform float uPulse;').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vGlow * (0.85 + 0.15 * uPulse);');
+    sh.uniforms.uPulse = CAVE_PULSE;
+  };
+  const g0 = new THREE.Group();
+  for (const list of buckets.values()) {
+    const remap = new Map(), pp = [], nn = [], cc = [], gg = [], ix = [];
+    for (const v of list) { if (!remap.has(v)) { remap.set(v, pp.length / 3); pp.push(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]); nn.push(Nn[v * 3], Nn[v * 3 + 1], Nn[v * 3 + 2]); cc.push(C[v * 3], C[v * 3 + 1], C[v * 3 + 2]); gg.push(GL[v * 3], GL[v * 3 + 1], GL[v * 3 + 2]); } ix.push(remap.get(v)); }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pp, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(nn, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(cc, 3)); geo.setAttribute('glow', new THREE.Float32BufferAttribute(gg, 3)); geo.setIndex(ix);
+    geo.computeBoundingSphere();
+    const m = new THREE.Mesh(geo, mat); m.receiveShadow = true; m.castShadow = true; g0.add(m); CAVE_CHUNKS.push(m);
+  }
+  return { group: g0, tris: tris.length / 3 };
+}
+const CAVE_PULSE = { value: 0 };
+
+/* ===================== geometry helpers ===================== */
+// sweep a circular tube along the track at a fixed offset in the rider frame
+function sweepTube(offU, offR, radius, radial, i0, i1, step) {
+  const pos = [], nor = [], uv = [], idx = [];
+  const rings = [];
+  for (let i = i0; i < i1; i += step) rings.push(i % N);
+  rings.push(i1 % N);
+  rings.forEach((i, k) => {
+    const p = P3(TR.P, i), u = P3(TR.U, i), r = P3(TR.R, i);
+    const c = p.clone().addScaledVector(u, offU).addScaledVector(r, offR);
+    for (let a = 0; a <= radial; a++) {
+      const th = a / radial * TAU, n = u.clone().multiplyScalar(Math.cos(th)).addScaledVector(r, Math.sin(th));
+      pos.push(c.x + n.x * radius, c.y + n.y * radius, c.z + n.z * radius); nor.push(n.x, n.y, n.z); uv.push(a / radial, k * step * ds);
+    }
+  });
+  for (let k = 0; k < rings.length - 1; k++) for (let a = 0; a < radial; a++) {
+    const A = k * (radial + 1) + a, B = A + radial + 1;
+    idx.push(A, B, A + 1, B, B + 1, A + 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+// a flat strip between two offset lines in the rider frame
+function sweepStrip(aU, aR, bU, bR, i0, i1, step, vScale = 1) {
+  const pos = [], uv = [], idx = [];
+  let k = 0;
+  for (let i = i0; i <= i1; i += step, k++) {
+    const j = i % N, p = P3(TR.P, j), u = P3(TR.U, j), r = P3(TR.R, j);
+    const A = p.clone().addScaledVector(u, aU).addScaledVector(r, aR), B = p.clone().addScaledVector(u, bU).addScaledVector(r, bR);
+    pos.push(A.x, A.y, A.z, B.x, B.y, B.z); uv.push(0, (i - i0) * ds * vScale, 1, (i - i0) * ds * vScale);
+    if (k) { const o = (k - 1) * 2; idx.push(o, o + 2, o + 1, o + 1, o + 2, o + 3); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+// instanced straight beams (unit cylinder stretched between two points)
+const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 10, 1).translate(0, 0.5, 0);
+const beamGeoLo = new THREE.CylinderGeometry(1, 1, 1, 6, 1).translate(0, 0.5, 0);
+class Beams {
+  constructor() { this.list = []; }
+  add(a, b, r) { this.list.push(a.x, a.y, a.z, b.x, b.y, b.z, r); }
+  mesh(mat, geo = beamGeo, chunk = 180) {
+    const buckets = new Map(), n = this.list.length / 7;
+    for (let k = 0; k < n; k++) {
+      const o = k * 7, key = Math.floor((this.list[o] + this.list[o + 3]) / 2 / chunk) * 1000 + Math.floor((this.list[o + 2] + this.list[o + 5]) / 2 / chunk);
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(k);
+    }
+    const g = new THREE.Group();
+    const Y = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), a = new THREE.Vector3(), b = new THREE.Vector3(), d = new THREE.Vector3(), sc = new THREE.Vector3(), mat4 = new THREE.Matrix4();
+    for (const ids of buckets.values()) {
+      const m = new THREE.InstancedMesh(geo, mat, ids.length), ctr = new THREE.Vector3();
+      for (const k of ids) ctr.x += this.list[k * 7] / ids.length, ctr.y += this.list[k * 7 + 1] / ids.length, ctr.z += this.list[k * 7 + 2] / ids.length;
+      m.position.copy(ctr);
+      ids.forEach((k, j) => {
+        const o = k * 7; a.set(this.list[o], this.list[o + 1], this.list[o + 2]).sub(ctr); b.set(this.list[o + 3], this.list[o + 4], this.list[o + 5]).sub(ctr);
+        d.subVectors(b, a); const len = d.length(); q.setFromUnitVectors(Y, d.normalize());
+        m.setMatrixAt(j, mat4.compose(a, q, sc.set(this.list[o + 6], len, this.list[o + 6])));
+      });
+      m.computeBoundingSphere();
+      m.castShadow = true; m.receiveShadow = true;
+      g.add(m);
+    }
+    return g;
+  }
+}
+// Bake a group's static meshes into one mesh per material (fewer draw calls)
+function sliceGeo(g, start, count) {
+  const out = new THREE.BufferGeometry();
+  for (const [name, attr] of Object.entries(g.attributes)) out.setAttribute(name, new THREE.BufferAttribute(attr.array.slice(start * attr.itemSize, (start + count) * attr.itemSize), attr.itemSize));
+  return out;
+}
+function mergeStatic(group) {
+  group.updateMatrixWorld(true);
+  const inv = group.matrixWorld.clone().invert(), buckets = new Map(), drop = [];
+  group.traverse(o => {
+    if (!o.isMesh || o.isInstancedMesh) return;
+    drop.push(o);
+    let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const parts = Array.isArray(o.material) && g.groups.length ? g.groups.map(gr => [sliceGeo(g, gr.start, gr.count), mats[gr.materialIndex]]) : [[g, mats[0]]];
+    for (const [pg, mat] of parts) {
+      for (const name of Object.keys(pg.attributes)) if (!['position', 'normal', 'uv'].includes(name)) pg.deleteAttribute(name);
+      if (!pg.attributes.uv) pg.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(pg.attributes.position.count * 2), 2));
+      pg.clearGroups();
+      if (!buckets.has(mat)) buckets.set(mat, { list: [], shadow: false });
+      const bk = buckets.get(mat); bk.list.push(pg); bk.shadow ||= o.castShadow;
+    }
+  });
+  for (const o of drop) o.parent.remove(o);
+  for (const [mat, bk] of buckets) {
+    const m = new THREE.Mesh(mergeGeometries(bk.list), mat);
+    m.castShadow = bk.shadow; m.receiveShadow = true; group.add(m);
+  }
+  return group;
+}
+
+
+
+/* ===================== track, timbers, lanterns ===================== */
+const GA = 0.55;
+const M = {
+  rail: new THREE.MeshStandardMaterial({ color: '#5a4a40', map: T.iron, metalness: 0.75, roughness: 0.55 }),
+  spine: new THREE.MeshStandardMaterial({ color: '#3a3430', map: T.iron, metalness: 0.7, roughness: 0.6 }),
+  timber: new THREE.MeshStandardMaterial({ color: '#7a5a3e', map: T.plank, roughness: 0.85 }),
+  sleeper: new THREE.MeshStandardMaterial({ color: '#5a4030', roughness: 0.9 }),
+  chain: new THREE.MeshStandardMaterial({ color: '#2a2622', metalness: 0.8, roughness: 0.5 }),
+  brass: new THREE.MeshStandardMaterial({ color: '#b08a3a', metalness: 1, roughness: 0.35 }),
+  flame: new THREE.MeshStandardMaterial({ color: '#ffcf7a', emissive: '#ff9a2a', emissiveIntensity: 3 }),
+  iron: new THREE.MeshStandardMaterial({ color: '#4a423c', map: T.iron, metalness: 0.7, roughness: 0.55 }),
+  wood: new THREE.MeshStandardMaterial({ color: '#8a6040', map: T.plank, roughness: 0.8 }),
+  bone: new THREE.MeshStandardMaterial({ color: '#e2d8c0', roughness: 0.8, emissive: '#3a2c18', emissiveIntensity: 0.1 }),
+  dark: new THREE.MeshStandardMaterial({ color: '#141210', roughness: 1 }),
+};
+const beamSq = new THREE.CylinderGeometry(1, 1, 1, 4, 1).rotateY(Math.PI / 4).translate(0, 0.5, 0);
+const LANTERNS = [];
+function buildTrackMeshes() {
+  const g = new THREE.Group();
+  const add = (geo, mat) => { geo.computeBoundingSphere(); const c = geo.boundingSphere.center.clone(); geo.translate(-c.x, -c.y, -c.z); const m = new THREE.Mesh(geo, mat); m.position.copy(c); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
+  for (let i0 = 0; i0 < N; i0 += 400) {
+    const i1 = Math.min(N, i0 + 400);
+    add(mergeGeometries([sweepTube(-HL, -GA, 0.075, 8, i0, i1, 3), sweepTube(-HL, GA, 0.075, 8, i0, i1, 3)]), M.rail);
+    add(sweepTube(-HL - 0.42, 0, 0.2, 4, i0, i1, 3), M.spine);
+  }
+  // wooden sleepers
+  const sl = [], m4 = new THREE.Matrix4();
+  for (let i = 0; i < N; i += Math.round(0.8 / ds)) { const p = P3(TR.P, i), t = P3(TR.T, i), u = P3(TR.U, i), r = P3(TR.R, i); sl.push({ p: p.clone().addScaledVector(u, -HL - 0.13), t, u, r }); }
+  const CH = 60, b2 = new Map(); for (const s of sl) { const k = Math.floor(s.p.x / CH) * 1000 + Math.floor(s.p.z / CH); if (!b2.has(k)) b2.set(k, []); b2.get(k).push(s); }
+  const sg = new THREE.BoxGeometry(1, 1, 1);
+  for (const items of b2.values()) {
+    const im = new THREE.InstancedMesh(sg, M.sleeper, items.length);
+    items.forEach((s, k) => { m4.makeBasis(s.t.clone().multiplyScalar(0.22), s.u.clone().multiplyScalar(0.12), s.r.clone().multiplyScalar(1.7)); m4.setPosition(s.p); im.setMatrixAt(k, m4); });
+    im.computeBoundingSphere(); im.castShadow = im.receiveShadow = true; g.add(im);
+  }
+  // chain on both lifts
+  for (const [a, b] of [['Chain lift', 'Crest'], ['Bat roost lift', 'Crest 2']]) {
+    const i0 = Math.round(secS(a) / ds), i1 = Math.round(secS(b) / ds);
+    add(sweepStrip(-HL - 0.02, -0.12, -HL - 0.02, 0.12, i0, i1, 2), M.chain);
+  }
+  return g;
+}
+function buildSupportsAndTimbers() {
+  const posts = new Beams(), braces = new Beams(), g = new THREE.Group();
+  const lava = ZONES.lava.level, lake = ZONES.lake.level;
+  // trestles under the track wherever it rides above the floor. Every member is checked against the ride
+  // envelope of all *other* passes of track (a 2.3 m tube around the riders), so lower coils of the helix
+  // never run through the supports of the coil above.
+  const ENV = 2.3, EXCL = 9;
+  const clearAt = (x, y, z, iSelf) => {
+    let ok = true;
+    nearSamples(x, z, ENV + 3, j => {
+      if (!ok) return;
+      let dsv = Math.abs(j - iSelf) * ds; dsv = Math.min(dsv, L - dsv);
+      if (dsv < EXCL) return;
+      const cx = TR.P[j * 3] - TR.U[j * 3] * 0.35, cy = TR.P[j * 3 + 1] - TR.U[j * 3 + 1] * 0.35, cz = TR.P[j * 3 + 2] - TR.U[j * 3 + 2] * 0.35;
+      if ((x - cx) ** 2 + (y - cy) ** 2 + (z - cz) ** 2 < ENV * ENV) ok = false;
+    });
+    return ok;
+  };
+  const segClear = (a, b, iSelf) => { const d = b.clone().sub(a), n = Math.max(2, Math.ceil(d.length() / 0.4)); for (let k = 0; k <= n; k++) { const q = a.clone().addScaledVector(d, k / n); if (!clearAt(q.x, q.y, q.z, iSelf)) return false; } return true; };
+  const brace = (a, b, r, i) => { if (segClear(a, b, i)) braces.add(a, b, r); };
+  const floorAt = (x, y, z, zone) => {
+    let f = rayToRock(x, y, z, -1, 70); if (f === null) return null;
+    const fluid = Math.hypot(x - ZONES.lava.c.x, z - ZONES.lava.c.z) < ZONES.lava.r ? lava : (zone === 'lake' ? lake : -1e9);
+    return Math.max(f, fluid - 2);
+  };
+  const stats = { bents: 0, outriggers: 0, skipped: 0 };
+  let prev = null;
+  for (let s = 2; s < L - 2; s += 0) {
+    const i = Math.round(s / ds) % N, z = ZONE[i]; s += z === 'tunnel' ? 5 : 6;
+    const p = P3(TR.P, i), u = P3(TR.U, i), r = P3(TR.R, i);
+    if (u.y < 0.5) { prev = null; continue; }
+    const spine = p.clone().addScaledVector(u, -HL - 0.5);
+    const floor = floorAt(spine.x, spine.y - 0.3, spine.z, z);
+    if (floor === null) { prev = null; continue; }
+    const h = spine.y - floor; if (h < 0.6) { prev = null; continue; }
+    const rh = V3(r.x, 0, r.z).normalize();
+    // 1) the usual two-legged bent
+    const legs = [-1, 1].map(sd => { const top = spine.clone().addScaledVector(r, sd * 0.7); const sp = 0.7 + h * 0.05; return { top, base: V3(spine.x + rh.x * sd * sp, floor, spine.z + rh.z * sd * sp) }; });
+    if (legs.every(l => segClear(l.top, l.base, i))) {
+      stats.bents++;
+      for (const l of legs) posts.add(l.base, l.top, 0.13);
+      brace(legs[0].top, legs[1].top, 0.09, i);
+      const lv = []; for (let y = floor + 3; y < spine.y - 1; y += 3.5) { const pts = legs.map(l => l.base.clone().lerp(l.top, (y - l.base.y) / (l.top.y - l.base.y))); lv.push(pts); brace(pts[0], pts[1], 0.07, i); }
+      lv.forEach((pts, k) => { const b = k ? lv[k - 1] : [legs[0].base, legs[1].base]; brace(b[0], pts[1], 0.05, i); brace(b[1], pts[0], 0.05, i); });
+      if (prev && h > 4) for (let k = 0; k < Math.min(prev.lv.length, lv.length); k++) for (const sd of [0, 1]) brace(prev.lv[k][sd], lv[k][sd], 0.05, i);
+      prev = { lv };
+      continue;
+    }
+    prev = null;
+    // 2) an outrigger: a horizontal arm out to one side, then a single column that stands clear of the track below.
+    //    Try the outside of the curve first (real helices are supported from outside), then the inside.
+    const k = P3(TR.T, (i + 8) % N).sub(P3(TR.T, (i - 8 + N) % N)), outside = k.dot(rh) > 0 ? -1 : 1;
+    let placed = false;
+    for (const side of [outside, -outside]) {
+      for (const reach of [3.2, 4.2, 5.4]) {
+        const armA = spine.clone(), armB = V3(spine.x + rh.x * side * reach, spine.y - 0.25, spine.z + rh.z * side * reach);
+        const fl = floorAt(armB.x, armB.y - 0.3, armB.z, z); if (fl === null || armB.y - fl < 0.6) continue;
+        const foot = V3(armB.x, fl, armB.z);
+        if (!segClear(armA, armB, i) || !segClear(armB, foot, i)) continue;
+        posts.add(foot, armB, 0.2);                                     // column
+        posts.add(armA, armB, 0.12);                                    // arm
+        const knee = armB.clone().lerp(foot, Math.min(1, 1.6 / (armB.y - fl)));
+        brace(knee, armA.clone().lerp(armB, 0.45), 0.07, i);            // knee brace under the arm
+        stats.outriggers++; placed = true; break;
+      }
+      if (placed) break;
+    }
+    if (!placed) stats.skipped++;
+  }
+  SUPPORT_STATS = stats;
+  // timber frames and hanging lanterns along the tunnels
+  let n = 0;
+  for (let s = 30; s < L - 30; s += 7) {
+    const i = Math.round(s / ds) % N, z = ZONE[i];
+    if (z !== 'tunnel' && z !== 'station' && z !== 'shaft') continue;
+    if (Math.abs(s - (secS('Lantern gallery') + 12)) < 7) continue;   // keep the view into the miner's alcove open
+    const p = P3(TR.P, i), u = P3(TR.U, i), r = P3(TR.R, i);
+    if (u.y < 0.85) continue;
+    const rh = V3(r.x, 0, r.z).normalize(), up = V3(0, 1, 0);
+    const floor = rayToRock(p.x, p.y - HL, p.z, -1, 6) ?? p.y - HL - 0.9;
+    const capY = p.y + 2.9;
+    const legs = [-1, 1].map(sd => V3(p.x + rh.x * sd * 2.7, 0, p.z + rh.z * sd * 2.7));
+    if (legs.some(l => sampleF(l.x, capY, l.z) > -0.2 || sampleF(l.x, floor + 0.5, l.z) > 0.3)) continue;
+    for (const l of legs) posts.add(V3(l.x, floor, l.z), V3(l.x, capY, l.z), 0.16);
+    posts.add(V3(legs[0].x, capY, legs[0].z), V3(legs[1].x, capY, legs[1].z), 0.17);
+    if (n++ % 3 === 0) LANTERNS.push({ p: V3(p.x + rh.x * 1.6, capY - 0.55, p.z + rh.z * 1.6), real: false });
+  }
+  g.add(posts.mesh(M.timber, beamSq, 60), braces.mesh(M.timber, beamSq, 60));
+  return g;
+}
+function buildLanterns() {
+  const g = new THREE.Group();
+  const cage = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.12, 0.14, 0.32, 6, 1, true), M.iron, LANTERNS.length);
+  const flame = new THREE.InstancedMesh(new THREE.SphereGeometry(0.08, 10, 8), M.flame, LANTERNS.length);
+  const m4 = new THREE.Matrix4();
+  LANTERNS.forEach((l, k) => { cage.setMatrixAt(k, m4.makeTranslation(l.p.x, l.p.y, l.p.z)); flame.setMatrixAt(k, m4.makeTranslation(l.p.x, l.p.y, l.p.z)); });
+  cage.computeBoundingSphere(); flame.computeBoundingSphere(); g.add(cage, flame);
+  // a handful of real lights; the rest glow through bloom
+  const picks = [...LANTERNS.filter(l => l.real), ...[0.05, 0.15, 0.3, 0.42, 0.8, 0.9].map(f => LANTERNS.filter(l => !l.real)[Math.floor(f * LANTERNS.filter(l => !l.real).length)])].filter(Boolean);
+  for (const l of picks) { const pl = new THREE.PointLight('#ffb766', l.dim ? 9 : l.real ? 45 : 30, 26, 1.5); pl.position.copy(l.p); g.add(pl); FLICKER.push({ light: pl, base: pl.intensity, ph: Math.random() * 10 }); }
+  return g;
+}
+const FLICKER = [];
+let SUPPORT_STATS = null;
+
+/* ===================== station dressing ===================== */
+function buildStation() {
+  const g = new THREE.Group(), y0 = -HL - 0.9;
+  const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; g.add(m); return m; };
+  box(46, 0.25, 4.2, M.wood, -6, y0 + 1.0, -3.4);               // platform planks
+  for (let x = -28; x <= 16; x += 4) { box(0.25, 1.0, 0.25, M.timber, x, y0 + 0.5, -5.3); box(0.25, 1.0, 0.25, M.timber, x, y0 + 0.5, -1.6); }
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(6, 3), new THREE.MeshStandardMaterial({ map: T.sign, roughness: 0.8 }));
+  sign.position.set(6, 3.2, -9.5); sign.rotation.y = 0; g.add(sign);
+  // the canary, still on duty
+  const cagePos = V3(-2, 4.2, -2.6);
+  const cage = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8, 0, TAU, 0, Math.PI * 0.6), new THREE.MeshStandardMaterial({ color: '#b08a3a', metalness: 1, roughness: 0.4, wireframe: true })); cage.position.copy(cagePos); g.add(cage);
+  const bird = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), new THREE.MeshStandardMaterial({ color: '#f2d23a', roughness: 0.6 })); bird.position.copy(cagePos).add(V3(0, -0.12, 0)); bird.scale.set(1.4, 1, 1); g.add(bird);
+  CANARY.bird = bird;
+  // station lamps
+  for (const x of [-20, -6, 8]) { LANTERNS.push({ p: V3(x, 4.4, -1.8), real: true }); }
+  return g;
+}
+const CANARY = {};
+function buildSkeletonMiner() {
+  // in an alcove off the lantern gallery: he never clocked out
+  const a = alcove(), r = a.r, base = a.base;
+  const g = new THREE.Group(); g.position.copy(base).add(V3(0, 1.15, 0)); g.rotation.y = Math.atan2(-r.z, r.x);   // on an ore crate, facing the passing train
+  const crate = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.15, 1.1), M.wood); crate.position.set(-0.15, -0.575, 0); g.add(crate);
+  for (const y of [-0.9, -0.25]) { const band = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.06, 1.14), M.iron); band.position.set(-0.15, y, 0); g.add(band); }
+  const bone = M.bone, limb = (a, b, rad) => { const d = b.clone().sub(a), m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, d.length(), 6), bone); m.position.copy(a).addScaledVector(d, 0.5); m.quaternion.setFromUnitVectors(V3(0, 1, 0), d.normalize()); g.add(m); };
+  limb(V3(0, 0.45, 0), V3(0, 1.0, 0), 0.04);
+  for (let k = 0; k < 4; k++) { const rib = new THREE.Mesh(new THREE.TorusGeometry(0.13 - k * 0.01, 0.012, 4, 14, Math.PI * 1.5), bone); rib.position.set(0.03, 0.75 + k * 0.06, 0); rib.rotation.set(Math.PI / 2, 0, Math.PI * 0.25); g.add(rib); }
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), bone); skull.position.set(0.02, 1.15, 0); g.add(skull);
+  for (const sz of [-0.04, 0.04]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), new THREE.MeshStandardMaterial({ color: '#111', emissive: '#ff3a1a', emissiveIntensity: 1.5 })); e.position.set(0.11, 1.16, sz); g.add(e); }
+  const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.17, 0.12, 14), new THREE.MeshStandardMaterial({ color: '#4a3a2a', roughness: 0.9 })); hat.position.set(0, 1.28, 0); g.add(hat);
+  for (const sz of [-0.11, 0.11]) { limb(V3(0, 0.45, sz), V3(0.42, 0.45, sz), 0.035); limb(V3(0.42, 0.45, sz), V3(0.45, 0.02, sz), 0.03); limb(V3(0, 0.95, sz * 1.6), V3(0.25, 0.7, sz * 1.8), 0.028); }
+  limb(V3(0.25, 0.7, 0.2), V3(0.3, 1.3, 0.35), 0.03);                                  // pickaxe handle
+  for (const sz of [-0.11, 0.11]) limb(V3(0.45, 0.02, sz), V3(0.5, -0.9, sz), 0.03);   // shins down the crate
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.06), M.iron); head.position.set(0.3, 1.32, 0.35); g.add(head);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.35), new THREE.MeshStandardMaterial({ map: T.shift, roughness: 0.9 })); sign.position.set(-0.3, 1.6, 0); sign.rotation.y = Math.PI / 2; g.add(sign);
+  LANTERNS.push({ p: base.clone().add(V3(0, 2.7, 0)).addScaledVector(r, 2.4), real: true, dim: true });
+  return g;
+}
+
+/* ===================== lava, water, crystals, rock spikes ===================== */
+let lavaMat, waterMat, EMBERS, DRIPS;
+function buildLava() {
+  const lv = ZONES.lava, g = new THREE.Group();
+  lavaMat = new THREE.ShaderMaterial({
+    uniforms: { time: { value: 0 } },
+    vertexShader: `varying vec3 vP; void main(){ vec4 w = modelMatrix*vec4(position,1.); vP = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }`,
+    fragmentShader: `uniform float time; varying vec3 vP;
+      float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+      float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
+      float fb(vec2 p){ float s=0., a=.5; for(int k=0;k<5;k++){ s+=a*n(p); p=p*2.03+vec2(1.7,9.2); a*=.5; } return s; }
+      void main(){
+        vec2 p = vP.xz*0.08;
+        float flow = fb(p + vec2(time*0.03, time*0.02) + fb(p*1.7 - time*0.05)*1.5);
+        float crack = smoothstep(0.42, 0.5, flow) - smoothstep(0.5, 0.62, flow);
+        float crust = smoothstep(0.35, 0.75, fb(p*2.3 + time*0.01));
+        vec3 hot = vec3(2.2, 0.62, 0.08), warm = vec3(0.7, 0.12, 0.02), cold = vec3(0.05, 0.02, 0.015);
+        vec3 col = mix(warm, cold, crust*0.85) + hot*crack*1.4 + hot*0.25*(1.-crust);
+        gl_FragColor = vec4(col, 1.);
+      }`,
+  });
+  const lava = new THREE.Mesh(new THREE.CircleGeometry(lv.r + 6, 96), lavaMat); lava.rotation.x = -Math.PI / 2; lava.position.set(lv.c.x, lv.level, lv.c.z); g.add(lava);
+  // lava light: a few warm lights that breathe
+  for (let k = 0; k < 3; k++) { const a = k / 3 * TAU, pl = new THREE.PointLight('#ff6a1a', 380, 140, 1.7); pl.position.set(lv.c.x + Math.cos(a) * lv.r * 0.5, lv.level + 4, lv.c.z + Math.sin(a) * lv.r * 0.5); g.add(pl); FLICKER.push({ light: pl, base: 380, ph: k * 3, slow: true }); }
+  // embers rising
+  const n = 500, pos = new Float32Array(n * 3), seeds = new Float32Array(n * 3);
+  for (let k = 0; k < n; k++) { const a = Math.random() * TAU, rr = Math.sqrt(Math.random()) * lv.r; seeds[k * 3] = lv.c.x + Math.cos(a) * rr; seeds[k * 3 + 1] = Math.random(); seeds[k * 3 + 2] = lv.c.z + Math.sin(a) * rr; }
+  const eg = new THREE.BufferGeometry(); eg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const dot = canvasTex(32, 32, (c, w, h) => { const gr = c.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,220,150,1)'); gr.addColorStop(0.4, 'rgba(255,120,40,0.8)'); gr.addColorStop(1, 'rgba(255,60,0,0)'); c.fillStyle = gr; c.fillRect(0, 0, w, h); });
+  EMBERS = new THREE.Points(eg, new THREE.PointsMaterial({ size: 0.45, map: dot, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(3, 1.4, 0.5) }));
+  EMBERS.userData.seeds = seeds; EMBERS.frustumCulled = false; g.add(EMBERS);
+  return g;
+}
+function buildWater() {
+  const lk = ZONES.lake, g = new THREE.Group();
+  let mnx = 1e9, mxx = -1e9, mnz = 1e9, mxz = -1e9;
+  for (const i of lk.samples) { mnx = Math.min(mnx, TR.P[i * 3]); mxx = Math.max(mxx, TR.P[i * 3]); mnz = Math.min(mnz, TR.P[i * 3 + 2]); mxz = Math.max(mxz, TR.P[i * 3 + 2]); }
+  const nrm = canvasTex(256, 256, (c, w, h) => { const img = c.createImageData(w, h); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const H = (a, b) => Math.sin(TAU * (a * 2 + b) / w) * 0.5 + Math.sin(TAU * (a - 3 * b) / w) * 0.3 + Math.sin(TAU * (5 * a + 2 * b) / w) * 0.12; const dx = H(x + 1, y) - H(x - 1, y), dy = H(x, y + 1) - H(x, y - 1); const nv = V3(-dx * 4, -dy * 4, 1).normalize(), o = (y * w + x) * 4; img.data[o] = (nv.x * .5 + .5) * 255; img.data[o + 1] = (nv.y * .5 + .5) * 255; img.data[o + 2] = (nv.z * .5 + .5) * 255; img.data[o + 3] = 255; } c.putImageData(img, 0, 0); }, { linear: true });
+  nrm.repeat.set(30, 30);
+  waterMat = new THREE.MeshStandardMaterial({ color: '#10302c', emissive: '#03110f', roughness: 0.06, metalness: 0.3, normalMap: nrm, normalScale: new THREE.Vector2(0.25, 0.25), transparent: true, opacity: 0.9 });
+  const w = new THREE.Mesh(new THREE.PlaneGeometry(mxx - mnx + 60, mxz - mnz + 60), waterMat); w.rotation.x = -Math.PI / 2; w.position.set((mnx + mxx) / 2, lk.level, (mnz + mxz) / 2); w.receiveShadow = true; g.add(w);
+  // something in the water: two pale eyes that surface now and then
+  const eye = new THREE.MeshStandardMaterial({ color: '#d8f0c8', emissive: '#8ff0a0', emissiveIntensity: 3 });
+  const eyes = new THREE.Group(); for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), eye); e.position.set(0, 0, s * 0.35); e.scale.y = 0.5; eyes.add(e); }
+  eyes.visible = false; g.add(eyes); LAKE_EYES.group = eyes;
+  // drips falling from the ceiling, splashing on the still water
+  const n = 60, pos = new Float32Array(n * 3), seeds = [];
+  for (let k = 0; k < n; k++) { const i = lk.samples[(Math.random() * lk.samples.length) | 0], x = TR.P[i * 3] + (Math.random() - 0.5) * 24, z = TR.P[i * 3 + 2] + (Math.random() - 0.5) * 24; const top = rayToRock(x, lk.level + 2, z, 1, 40) ?? lk.level + 15; seeds.push({ x, z, top: top - 0.3, ph: Math.random() }); }
+  const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  DRIPS = new THREE.Points(dg, new THREE.PointsMaterial({ size: 0.08, color: '#9fc8d8', transparent: true, opacity: 0.8 })); DRIPS.userData.seeds = seeds; DRIPS.frustumCulled = false; g.add(DRIPS);
+  return g;
+}
+const LAKE_EYES = { group: null, t: 0, on: false };
+function buildCrystals() {
+  const cr = ZONES.crystal, g = new THREE.Group();
+  const prism = mergeGeometries([new THREE.CylinderGeometry(0.5, 0.5, 2, 6, 1).translate(0, 1, 0), new THREE.ConeGeometry(0.5, 0.9, 6, 1).translate(0, 2.45, 0)]);
+  const mats = [['#b06aff', '#7a2aff'], ['#5ae0ff', '#1a9aff'], ['#ff6ad0', '#c02a9a']].map(([c, e]) => new THREE.MeshStandardMaterial({ color: c, emissive: e, emissiveIntensity: 1.6, roughness: 0.12, metalness: 0.1, flatShading: true }));
+  const lists = mats.map(() => []), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), n = V3(0, 0, 0);
+  // the giant column in the middle of the helix
+  for (let k = 0; k < 9; k++) { const a = k / 9 * TAU, h = 14 + Math.random() * 18; lists[k % 3].push({ p: V3(cr.c.x + Math.cos(a) * 2.5, cr.y0 + 1, cr.c.z + Math.sin(a) * 2.5), dir: V3(Math.cos(a) * 0.15, 1, Math.sin(a) * 0.15).normalize(), s: V3(2.6, h / 2.9, 2.6) }); }
+  lists[0].push({ p: V3(cr.c.x, cr.y0 + 1, cr.c.z), dir: V3(0, 1, 0), s: V3(4.2, 14, 4.2) });
+  // clusters on the floor and walls of the cavern
+  const rnd = mulberry(11);
+  for (let k = 0; k < 900 && lists.flat().length < 260; k++) {
+    const a = rnd() * TAU, rr = cr.helixR + 4 + rnd() * 18, x = cr.c.x + Math.cos(a) * rr, z = cr.c.z + Math.sin(a) * rr, y0 = cr.y0 + rnd() * (cr.y1 - cr.y0);
+    if (sampleF(x, y0, z) > 0) continue;
+    const dir = rnd() < 0.6 ? -1 : 1, hit = rayToRock(x, y0, z, dir, 40); if (hit === null) continue;
+    const p = V3(x, hit - dir * 0.2, z); if (trackDist(p.x, p.y, p.z, 10) < 5) continue;
+    gradF(p.x, p.y, p.z, n); const base = n.clone().negate();
+    for (let c = 0; c < 3 + (rnd() * 4 | 0); c++) { const d = base.clone().add(V3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).multiplyScalar(0.9)).normalize(); const sc = 0.5 + rnd() * 1.6, len = sc * (0.8 + rnd()); const p0 = p.clone().add(V3(rnd() - 0.5, 0, rnd() - 0.5)); const tip = p0.clone().addScaledVector(d, len * 2.9); if (trackDist(tip.x, tip.y, tip.z, 12) < 3.5 || trackDist((p0.x + tip.x) / 2, (p0.y + tip.y) / 2, (p0.z + tip.z) / 2, 12) < 3.5) continue; lists[(rnd() * 3) | 0].push({ p: p0, dir: d, s: V3(sc, len, sc) }); }
+  }
+  lists.forEach((list, k) => { const im = new THREE.InstancedMesh(prism, mats[k], list.length); list.forEach((c, j) => im.setMatrixAt(j, m4.compose(c.p, q.setFromUnitVectors(V3(0, 1, 0), c.dir), c.s))); im.computeBoundingSphere(); im.castShadow = true; g.add(im); });
+  for (const [col, y] of [['#a060ff', 0.2], ['#40c8ff', 0.7]]) { const pl = new THREE.PointLight(col, 600, 90, 1.7); pl.position.set(cr.c.x, cr.y0 + (cr.y1 - cr.y0) * y, cr.c.z); g.add(pl); FLICKER.push({ light: pl, base: 600, ph: y * 9, slow: true }); }
+  return g;
+}
+function buildRockSpikes() {
+  // stalactites hang from ceilings, stalagmites rise from floors; gems glint in the tunnel walls
+  const geoUp = new THREE.ConeGeometry(1, 1, 7, 4).translate(0, 0.5, 0), p = geoUp.attributes.position;
+  for (let k = 0; k < p.count; k++) { const y = p.getY(k), w = 1 + vn3(p.getX(k) * 3, y * 4, p.getZ(k) * 3) * 0.25; p.setX(k, p.getX(k) * w); p.setZ(k, p.getZ(k) * w); }
+  geoUp.computeVertexNormals();
+  const mat = new THREE.MeshStandardMaterial({ color: '#6a5a4a', roughness: 0.75, metalness: 0.05 });
+  const tites = [], mites = [], gems = [], rnd = mulberry(5), n = V3(0, 0, 0);
+  const { mn, nx, ny, nz } = FIELD;
+  for (let k = 0; k < 26000; k++) {
+    const x = mn[0] + rnd() * (nx - 1) * CELL, y = mn[1] + rnd() * (ny - 1) * CELL, z = mn[2] + rnd() * (nz - 1) * CELL;
+    if (sampleF(x, y, z) > -1) continue;
+    const up = rnd() < 0.55, hit = rayToRock(x, y, z, up ? 1 : -1, 30); if (hit === null) continue;
+    const pt = V3(x, hit + (up ? 0.25 : -0.25), z);
+    const td = trackDist(pt.x, pt.y, pt.z, 14), roomy = -sampleF(x, y, z);
+    if (rnd() < 0.08 && td < 12 && td > 3.5) { gradF(pt.x, pt.y, pt.z, n); gems.push({ p: pt.clone().addScaledVector(n, 0.15), s: 0.08 + rnd() * 0.12, c: (rnd() * 4) | 0 }); continue; }
+    const len = Math.min(roomy * 0.8, (roomy > 8 ? 2 + rnd() * 9 : 0.4 + rnd() * 1.6)) * (up ? 1 : 0.7);
+    if (len < 0.3) continue;
+    // never reach into the riders' space
+    const tip = V3(x, up ? hit - len : hit + len, z); if (trackDist(tip.x, tip.y, tip.z, 14) < 3.4 || trackDist(x, (hit + tip.y) / 2, z, 14) < 3.4) continue;
+    (up ? tites : mites).push({ p: pt, len, w: len * (0.12 + rnd() * 0.12) + 0.08 });
+    if (tites.length + mites.length > 2400) break;
+  }
+  const g = new THREE.Group(), m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
+  for (const [list, flip] of [[tites, true], [mites, false]]) {
+    const im = new THREE.InstancedMesh(geoUp, mat, list.length);
+    list.forEach((s, k) => im.setMatrixAt(k, m4.compose(s.p, q.setFromAxisAngle(V3(1, 0, 0), flip ? Math.PI : 0).multiply(new THREE.Quaternion().setFromAxisAngle(V3(0, 1, 0), hash1(k) * TAU)), V3(s.w, s.len, s.w))));
+    im.computeBoundingSphere(); im.castShadow = true; im.receiveShadow = true; g.add(im);
+  }
+  const gemMats = ['#ff2a4a', '#2aff8a', '#3a6aff', '#c04aff'].map(c => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 2.2, roughness: 0.1, metalness: 0.3, flatShading: true }));
+  gemMats.forEach((m, c) => { const list = gems.filter(x => x.c === c); const im = new THREE.InstancedMesh(new THREE.OctahedronGeometry(1, 0), m, list.length); list.forEach((s, k) => im.setMatrixAt(k, m4.compose(s.p, q.setFromEuler(new THREE.Euler(hash1(k) * 3, hash1(k + 9) * 3, 0)), V3(s.s, s.s * 1.4, s.s)))); im.computeBoundingSphere(); g.add(im); });
+  // glow-worms on the lake cavern ceiling
+  const gw = [];
+  for (let k = 0; k < 3000 && gw.length < 1400; k++) { const i = ZONES.lake.samples[(rnd() * ZONES.lake.samples.length) | 0]; const x = TR.P[i * 3] + (rnd() - 0.5) * 34, z = TR.P[i * 3 + 2] + (rnd() - 0.5) * 34; const top = rayToRock(x, ZONES.lake.level + 1, z, 1, 40); if (top !== null) gw.push(x, top - 0.2 - rnd() * 0.6, z); }
+  const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(gw, 3));
+  const dot = canvasTex(32, 32, (c, w, h) => { const gr = c.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(200,255,240,1)'); gr.addColorStop(1, 'rgba(80,255,220,0)'); c.fillStyle = gr; c.fillRect(0, 0, w, h); });
+  g.add(new THREE.Points(gg, new THREE.PointsMaterial({ size: 0.35, map: dot, color: new THREE.Color(0.6, 2.2, 1.8), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })));
+  const lvl = ZONES.lake.level, mirror = gw.slice(); for (let k = 1; k < mirror.length; k += 3) mirror[k] = 2 * lvl - mirror[k];
+  const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.Float32BufferAttribute(mirror, 3));
+  g.add(new THREE.Points(mg, new THREE.PointsMaterial({ size: 0.3, map: dot, color: new THREE.Color(0.25, 0.9, 0.75), transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending })));
+  const fog = canvasTex(64, 64, (c, w, h) => { const gr = c.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(160,210,200,0.35)'); gr.addColorStop(1, 'rgba(160,210,200,0)'); c.fillStyle = gr; c.fillRect(0, 0, w, h); });
+  const mist = []; for (let k = 0; k < 260; k++) { const i = ZONES.lake.samples[(rnd() * ZONES.lake.samples.length) | 0]; mist.push(TR.P[i * 3] + (rnd() - 0.5) * 40, lvl + 0.4 + rnd() * 1.2, TR.P[i * 3 + 2] + (rnd() - 0.5) * 40); }
+  const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(mist, 3));
+  g.add(new THREE.Points(fg, new THREE.PointsMaterial({ size: 6, map: fog, transparent: true, depthWrite: false, opacity: 0.35 })));
+  return { group: g, counts: { stalactites: tites.length, stalagmites: mites.length, gems: gems.length } };
+}
+
+/* ===================== bats ===================== */
+const BATS = { wings: null, bodies: null, eyes: null, list: [] };
+function buildBats() {
+  const g = new THREE.Group(), mat = new THREE.MeshStandardMaterial({ color: '#16120f', roughness: 0.9, side: THREE.DoubleSide });
+  const wing = new THREE.BufferGeometry(); wing.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0.12, 0, 0.28, -0.1, 0, 0.5, 0, 0, 0, -0.1, 0, 0.5, -0.22, 0, 0.3], 3)); wing.computeVertexNormals();
+  const n = 140;
+  BATS.wings = new THREE.InstancedMesh(wing, mat, n * 2); BATS.bodies = new THREE.InstancedMesh(new THREE.SphereGeometry(0.09, 6, 5).scale(1.6, 1, 1), mat, n);
+  BATS.eyes = new THREE.InstancedMesh(new THREE.SphereGeometry(0.022, 6, 4), new THREE.MeshStandardMaterial({ color: '#ff3020', emissive: '#ff2010', emissiveIntensity: 5 }), n * 2);
+  for (const m of [BATS.wings, BATS.bodies, BATS.eyes]) { m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); g.add(m); }
+  // circling the lava dome, the crystal cavern, and a colony that wakes when the train climbs the roost
+  const lv = ZONES.lava, cr = ZONES.crystal, rs = ZONES.roost.samples;
+  for (let k = 0; k < n; k++) {
+    const kind = k < 50 ? 'lava' : k < 80 ? 'crystal' : 'roost';
+    let c, r, y;
+    if (kind === 'lava') { c = lv.c; r = 10 + Math.random() * lv.r * 0.7; y = 12 + Math.random() * 20; }
+    else if (kind === 'crystal') { c = cr.c; r = 6 + Math.random() * cr.r * 0.6; y = cr.y0 + 12 + Math.random() * 20; }
+    else { const i = rs[(Math.random() * rs.length) | 0]; c = P3(TR.P, i); r = 2 + Math.random() * 4; y = c.y + 5 + Math.random() * 3; }
+    BATS.list.push({ kind, c, r, y, sp: (0.4 + Math.random() * 0.6) * (Math.random() < 0.5 ? -1 : 1), ph: Math.random() * TAU, flap: 10 + Math.random() * 6, awake: kind !== 'roost', fly: 0 });
+  }
+  return g;
+}
+const _eyeOff = [new THREE.Matrix4().makeTranslation(0.13, 0.03, 0.04), new THREE.Matrix4().makeTranslation(0.13, 0.03, -0.04)];
+const _bm = new THREE.Matrix4(), _wm = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _flip = new THREE.Matrix4().makeScale(-1, 1, 1);
+function updateBats(t, dt, trainPos) {
+  BATS.list.forEach((b, k) => {
+    if (b.kind === 'roost' && !b.awake && trainPos.distanceTo(b.c) < 22) { b.awake = true; b.fly = 0; if (Math.random() < 0.05) squeak(); }
+    let x, y, z, yaw, flap;
+    if (!b.awake) { x = b.c.x + Math.cos(b.ph) * b.r; z = b.c.z + Math.sin(b.ph) * b.r; y = b.y + 2.5; yaw = b.ph; flap = 1.2; _bm.compose(_p.set(x, y, z), _q.setFromEuler(new THREE.Euler(Math.PI, yaw, 0)), _s.set(1, 1, 1)); }
+    else {
+      b.fly += dt; const sp = b.kind === 'roost' ? 1.6 : 0.25;
+      const a = b.ph + t * b.sp * sp + (b.kind === 'roost' ? b.fly * 0.8 : 0);
+      const rr = b.kind === 'roost' ? b.r + b.fly * 6 : b.r;
+      x = b.c.x + Math.cos(a) * rr; z = b.c.z + Math.sin(a) * rr; y = b.y + Math.sin(t * 1.7 + b.ph) * 2 + (b.kind === 'roost' ? b.fly * 2.5 : 0);
+      yaw = -a - Math.sign(b.sp) * Math.PI / 2; flap = Math.sin(t * b.flap + b.ph) * 0.9;
+      _bm.compose(_p.set(x, y, z), _q.setFromEuler(new THREE.Euler(0, yaw, 0)), _s.set(1.4, 1.4, 1.4));
+      if (b.kind === 'roost' && b.fly > 9) { b.awake = false; b.fly = 0; }
+    }
+    BATS.bodies.setMatrixAt(k, _bm);
+    for (const e of [0, 1]) BATS.eyes.setMatrixAt(k * 2 + e, _wm.multiplyMatrices(_bm, _eyeOff[e]));
+    BATS.wings.setMatrixAt(k * 2, _wm.multiplyMatrices(_bm, new THREE.Matrix4().makeRotationZ(flap)));
+    BATS.wings.setMatrixAt(k * 2 + 1, _wm.multiplyMatrices(_bm, new THREE.Matrix4().makeRotationZ(-flap).multiply(_flip)));
+  });
+  BATS.wings.instanceMatrix.needsUpdate = true; BATS.bodies.instanceMatrix.needsUpdate = true; BATS.eyes.instanceMatrix.needsUpdate = true;
+}
+
+/* ===================== the minecart train ===================== */
+const CAR_GAP = 2.7, CARS = 4, train = [];
+let HEADLAMP = null, CART_LIGHT = null;
+function buildCart(front) {
+  const car = new THREE.Group();
+  const add = (geo, mat, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; m.receiveShadow = true; car.add(m); return m; };
+  // a tapered tub: wider at the rim than the floor
+  const tub = new THREE.BoxGeometry(2.3, 0.5, 1.5, 1, 1, 1), tp = tub.attributes.position;
+  for (let k = 0; k < tp.count; k++) if (tp.getY(k) < 0) { tp.setX(k, tp.getX(k) * 0.84); tp.setZ(k, tp.getZ(k) * 0.82); }
+  tub.computeVertexNormals();
+  const shell = add(tub, M.wood, 0, 0.58, 0);
+  add(new THREE.BoxGeometry(1.9, 0.04, 1.2), M.dark, 0, 0.36, 0);              // interior floor
+  // iron bands, rim and rivets
+  for (const x of [-0.9, -0.3, 0.3, 0.9]) add(new THREE.BoxGeometry(0.08, 0.52, 1.56), M.iron, x * 0.95, 0.59, 0);
+  for (const [w, d, y] of [[2.36, 1.56, 0.85]]) { add(new THREE.BoxGeometry(w, 0.07, 0.08), M.iron, 0, y, d / 2); add(new THREE.BoxGeometry(w, 0.07, 0.08), M.iron, 0, y, -d / 2); add(new THREE.BoxGeometry(0.08, 0.07, d), M.iron, w / 2, y, 0); add(new THREE.BoxGeometry(0.08, 0.07, d), M.iron, -w / 2, y, 0); }
+  // seats and a grab bar
+  add(new THREE.BoxGeometry(0.4, 0.3, 1.25), M.wood, -0.7, 0.5, 0);
+  add(new THREE.BoxGeometry(0.4, 0.3, 1.25), M.wood, 0.15, 0.5, 0);
+  add(new THREE.CylinderGeometry(0.035, 0.035, 1.3, 8).rotateX(Math.PI / 2), M.iron, 0.75, 0.98, 0);
+  for (const z of [-0.65, 0.65]) add(new THREE.CylinderGeometry(0.03, 0.03, 0.4, 8), M.iron, 0.75, 0.78, z);
+  // wheels: iron discs with spokes, sitting on the rails
+  for (const x of [-0.75, 0.75]) for (const z of [-GA, GA]) {
+    add(new THREE.CylinderGeometry(0.24, 0.24, 0.1, 16).rotateX(Math.PI / 2), M.iron, x, 0.2, z * 1.08);
+    add(new THREE.TorusGeometry(0.17, 0.025, 6, 16), M.dark, x, 0.2, z * 1.13);
+  }
+  add(new THREE.BoxGeometry(1.9, 0.15, 0.4), M.iron, 0, 0.3, 0);
+  add(new THREE.CylinderGeometry(0.03, 0.03, 0.55, 6).rotateZ(Math.PI / 2), M.iron, -1.4, 0.32, 0);
+  if (front) {
+    // the lantern on the front of the cart
+    const lx = 1.24, ly = 0.66, lz = -0.45;   // hung on the front face, below the rim: you see its glow, not the lantern
+    add(new THREE.BoxGeometry(0.05, 0.18, 0.05), M.iron, lx, 0.8, lz);
+    add(new THREE.CylinderGeometry(0.08, 0.1, 0.2, 6, 1, true), M.iron, lx, ly, lz);
+    add(new THREE.ConeGeometry(0.1, 0.1, 6), M.iron, lx, ly + 0.15, lz);
+    add(new THREE.SphereGeometry(0.045, 10, 8), M.flame, lx, ly, lz);
+  }
+  return car;
+}
+
+/* ===================== audio ===================== */
+const AUD = { ctx: null, on: false };
+function initAudio() {
+  if (AUD.ctx) return;
+  const ctx = new (window.AudioContext || window.webkitAudioContext)(), sr = ctx.sampleRate;
+  const noiseBuf = (brown) => { const b = ctx.createBuffer(1, sr * 2, sr), d = b.getChannelData(0); let last = 0; for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; if (brown) { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; } else d[i] = w; } return b; };
+  const src = (buf) => { const s = ctx.createBufferSource(); s.buffer = buf; s.loop = true; s.start(); return s; };
+  const master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
+  const windF = ctx.createBiquadFilter(); windF.type = 'bandpass'; windF.Q.value = 0.6;
+  const windG = ctx.createGain(); windG.gain.value = 0; src(noiseBuf(false)).connect(windF).connect(windG).connect(master);
+  const rumF = ctx.createBiquadFilter(); rumF.type = 'lowpass'; rumF.frequency.value = 140;
+  const rumG = ctx.createGain(); rumG.gain.value = 0; src(noiseBuf(true)).connect(rumF).connect(rumG).connect(master);
+  const lavaF = ctx.createBiquadFilter(); lavaF.type = 'lowpass'; lavaF.frequency.value = 90;
+  const lavaG = ctx.createGain(); lavaG.gain.value = 0; src(noiseBuf(true)).connect(lavaF).connect(lavaG).connect(master);
+  const droneO = ctx.createOscillator(), droneG = ctx.createGain(); droneO.type = 'sine'; droneO.frequency.value = 46; droneG.gain.value = 0.05; droneO.connect(droneG).connect(master); droneO.start();
+  const brakeF = ctx.createBiquadFilter(); brakeF.type = 'highpass'; brakeF.frequency.value = 2500;
+  const brakeG = ctx.createGain(); brakeG.gain.value = 0; src(noiseBuf(false)).connect(brakeF).connect(brakeG).connect(master);
+  Object.assign(AUD, { ctx, master, windF, windG, rumG, lavaG, brakeG, clickBuf: noiseBuf(false) });
+}
+function clack(vol) {
+  const { ctx } = AUD; if (!ctx || !AUD.on) return;
+  const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+  s.buffer = AUD.clickBuf; f.type = 'bandpass'; f.frequency.value = 1800; f.Q.value = 3;
+  const t = ctx.currentTime; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+  s.connect(f).connect(g).connect(AUD.master); s.start(t, Math.random()); s.stop(t + 0.08);
+}
+function updateAudio(v, accelT, kind, zone) {
+  if (!AUD.ctx) return;
+  const t = AUD.ctx.currentTime, k = 0.15;
+  AUD.master.gain.setTargetAtTime(AUD.on ? 0.9 : 0, t, 0.2);
+  AUD.windF.frequency.setTargetAtTime(300 + v * 45, t, k);
+  AUD.windG.gain.setTargetAtTime(Math.min(0.5, (v / 30) ** 2 * 0.55), t, k);
+  AUD.rumG.gain.setTargetAtTime(Math.min(0.7, v / 30 * 0.6), t, k);
+  AUD.lavaG.gain.setTargetAtTime(zone === 'lava' ? 0.6 : 0.02, t, 0.8);
+  AUD.brakeG.gain.setTargetAtTime(kind === 'brake' && accelT < -1.5 ? 0.12 : 0, t, 0.1);
+}
+
+function drip() {
+  const { ctx } = AUD; if (!ctx || !AUD.on) return;
+  const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain(), f0 = 900 + Math.random() * 900;
+  o.type = 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * 2.2, t + 0.05);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.08, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+  o.connect(g).connect(AUD.master); o.start(t); o.stop(t + 0.3);
+}
+function squeak() {
+  const { ctx } = AUD; if (!ctx || !AUD.on) return;
+  for (let k = 0; k < 4; k++) { const t = ctx.currentTime + k * 0.07 + Math.random() * 0.05, o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(5200 + Math.random() * 2000, t); o.frequency.exponentialRampToValueAtTime(3800, t + 0.04); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.04, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05); o.connect(g).connect(AUD.master); o.start(t); o.stop(t + 0.06); }
+}
+
+
+/* ===================== HUD helpers ===================== */
+const gColor = g => g < 2 ? '#86d08f' : g < 3.5 ? '#f2b84b' : '#ef6b5b';
+const S = TR.stats;
+function fillFacts() {
+  let deep = 0; for (let i = 0; i < N; i++) deep = Math.min(deep, TR.P[i * 3 + 1]);
+  $('f-height').textContent = `${Math.round(-deep)} m`;
+  $('f-speed').textContent = `${Math.round(S.speed * 3.6)} km/h`;
+  $('f-g').textContent = `${S.vMax.toFixed(1)} g`;
+  $('f-len').textContent = `${Math.round(L).toLocaleString()} m`;
+  $('f-time').textContent = `${Math.floor(S.time / 60)}:${String(Math.round(S.time % 60)).padStart(2, '0')}`;
+  $('f-lat').textContent = `${S.lat.toFixed(2)} g`;
+  const rows = [
+    ['Peak vertical g', `${S.vMax.toFixed(2)} g`, `+${LIMITS.vMax.toFixed(1)} g`, S.vMax <= LIMITS.vMax],
+    ['Lowest vertical g', `${S.vMin.toFixed(2)} g`, `${LIMITS.vMin.toFixed(1)} g`, S.vMin >= LIMITS.vMin],
+    ['Peak lateral g', `${S.lat.toFixed(2)} g`, `±${LIMITS.lat.toFixed(1)} g`, S.lat <= LIMITS.lat],
+    ['Peak fore/aft g', `${S.fwd.toFixed(2)} g`, `±1.0 g`, S.fwd <= 1.0],
+    ['Peak roll rate', `${Math.round(S.rollRate)}°/s`, `${LIMITS.rollRate}°/s`, S.rollRate <= LIMITS.rollRate],
+    ['Brake deceleration', `${(LIMITS.decel * 0.85).toFixed(2)} g`, `${LIMITS.decel.toFixed(1)} g`, true],
+  ];
+  $('check-rows').innerHTML = rows.map(([a, b, c, ok]) => `<tr><td>${a}</td><td class="num">${b}</td><td class="lim">${c}</td><td><span class="chip ${ok ? 'ok' : 'bad'}">${ok ? 'Within limit' : 'Over limit'}</span></td></tr>`).join('');
+}
+const prof = { c: $('profile'), base: null };
+function drawProfileBase() {
+  const c = prof.c, w = c.clientWidth, h = c.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
+  if (!w) return;
+  c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+  const off = document.createElement('canvas'); off.width = c.width; off.height = c.height;
+  const g = off.getContext('2d'); g.scale(dpr, dpr);
+  let minY = 0; for (let i = 0; i < N; i++) minY = Math.min(minY, TR.P[i * 3 + 1]); minY -= 3;
+  const pad = 4, maxY = S.height + 4, X = s => pad + s / L * (w - pad * 2), Y = y => h - pad - (y - minY) / (maxY - minY) * (h - pad * 2);
+  g.strokeStyle = 'rgba(232,137,58,0.15)'; g.lineWidth = 1;
+  for (const y of [-20, -10, 0, 10, 20]) { g.beginPath(); g.moveTo(pad, Y(y) + 0.5); g.lineTo(w - pad, Y(y) + 0.5); g.stroke(); }
+  g.fillStyle = 'rgba(196,180,154,0.65)'; g.font = '500 10px Barlow, sans-serif'; g.fillText('station level', pad + 2, Y(0) - 3);
+  const step = Math.max(1, Math.floor(N / 600));
+  g.beginPath(); g.moveTo(X(0), Y(minY));
+  for (let i = 0; i < N; i += step) g.lineTo(X(i * ds), Y(TR.P[i * 3 + 1]));
+  g.lineTo(X(L), Y(minY)); g.closePath();
+  const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(232,137,58,0.28)'); gr.addColorStop(1, 'rgba(232,137,58,0.02)');
+  g.fillStyle = gr; g.fill();
+  g.lineWidth = 2.2; g.lineCap = 'round';
+  for (let i = 0; i < N - step; i += step) {
+    g.strokeStyle = gColor(TR.gV[i]); g.beginPath(); g.moveTo(X(i * ds), Y(TR.P[i * 3 + 1])); g.lineTo(X((i + step) * ds), Y(TR.P[(i + step) * 3 + 1])); g.stroke();
+  }
+  prof.base = off; prof.X = X; prof.Y = Y; prof.dpr = dpr;
+}
+function drawProfile(s) {
+  const c = prof.c; if (!prof.base) return;
+  const g = c.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height); g.drawImage(prof.base, 0, 0);
+  g.setTransform(prof.dpr, 0, 0, prof.dpr, 0, 0);
+  const x = prof.X(s);
+  const yy = prof.Y(TR.P[idxAt(s)[0] * 3 + 1]);
+  g.strokeStyle = 'rgba(255,246,224,0.5)'; g.lineWidth = 1; g.beginPath(); g.moveTo(x, 2); g.lineTo(x, c.height / prof.dpr - 2); g.stroke();
+  g.fillStyle = '#fff6e0'; g.beginPath(); g.arc(x, yy, 4.5, 0, TAU); g.fill();
+  g.strokeStyle = '#2a1a08'; g.lineWidth = 1.5; g.stroke();
+}
+const gm = { c: $('gmeter'), trail: [] };
+function drawGMeter(gl, gv) {
+  const c = gm.c, w = c.clientWidth, h = c.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
+  if (!w) return;
+  if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const X = v => w / 2 + v / 1.5 * (w / 2 - 6), Y = v => h - 8 - (v + 1) / 6 * (h - 16);
+  g.fillStyle = 'rgba(134,208,143,0.10)'; g.fillRect(X(-LIMITS.lat), Y(LIMITS.vMax), X(LIMITS.lat) - X(-LIMITS.lat), Y(LIMITS.vMin) - Y(LIMITS.vMax));
+  g.strokeStyle = 'rgba(134,208,143,0.45)'; g.lineWidth = 1; g.setLineDash([3, 3]);
+  g.strokeRect(X(-LIMITS.lat) + 0.5, Y(LIMITS.vMax) + 0.5, X(LIMITS.lat) - X(-LIMITS.lat), Y(LIMITS.vMin) - Y(LIMITS.vMax)); g.setLineDash([]);
+  g.strokeStyle = 'rgba(232,137,58,0.25)';
+  g.beginPath(); g.moveTo(X(0) + 0.5, 4); g.lineTo(X(0) + 0.5, h - 4); g.stroke();
+  for (const v of [0, 1, 2, 3, 4]) { g.beginPath(); g.moveTo(X(-0.15), Y(v) + 0.5); g.lineTo(X(0.15), Y(v) + 0.5); g.stroke(); }
+  g.fillStyle = 'rgba(196,180,154,0.8)'; g.font = '600 9.5px Barlow, sans-serif'; g.textAlign = 'left';
+  for (const v of [0, 1, 2, 3, 4]) g.fillText(`${v}g`, X(0.2), Y(v) + 3);
+  gm.trail.push([gl, gv]); if (gm.trail.length > 40) gm.trail.shift();
+  gm.trail.forEach(([a, b], k) => { g.fillStyle = `rgba(242,184,75,${k / gm.trail.length * 0.5})`; g.beginPath(); g.arc(X(a), Y(b), 2, 0, TAU); g.fill(); });
+  g.fillStyle = gColor(gv); g.beginPath(); g.arc(X(clamp(gl, -1.5, 1.5)), Y(clamp(gv, -1, 5)), 5.5, 0, TAU); g.fill();
+  g.strokeStyle = '#1a120a'; g.lineWidth = 1.5; g.stroke();
+}
+let toastTimer = 0;
+function toast(msg, dur = 3) { const t = $('toast'); t.textContent = msg; t.style.opacity = 1; toastTimer = dur; }
+
+
+
+/* ===================== camera ===================== */
+const CAMS = ['ride', 'chase', 'orbit'], CAM_LABEL = { ride: 'Front cart', chase: 'Chase view', orbit: 'Cutaway view' };
+const view = { mode: 'ride', yaw: 0, pitch: 0, drag: null, idle: 0 };
+let orbit = null;
+canvas.addEventListener('pointerdown', e => { if (view.mode === 'orbit') return; view.drag = { x: e.clientX, y: e.clientY, yaw: view.yaw, pitch: view.pitch }; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', e => { if (!view.drag) return; view.yaw = clamp(view.drag.yaw - (e.clientX - view.drag.x) * 0.005, -2.9, 2.9); view.pitch = clamp(view.drag.pitch - (e.clientY - view.drag.y) * 0.005, -1.1, 1.1); view.idle = 0; });
+const endDrag = () => { view.drag = null; view.idle = 0; };
+canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('dblclick', () => { view.yaw = 0; view.pitch = 0; });
+const BOUNDS = new THREE.Box3();
+function setCam(m) {
+  if (!orbit) return;
+  view.mode = m; camera.up.set(0, 1, 0); $('btn-cam').firstChild.textContent = CAM_LABEL[m];
+  orbit.enabled = m === 'orbit';
+  if (m === 'chase') { frameAt(ride.s, FR); chaseLook.copy(FR.p); chasePos.copy(FR.p).add(V3(-6, 3, -2)); }
+  scene.fog.density = m === 'orbit' ? 0.0012 : DENS[secOf(ride.s).zone] || 0.02;
+  if (m === 'orbit') { const c = BOUNDS.getCenter(new THREE.Vector3()); orbit.target.copy(c); camera.position.copy(c).add(V3(160, 260, 330)); orbit.update(); }
+  toast(m === 'ride' ? 'Front cart. Drag to look around.' : m === 'chase' ? 'Chase view' : 'Cutaway view: the rock is see-through from outside. Drag to orbit.', 2.6);
+}
+
+/* ===================== ride ===================== */
+const ride = { s: 0, v: 0, phase: 'boarding', t: 0, paused: false, laps: 0 };
+const FR = newFrame(), basis = new THREE.Matrix4(), shake = new THREE.Euler(), lookE = new THREE.Euler();
+function placeTrain() {
+  for (let k = 0; k < train.length; k++) {
+    frameAt(ride.s - k * CAR_GAP, FR);
+    const c = FR.p.clone().addScaledVector(FR.u, -HL);
+    basis.makeBasis(FR.t, FR.u, FR.r); basis.setPosition(c);
+    train[k].matrix.copy(basis); train[k].matrixWorldNeedsUpdate = true;
+  }
+}
+const negT = new THREE.Vector3(), camQ = new THREE.Quaternion(), lookQ = new THREE.Quaternion(), tmpQ = new THREE.Quaternion(), camBasis = new THREE.Matrix4();
+const eyeLocal = new THREE.Vector3(0.15, HL + 0.25, 0);
+const chasePos = new THREE.Vector3(), chaseLook = new THREE.Vector3();
+function updateCamera(dt, t) {
+  if (view.mode === 'orbit') { orbit.update(); return; }
+  if (!view.drag) { view.idle += dt; if (view.idle > 3) { view.yaw *= Math.exp(-1.2 * dt); view.pitch *= Math.exp(-1.2 * dt); } }
+  if (view.mode === 'ride') {
+    camera.position.copy(eyeLocal).applyMatrix4(train[0].matrix);
+    frameAt(ride.s, FR);
+    camBasis.makeBasis(FR.r, FR.u, negT.copy(FR.t).negate()); camQ.setFromRotationMatrix(camBasis);
+    lookQ.setFromEuler(lookE.set(view.pitch, view.yaw, 0, 'YXZ'));
+    const amp = ride.phase === 'running' ? Math.min(1, ride.v / 20) * 0.006 : 0;   // old rails rattle
+    shake.set((Math.sin(t * 41.1) + Math.sin(t * 27.7)) * amp, Math.sin(t * 33.3) * amp * 0.6, Math.sin(t * 37.9) * amp);
+    tmpQ.setFromEuler(shake); camera.quaternion.copy(camQ).multiply(lookQ).multiply(tmpQ);
+  } else {
+    // chase: just behind and above the last cart, kept inside the cave
+    frameAt(ride.s - (CARS - 1) * CAR_GAP - 7, FR);
+    const want = FR.p.clone().addScaledVector(FR.u, 2.2);
+    if (sampleF(want.x, want.y, want.z) > -0.6) want.copy(FR.p).addScaledVector(FR.u, 0.8);
+    chasePos.lerp(want, 1 - Math.exp(-5 * dt)); frameAt(ride.s, FR); chaseLook.lerp(FR.p, 1 - Math.exp(-10 * dt));
+    camera.position.copy(chasePos); camera.up.set(0, 1, 0); camera.lookAt(chaseLook);
+  }
+}
+// fog and ambience shift with the cavern you are in
+const fogTarget = new THREE.Color(), FOGS = { station: '#0c0a08', tunnel: '#050608', shaft: '#06070a', lava: '#1c0703', crystal: '#0e0618', lake: '#03100e', roost: '#060506' };
+const DENS = { station: 0.02, tunnel: 0.03, shaft: 0.025, lava: 0.008, crystal: 0.011, lake: 0.016, roost: 0.03 };
+
+/* ===================== performance: counter + adaptive quality ===================== */
+const DPR_CAP = Math.min(window.devicePixelRatio || 1, 1.75);
+const QUALITY = {
+  auto: { label: 'Auto', ratio: DPR_CAP, adaptive: true, shadow: 1024, bloom: true },
+  high: { label: 'High', ratio: Math.min(window.devicePixelRatio || 1, 2), adaptive: false, shadow: 2048, bloom: true },
+  low: { label: 'Low', ratio: Math.min(window.devicePixelRatio || 1, 1) * 0.75, adaptive: false, shadow: 512, bloom: false },
+};
+const PERF = { q: 'auto', scale: 1, frames: 0, acc: 0, fps: 0, ms: 0, hist: new Float32Array(120), hi: 0, calls: 0, tris: 0, low: 0, high: 0, cool: 0 };
+renderer.info.autoReset = false;
+function applyResolution() {
+  const r = QUALITY[PERF.q].ratio * PERF.scale;
+  if (Math.abs(renderer.getPixelRatio() - r) > 0.01) { renderer.setPixelRatio(r); renderer.setSize(innerWidth, innerHeight, false); composer.setPixelRatio(r); composer.setSize(innerWidth, innerHeight); }
+}
+function setQuality(q) {
+  PERF.q = q; PERF.scale = 1; PERF.low = PERF.high = 0;
+  const Q = QUALITY[q];
+  if (HEADLAMP && HEADLAMP.shadow.mapSize.x !== Q.shadow) { HEADLAMP.shadow.mapSize.set(Q.shadow, Q.shadow); if (HEADLAMP.shadow.map) { HEADLAMP.shadow.map.dispose(); HEADLAMP.shadow.map = null; } }
+  renderer.shadowMap.type = q === 'low' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+  applyResolution(); forceRender = true;
+  $('btn-quality').firstChild.textContent = `Quality: ${Q.label}`;
+}
+function perfFrame(realDt) {
+  PERF.hist[PERF.hi++ % PERF.hist.length] = realDt * 1000;
+  PERF.frames++; PERF.acc += realDt;
+  if (PERF.acc < 0.5) return;
+  PERF.fps = PERF.frames / PERF.acc; PERF.ms = PERF.acc / PERF.frames * 1000; PERF.frames = 0; PERF.acc = 0;
+  // adaptive resolution: drop quickly when slow, climb back slowly when there is headroom
+  if (QUALITY[PERF.q].adaptive && !ride.paused) {
+    PERF.low = PERF.fps < 50 ? PERF.low + 1 : 0;
+    PERF.high = PERF.fps >= 58 ? PERF.high + 1 : 0;
+    if (PERF.low >= 2 && PERF.scale > 0.5) { PERF.scale = Math.max(0.5, PERF.scale * 0.85); PERF.low = 0; applyResolution(); }
+    else if (PERF.high >= 8 && PERF.scale < 1) { PERF.scale = Math.min(1, PERF.scale * 1.08); PERF.high = 0; applyResolution(); }
+  }
+  const fpsEl = $('p-fps');
+  fpsEl.textContent = PERF.fps < 10 ? PERF.fps.toFixed(1) : Math.round(PERF.fps); fpsEl.style.color = PERF.fps >= 55 ? 'var(--ok)' : PERF.fps >= 30 ? 'var(--warn)' : 'var(--bad)';
+  $('p-ms').innerHTML = `${PERF.ms.toFixed(1)} <i>ms</i>`;
+  $('p-res').innerHTML = `${renderer.getPixelRatio().toFixed(2)}× <i>res</i>`;
+  $('p-draw').innerHTML = `${PERF.calls.toLocaleString()} <i>draws</i>`;
+  $('p-tri').innerHTML = `${PERF.tris >= 1e6 ? (PERF.tris / 1e6).toFixed(2) + 'M' : Math.round(PERF.tris / 1000) + 'k'} <i>tris</i>`;
+  drawPerfGraph();
+  window.__perf = { fps: PERF.fps, ms: PERF.ms, calls: PERF.calls, tris: PERF.tris, ratio: renderer.getPixelRatio() };
+}
+function drawPerfGraph() {
+  const c = $('perf-graph'), w = c.clientWidth, h = c.clientHeight; if (!w) return;
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const Y = ms => h - Math.min(ms, 50) / 50 * h;
+  g.strokeStyle = 'rgba(232,137,58,0.25)'; g.lineWidth = 1;
+  for (const ms of [16.7, 33.3]) { g.beginPath(); g.moveTo(0, Math.round(Y(ms)) + 0.5); g.lineTo(w, Math.round(Y(ms)) + 0.5); g.stroke(); }
+  const n = PERF.hist.length, bw = w / n;
+  for (let k = 0; k < n; k++) {
+    const ms = PERF.hist[(PERF.hi + k) % n]; if (!ms) continue;
+    g.fillStyle = ms <= 18 ? '#86d08f' : ms <= 34 ? '#f2b84b' : '#ef6b5b';
+    g.fillRect(k * bw, Y(ms), Math.max(1, bw - 0.3), h - Y(ms));
+  }
+}
+
+
+
+/* ===================== main loop ===================== */
+let lastT = performance.now(), hudT = 0, clock = 0, lastSec = '', forceRender = true;
+const trainPos = new THREE.Vector3();
+function tick(now) {
+  const realDt = Math.max(0.0001, (now - lastT) / 1000), dt = Math.min(0.05, realDt); lastT = now;
+  perfFrame(realDt);
+  if (!ride.paused) {
+    clock += dt;
+    if (ride.phase === 'running') {
+      ride.v = Math.max(arrAt(TR.V, ride.s), ride.s < 2 ? 0.5 : 0.05);
+      const prevS = ride.s; ride.s += ride.v * dt;
+      const kind = secOf(ride.s).kind;
+      if (kind === 'lift') { if (Math.floor(ride.s / 0.9) !== Math.floor(prevS / 0.9)) clack(0.5); }
+      else if (Math.floor(ride.s / 4) !== Math.floor(prevS / 4) && ride.v > 4) clack(0.16);
+      if (kind === 'trim' && Math.floor(ride.s / 6) !== Math.floor(prevS / 6)) toast('Block brake. The old timbers groan.', 1.6);
+      if (ride.s >= L - 0.03) { ride.s = 0; ride.v = 0; ride.phase = 'unload'; ride.t = 0; ride.laps++; toast('Back at the lantern station. Count your fingers.', 3.5); }
+    } else if (ride.phase === 'unload') { ride.t += dt; if (ride.t > 4) { ride.phase = 'dispatch'; ride.t = 0; toast('Lap bars checked. Lanterns lit. Dispatching in 3…', 3); } }
+    else if (ride.phase === 'dispatch') { ride.t += dt; if (ride.t > 3) { ride.phase = 'running'; toast('Mind your head.', 2); } }
+    placeTrain();
+    trainPos.setFromMatrixPosition(train[0].matrix);
+    // living cave
+    if (lavaMat) lavaMat.uniforms.time.value = clock;
+    CAVE_PULSE.value = Math.sin(clock * 1.3) * 0.5 + Math.sin(clock * 3.1) * 0.5;
+    for (const f of FLICKER) f.light.intensity = f.base * (f.slow ? 0.85 + 0.15 * Math.sin(clock * 0.9 + f.ph) * Math.sin(clock * 1.7 + f.ph * 2) : 0.82 + 0.18 * Math.sin(clock * 13 + f.ph) * Math.sin(clock * 7.3 + f.ph));
+    if (CART_LIGHT) CART_LIGHT.intensity = 1.2 * (0.85 + 0.15 * Math.sin(clock * 17) * Math.sin(clock * 6.1));
+    if (EMBERS) { const p = EMBERS.geometry.attributes.position, sd = EMBERS.userData.seeds; for (let k = 0; k < p.count; k++) { const life = (clock * (0.05 + sd[k * 3 + 1] * 0.07) + sd[k * 3 + 1]) % 1; p.setXYZ(k, sd[k * 3] + Math.sin(clock + k) * 0.6 * life, ZONES.lava.level + life * 30, sd[k * 3 + 2] + Math.cos(clock * 0.7 + k) * 0.6 * life); } p.needsUpdate = true; }
+    if (DRIPS) { const p = DRIPS.geometry.attributes.position, sd = DRIPS.userData.seeds; sd.forEach((d, k) => { const life = (clock * 0.35 + d.ph) % 1, y = d.top - (d.top - ZONES.lake.level) * life * life; p.setXYZ(k, d.x, y, d.z); }); p.needsUpdate = true; if (Math.random() < dt * 0.6) drip(); }
+    if (waterMat) { waterMat.normalMap.offset.x = clock * 0.004; waterMat.normalMap.offset.y = clock * 0.002; }
+    if (CANARY.bird) CANARY.bird.rotation.y = Math.sin(clock * 0.8) * 0.8;
+    // something in the water
+    const lk = LAKE_EYES; lk.t -= dt;
+    if (lk.t <= 0) { lk.on = !lk.on; lk.t = lk.on ? 3.5 : 14 + Math.random() * 10; if (lk.on && secOf(ride.s).zone === 'lake') { const fr = frameAt(ride.s + 22, newFrame()); lk.group.position.set(fr.p.x + fr.r.x * 9, ZONES.lake.level + 0.05, fr.p.z + fr.r.z * 9); lk.group.rotation.y = Math.atan2(-fr.r.z, fr.r.x); lk.group.visible = true; } else lk.group.visible = false; }
+    updateBats(clock, dt, trainPos);
+  }
+  updateCamera(dt, clock);
+  // fog colour per cavern
+  const z = view.mode === 'orbit' ? 'orbit' : secOf(ride.s).zone;
+  fogTarget.set(FOGS[z] || '#05060a'); scene.fog.color.lerp(fogTarget, 1 - Math.exp(-1.5 * dt)); scene.background.copy(scene.fog.color);
+  scene.fog.density += ((view.mode === 'orbit' ? 0.0012 : DENS[z] || 0.02) - scene.fog.density) * (1 - Math.exp(-1.5 * dt));
+  hemi.intensity = view.mode === 'orbit' ? 9 : 0.3;
+  renderer.toneMappingExposure = view.mode === 'orbit' ? 1.6 : 1.05;
+  const still = ride.paused && view.mode !== 'orbit' && !view.drag && Math.abs(view.yaw) + Math.abs(view.pitch) < 1e-3 && !forceRender;
+  if (!still) {
+    renderer.info.reset();
+    if (QUALITY[PERF.q].bloom) composer.render(); else renderer.render(scene, camera);
+    PERF.calls = renderer.info.render.calls; PERF.tris = renderer.info.render.triangles;
+  }
+  forceRender = false;
+
+  // HUD
+  const [i] = idxAt(ride.s + eyeLocal.x);
+  const moving = ride.phase === 'running';
+  const gv = moving ? TR.gV[i] : 1, gl = moving ? TR.gL[i] : 0, gf = moving ? TR.gF[i] : 0;
+  hudT += dt; toastTimer -= dt; if (toastTimer < 0 && $('toast').style.opacity !== '0') $('toast').style.opacity = 0;
+  if (hudT > 0.066) {
+    hudT = 0;
+    $('spd').textContent = Math.round((moving ? ride.v : 0) * 3.6);
+    $('gv').innerHTML = `${gv.toFixed(2)}<small>g</small>`; $('gv').style.color = gColor(gv);
+    $('gl').innerHTML = `${gl >= 0 ? '' : '−'}${Math.abs(gl).toFixed(2)}<small>g</small>`;
+    $('gf').innerHTML = `${gf >= 0 ? '' : '−'}${Math.abs(gf).toFixed(2)}<small>g</small>`;
+    const y = TR.P[i * 3 + 1]; $('alt-label').textContent = y > 0.5 ? 'Height' : 'Depth'; $('alt').innerHTML = `${Math.abs(Math.round(y))}<small>m</small>`;
+    $('bank').innerHTML = `${Math.round(TR.roll[i])}<small>°</small>`;
+    $('rr').innerHTML = `${Math.round(moving ? Math.abs(TR.rollRate[i]) : 0)}<small>°/s</small>`;
+    const sec = ride.phase === 'running' ? secOf(ride.s).name : ride.phase === 'boarding' ? 'Boarding' : ride.phase === 'unload' ? 'Unloading' : 'Dispatch';
+    if (sec !== lastSec) { $('sec').textContent = sec; lastSec = sec; }
+    $('progress').style.width = `${(ride.s / L * 100).toFixed(1)}%`;
+    drawGMeter(gl, gv); drawProfile(ride.s);
+    const at = moving ? (arrAt(TR.V, ride.s + 0.5) - arrAt(TR.V, ride.s - 0.5)) * ride.v : 0;
+    updateAudio(moving ? ride.v : 0, at, secOf(ride.s).kind, secOf(ride.s).zone);
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ===================== controls ===================== */
+function togglePause() { ride.paused = !ride.paused; forceRender = true; $('btn-pause').firstChild.textContent = ride.paused ? 'Resume' : 'Pause'; $('btn-pause').setAttribute('aria-pressed', String(ride.paused)); }
+function toggleSound() { initAudio(); AUD.on = !AUD.on; AUD.ctx.resume(); $('btn-sound').firstChild.textContent = AUD.on ? 'Sound on' : 'Sound off'; $('btn-sound').setAttribute('aria-pressed', String(AUD.on)); }
+$('btn-cam').addEventListener('click', () => setCam(CAMS[(CAMS.indexOf(view.mode) + 1) % CAMS.length]));
+$('btn-pause').addEventListener('click', togglePause);
+$('btn-sound').addEventListener('click', toggleSound);
+$('btn-quality').addEventListener('click', () => { const order = ['auto', 'high', 'low']; setQuality(order[(order.indexOf(PERF.q) + 1) % 3]); toast(`Quality: ${QUALITY[PERF.q].label}`, 1.6); });
+$('btn-check').addEventListener('click', () => { const c = $('check'), open = c.hidden; c.hidden = !open; $('btn-check').setAttribute('aria-expanded', String(open)); });
+window.addEventListener('keydown', e => {
+  if (e.key === ' ') { e.preventDefault(); togglePause(); }
+  else if (e.key === 'c' || e.key === 'C') $('btn-cam').click();
+  else if (e.key === 'm' || e.key === 'M') toggleSound();
+  else if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('hud-hidden');
+  else if (e.key === 'f' || e.key === 'F') document.body.classList.toggle('perf-hidden');
+  else if (e.key === 'q' || e.key === 'Q') $('btn-quality').click();
+});
+$('board').addEventListener('click', () => { $('intro').hidden = true; if (!AUD.ctx) toggleSound(); ride.phase = 'dispatch'; ride.t = 0; toast('Lap bars checked. Lanterns lit. Dispatching in 3…', 3); });
+window.addEventListener('resize', () => { forceRender = true; applyResolution(); renderer.setSize(innerWidth, innerHeight, false); composer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); drawProfileBase(); });
+
+/* ===================== boot ===================== */
+async function boot() {
+  fillFacts();
+  try { await Promise.race([document.fonts.load('40px "IM Fell English SC"'), new Promise(r => setTimeout(r, 2500))]); } catch (e) { /* fallback */ }
+  paintSign(T.sign.image.getContext('2d'), 1024, 512); T.sign.needsUpdate = true; paintShift(T.shift.image.getContext('2d'), 256, 128); T.shift.needsUpdate = true;
+  await nextFrame();
+  defineZones(); buildField(); await nextFrame();
+  const cave = buildCaveMesh(); scene.add(cave.group); await nextFrame();
+  scene.add(buildTrackMeshes(), buildSupportsAndTimbers()); await nextFrame();
+  scene.add(buildStation(), buildSkeletonMiner());
+  scene.add(buildLanterns());
+  scene.add(buildLava(), buildWater(), buildCrystals()); await nextFrame();
+  const spikes = buildRockSpikes(); scene.add(spikes.group, buildBats()); await nextFrame();
+  for (let k = 0; k < CARS; k++) { const c = mergeStatic(buildCart(k === 0)); c.matrixAutoUpdate = false; train.push(c); scene.add(c); }
+  // the front cart carries its own lantern and a headlamp that throws shadows down the tunnel
+  CART_LIGHT = new THREE.PointLight('#ffb766', 1.2, 10, 1.8); CART_LIGHT.position.set(1.45, 0.7, -0.45); train[0].add(CART_LIGHT);
+  HEADLAMP = new THREE.SpotLight('#ffe2b8', 340, 90, 0.62, 0.6, 1.5); HEADLAMP.position.set(1.3, 1.5, 0); HEADLAMP.castShadow = true; HEADLAMP.shadow.mapSize.set(1024, 1024); HEADLAMP.shadow.camera.near = 0.5; HEADLAMP.shadow.camera.far = 70; HEADLAMP.shadow.bias = -0.0008;
+  const tgt = new THREE.Object3D(); tgt.position.set(12, 0.6, 0); train[0].add(HEADLAMP, tgt); HEADLAMP.target = tgt;
+  orbit = new OrbitControls(camera, canvas); orbit.enabled = false; orbit.enableDamping = true; orbit.autoRotate = true; orbit.autoRotateSpeed = 0.35;
+  for (let i = 0; i < N; i += 20) BOUNDS.expandByPoint(P3(TR.P, i));
+  placeTrain(); chasePos.copy(P3(TR.P, 0)); chaseLook.copy(chasePos);
+  drawProfileBase();
+  window.__cave = { tris: cave.tris, ...spikes.counts, lanterns: LANTERNS.length, supports: SUPPORT_STATS };
+  $('board').disabled = false; $('board').textContent = 'Climb into the cart';
+  const q = new URLSearchParams(location.hash.slice(1));
+  if (q.has('s')) { $('intro').hidden = true; ride.phase = 'running'; ride.s = clamp(+q.get('s') || 0, 0, L - 1); placeTrain(); }
+  setQuality(QUALITY[q.get('q')] ? q.get('q') : 'auto');
+  if (q.has('cam')) setCam(q.get('cam'));
+  if (q.has('pause')) togglePause();
+  if (q.has('yaw')) { view.yaw = clamp(+q.get('yaw') || 0, -2.9, 2.9); view.pitch = clamp(+q.get('pitch') || 0, -1.1, 1.1); view.idle = -1e9; }
+  requestAnimationFrame(t => { lastT = t; tick(t); });
+}
+boot();
+</script>
+</body>
+</html>
