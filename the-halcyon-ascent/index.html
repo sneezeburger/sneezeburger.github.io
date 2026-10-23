@@ -223,7 +223,7 @@ body:has(#intro:not([hidden])) .hud-toggle { display: none; }
       <div><b id="f-lat">–</b><span>Max lateral</span></div>
     </div>
     <button type="button" class="board" id="board" disabled>Fuelling…</button>
-    <p class="fine">Drag or tilt your phone to look around · double-tap to recentre · <b>C</b> camera · <b>Space</b> pause · <b>Q</b> quality · <b>F</b> frame rate · <b>H</b> hide panels</p>
+    <p class="fine">Drag or tilt your phone to look around · pinch to zoom · double-tap to recentre · <b>C</b> camera · <b>Space</b> pause · <b>Q</b> quality · <b>F</b> frame rate · <b>H</b> hide panels</p>
   </div>
 </div>
 
@@ -1543,13 +1543,13 @@ function toast(msg, dur = 3) { const t = $('toast'); t.textContent = msg; t.styl
 
 /* ===================== camera ===================== */
 const CAMS = ['ride', 'chase', 'orbit'], CAM_LABEL = { ride: 'Front car', chase: 'Chase view', orbit: 'Orbit view' };
-const view = { mode: 'ride', yaw: 0, pitch: 0, drag: null, idle: 0 };
+const view = { mode: 'ride', yaw: 0, pitch: 0, drag: null, idle: 0, zoom: 1 };
 let orbit = null;
 canvas.addEventListener('pointerdown', e => { if (view.mode === 'orbit') return; view.drag = { x: e.clientX, y: e.clientY, yaw: view.yaw, pitch: view.pitch }; canvas.setPointerCapture(e.pointerId); });
-canvas.addEventListener('pointermove', e => { if (!view.drag) return; view.yaw = clamp(view.drag.yaw - (e.clientX - view.drag.x) * 0.005, -2.9, 2.9); view.pitch = clamp(view.drag.pitch - (e.clientY - view.drag.y) * 0.005, -1.1, 1.1); view.idle = 0; });
+canvas.addEventListener('pointermove', e => { if (!view.drag) return; view.yaw = clamp(view.drag.yaw - (e.clientX - view.drag.x) * 0.005 / view.zoom, -2.9, 2.9); view.pitch = clamp(view.drag.pitch - (e.clientY - view.drag.y) * 0.005 / view.zoom, -1.1, 1.1); view.idle = 0; });
 const endDrag = () => { view.drag = null; view.idle = 0; };
 canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
-canvas.addEventListener('dblclick', () => { view.yaw = 0; view.pitch = 0; motion.recenter = true; });
+canvas.addEventListener('dblclick', () => { view.yaw = 0; view.pitch = 0; view.zoom = 1; motion.recenter = true; });
 
 /* ===================== device motion: gyro + compass look ===================== */
 const motion = { on: false, ready: false, recenter: true, north: null, e: new THREE.Euler(), dev: new THREE.Quaternion(), ref: new THREE.Quaternion(), look: new THREE.Quaternion(), sm: new THREE.Quaternion(), raw: new THREE.Quaternion(), wake: null, last: 0 };
@@ -1600,7 +1600,32 @@ window.addEventListener('orientationchange', () => { motion.recenter = true; });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && motion.on) { motion.recenter = true; navigator.wakeLock && navigator.wakeLock.request('screen').then(w => { motion.wake = w; }).catch(() => {}); } });
 // double-tap recentring on touch (iOS Safari does not fire dblclick reliably with touch-action: none)
 let lastTap = 0;
-canvas.addEventListener('pointerup', e => { if (e.pointerType !== 'touch') return; const n = performance.now(); if (n - lastTap < 320) { view.yaw = 0; view.pitch = 0; motion.recenter = true; } lastTap = n; });
+canvas.addEventListener('pointerup', e => { if (e.pointerType !== 'touch' || pinch.used) return; const n = performance.now(); if (n - lastTap < 320) { view.yaw = 0; view.pitch = 0; view.zoom = 1; motion.recenter = true; } lastTap = n; });
+
+/* pinch (or mouse wheel / trackpad pinch) zooms the ride and chase cameras by narrowing the field of view; orbit view keeps OrbitControls' own dolly */
+const ZOOM_MIN = 0.8, ZOOM_MAX = 5, touches = new Map(), pinch = { d0: 0, z0: 1, used: false };
+let baseFov = 74;
+const pinchDist = () => { const [a, b] = [...touches.values()]; return Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)); };
+function setZoom(z) {
+  z = clamp(z, ZOOM_MIN, ZOOM_MAX); if (z === view.zoom) return;
+  view.zoom = z; forceRender = true; toast(`Zoom ${z.toFixed(1)}×`, 0.9);
+}
+canvas.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'touch' || view.mode === 'orbit') return;
+  if (!touches.size) pinch.used = false;
+  touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (touches.size === 2) { view.drag = null; pinch.d0 = pinchDist(); pinch.z0 = view.zoom; pinch.used = true; }
+});
+canvas.addEventListener('pointermove', e => {
+  const p = touches.get(e.pointerId); if (!p) return;
+  p.x = e.clientX; p.y = e.clientY;
+  if (touches.size === 2 && pinch.d0) setZoom(pinch.z0 * pinchDist() / pinch.d0);
+});
+const endTouch = e => { touches.delete(e.pointerId); if (touches.size !== 2) pinch.d0 = 0; };
+canvas.addEventListener('pointerup', endTouch); canvas.addEventListener('pointercancel', endTouch);
+canvas.addEventListener('wheel', e => { if (view.mode === 'orbit') return; e.preventDefault(); setZoom(view.zoom * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015))); }, { passive: false });
+// stop iOS Safari zooming the whole page on a pinch
+for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, e => e.preventDefault());
 
 const BOUNDS = new THREE.Box3();
 let envSnap = true;
@@ -1611,7 +1636,7 @@ function setCam(m) {
   orbit.enabled = m === 'orbit';
   if (m === 'chase') { frameAt(ride.s, FR); chaseLook.copy(FR.p); chasePos.copy(FR.p).add(V3(-8, 4, -3)); }
   if (m === 'orbit') { const c = BOUNDS.getCenter(new THREE.Vector3()), sz = BOUNDS.getSize(new THREE.Vector3()).length(); orbit.target.copy(c); camera.position.copy(c).add(V3(-sz * 0.08, sz * 0.2, sz * 0.32)); orbit.update(); }
-  camera.fov = 74; camera.updateProjectionMatrix();
+  baseFov = 74; view.zoom = 1; camera.fov = 74; camera.updateProjectionMatrix();
   toast(m === 'ride' ? 'Front car. Drag to look around.' : m === 'chase' ? 'Chase view' : 'Overview: the whole line from above. Drag to orbit.', 2.6);
 }
 
@@ -1641,13 +1666,15 @@ function updateCamera(dt, t, launchK) {
   if (!view.drag && !(motion.on && motion.ready)) { view.idle += dt; if (view.idle > 3) { view.yaw *= Math.exp(-1.2 * dt); view.pitch *= Math.exp(-1.2 * dt); } }
   // the launch pins you back: the field of view stretches and the car buzzes
   const fov = 74 + launchK * 12 + clamp((ride.v - 30) / 15, 0, 1) * 4;
-  if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt)); camera.updateProjectionMatrix(); }
+  baseFov += (fov - baseFov) * (1 - Math.exp(-4 * dt));
+  const zf = 2 * Math.atan(Math.tan(baseFov * Math.PI / 360) / view.zoom) * 180 / Math.PI;
+  if (Math.abs(camera.fov - zf) > 0.01) { camera.fov = zf; camera.updateProjectionMatrix(); }
   if (view.mode === 'ride') {
     camera.position.copy(eyeLocal).applyMatrix4(train[0].matrix);
     frameAt(ride.s, FR);
     camBasis.makeBasis(FR.r, FR.u, negT.copy(FR.t).negate()); camQ.setFromRotationMatrix(camBasis);
     lookQ.setFromEuler(lookE.set(view.pitch, view.yaw, 0, 'YXZ'));
-    const amp = ride.phase === 'running' ? Math.min(1, ride.v / 30) * 0.0025 + launchK * 0.008 : 0;
+    const amp = ride.phase === 'running' ? (Math.min(1, ride.v / 30) * 0.0025 + launchK * 0.008) / view.zoom : 0;
     shake.set((Math.sin(t * 41.1) + Math.sin(t * 27.7)) * amp, Math.sin(t * 33.3) * amp * 0.6, Math.sin(t * 37.9) * amp);
     tmpQ.setFromEuler(shake); camera.quaternion.copy(camQ).multiply(lookQ).multiply(motion.look).multiply(tmpQ);
   } else {
