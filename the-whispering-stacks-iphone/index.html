@@ -40,6 +40,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .panel { background: var(--glass); border: 1px solid var(--brass-dim); border-radius: 12px; backdrop-filter: blur(10px) saturate(130%); -webkit-backdrop-filter: blur(10px) saturate(130%); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
 .hud-hidden .hud { display: none !important; }
+.hud-toggle { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); top: calc(8px + env(safe-area-inset-top, 0px)); padding: 6px 14px; border-radius: 999px; border: 1px solid var(--brass-dim); background: var(--glass); color: var(--brass); font: 600 12px/1 var(--f-num); letter-spacing: 0.04em; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.hud-hidden .hud-toggle { opacity: 0.28; }
+body:has(#intro:not([hidden])) .hud-toggle { display: none; }
 
 .title-plate { position: fixed; top: calc(var(--g) + env(safe-area-inset-top, 0px)); left: var(--g); padding: 12px 16px 12px; max-width: calc(100vw - 2 * var(--g)); }
 .eyebrow { margin: 0 0 2px; font: 600 10.5px/1.2 var(--f-body); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
@@ -201,6 +204,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
     <canvas id="profile" aria-label="Height profile of the whole track with the train's position"></canvas>
   </div>
 </footer>
+
+<button type="button" class="hud-toggle" id="btn-hud" aria-pressed="false" aria-label="Hide on-screen display">Hide display</button>
 
 <p class="toast hud" id="toast" style="opacity:0"></p>
 
@@ -2196,11 +2201,13 @@ $('btn-pause').addEventListener('click', togglePause);
 $('btn-sound').addEventListener('click', toggleSound);
 $('btn-quality').addEventListener('click', () => { const order = ['auto', 'high', 'low']; setQuality(order[(order.indexOf(PERF.q) + 1) % 3]); toast(`Quality: ${QUALITY[PERF.q].label}`, 1.6); });
 $('btn-check').addEventListener('click', () => { const c = $('check'), open = c.hidden; c.hidden = !open; $('btn-check').setAttribute('aria-expanded', String(open)); });
+function toggleHud() { const h = document.body.classList.toggle('hud-hidden'); $('btn-hud').textContent = h ? 'Show' : 'Hide display'; $('btn-hud').setAttribute('aria-pressed', String(h)); $('btn-hud').setAttribute('aria-label', h ? 'Show on-screen display' : 'Hide on-screen display'); }
+$('btn-hud').addEventListener('click', toggleHud);
 window.addEventListener('keydown', e => {
   if (e.key === ' ') { e.preventDefault(); togglePause(); }
   else if (e.key === 'c' || e.key === 'C') $('btn-cam').click();
   else if (e.key === 'm' || e.key === 'M') toggleSound();
-  else if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('hud-hidden');
+  else if (e.key === 'h' || e.key === 'H') toggleHud();
   else if (e.key === 'f' || e.key === 'F') document.body.classList.toggle('perf-hidden');
   else if (e.key === 'q' || e.key === 'Q') $('btn-quality').click();
 });
