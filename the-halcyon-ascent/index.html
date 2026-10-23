@@ -1,0 +1,1886 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>The Halcyon Ascent</title>
+<meta name="description" content="A first-person launch coaster from a utopian garden city into orbit: a rocket-style launch up a 166 m tower, zero-g hills above the clouds, an asteroid belt, a re-entry spiral round a skyscraper spire and a glide home through a glass-domed forest.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700&family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: full-bleed WebGL ride from a garden city into orbit; title plate top-left, controls top-right, instrument cluster in the bottom corners. Deep-space glass with cyan accents. */
+:root {
+  --glass: rgba(6, 12, 24, 0.58);
+  --glass-strong: rgba(5, 10, 22, 0.9);
+  --brass: #7fe3ff;
+  --brass-dim: rgba(127, 227, 255, 0.3);
+  --cream: #eef7ff;
+  --muted: #a5b8cc;
+  --ok: #86d08f;
+  --warn: #f2b84b;
+  --bad: #ef6b5b;
+  --f-display: 'Orbitron', 'Eurostile', 'Arial Black', system-ui, sans-serif;
+  --f-num: 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif;
+  --f-body: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --g: 16px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #04070f; color: var(--cream); font: 14px/1.4 var(--f-body); }
+[hidden] { display: none !important; }
+html, body { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+canvas#c:active { cursor: grabbing; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+.panel { background: var(--glass); border: 1px solid var(--brass-dim); border-radius: 12px; backdrop-filter: blur(10px) saturate(130%); -webkit-backdrop-filter: blur(10px) saturate(130%); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
+.hud-hidden .hud { display: none !important; }
+.hud-toggle { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); top: calc(8px + env(safe-area-inset-top, 0px)); padding: 6px 14px; border-radius: 999px; border: 1px solid var(--brass-dim); background: var(--glass); color: var(--brass); font: 600 12px/1 var(--f-num); letter-spacing: 0.04em; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.hud-hidden .hud-toggle { opacity: 0.28; }
+body:has(#intro:not([hidden])) .hud-toggle { display: none; }
+
+.title-plate { position: fixed; top: calc(var(--g) + env(safe-area-inset-top, 0px)); left: var(--g); padding: 12px 16px 12px; max-width: calc(100vw - 2 * var(--g)); }
+.eyebrow { margin: 0 0 2px; font: 600 10.5px/1.2 var(--f-body); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+.title-plate h1 { margin: 0; font: 700 22px/1.1 var(--f-display); letter-spacing: 0.06em; color: var(--brass); text-shadow: 0 1px 0 rgba(0,0,0,0.5); }
+.section { margin: 6px 0 0; font: 600 15px/1.2 var(--f-num); letter-spacing: 0.04em; color: var(--cream); display: flex; align-items: center; gap: 8px; }
+.section .bar { width: 120px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.12); overflow: hidden; }
+.section .bar i { display: block; height: 100%; width: 0; background: var(--brass); }
+
+.controls { position: fixed; top: calc(var(--g) + env(safe-area-inset-top, 0px)); right: var(--g); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: calc(100vw - 2 * var(--g)); }
+.controls button { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--brass-dim); background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font: 600 13px/1 var(--f-body); white-space: nowrap; }
+.controls button:hover { border-color: var(--brass); }
+.controls button[aria-pressed="true"], .controls button[aria-expanded="true"] { border-color: var(--brass); color: #eafcff; background: rgba(20, 60, 90, 0.75); }
+.controls kbd { font: 600 10px/1 var(--f-num); color: var(--muted); border: 1px solid var(--brass-dim); border-radius: 4px; padding: 2px 4px; margin-left: 6px; }
+
+.perf { position: fixed; top: calc(var(--g) + 116px + env(safe-area-inset-top, 0px)); left: var(--g); display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+.perf-fps { display: flex; flex-direction: column; align-items: center; min-width: 44px; }
+.perf-fps b { font: 600 24px/1 var(--f-num); font-variant-numeric: tabular-nums; color: var(--ok); }
+.perf-fps span { font: 600 9.5px/1.2 var(--f-body); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.perf-nums { display: grid; grid-template-columns: auto auto; gap: 2px 12px; font: 500 12px/1.2 var(--f-num); font-variant-numeric: tabular-nums; color: #d6e6f5; }
+.perf-nums span { white-space: nowrap; }
+.perf-nums i { font-style: normal; color: var(--muted); }
+#perf-graph { width: 96px; height: 32px; display: block; }
+.perf-hidden .perf { display: none !important; }
+.check { position: fixed; top: calc(64px + env(safe-area-inset-top, 0px)); right: var(--g); width: 360px; max-width: calc(100vw - 2 * var(--g)); max-height: calc(100% - 300px); overflow-y: auto; padding: 14px 16px; background: var(--glass-strong); }
+.check h2 { margin: 0 0 4px; font: 700 15px/1.2 var(--f-display); letter-spacing: 0.06em; color: var(--brass); }
+.check p { margin: 0 0 10px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.check table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.check th { text-align: left; font: 600 10.5px/1.2 var(--f-body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 0 0 6px; }
+.check td { padding: 6px 0; border-top: 1px solid rgba(127, 227, 255, 0.15); }
+.check td.num { font: 600 15px/1 var(--f-num); font-variant-numeric: tabular-nums; text-align: right; padding-right: 10px; }
+.check td.lim { color: var(--muted); font: 500 13px/1 var(--f-num); text-align: right; padding-right: 10px; }
+.chip { display: inline-block; padding: 3px 7px; border-radius: 999px; font: 600 11px/1 var(--f-body); }
+.chip.ok { background: rgba(134, 208, 143, 0.18); color: var(--ok); }
+.chip.bad { background: rgba(239, 107, 91, 0.2); color: var(--bad); }
+
+.cluster { position: fixed; left: var(--g); right: var(--g); bottom: calc(var(--g) + env(safe-area-inset-bottom, 0px)); display: flex; gap: 12px; align-items: flex-end; pointer-events: none; }
+.cluster .spacer { flex: 1; }
+.cluster .left { display: flex; flex-direction: column; gap: 10px; }
+.cluster .panel { pointer-events: auto; padding: 12px 14px; }
+.gpanel { display: flex; gap: 12px; align-items: center; }
+#gmeter { width: 110px; height: 130px; display: block; }
+.readouts { margin: 0; display: grid; gap: 6px; }
+.readouts div { display: flex; flex-direction: column; gap: 1px; }
+.readouts dt { font: 600 10px/1.2 var(--f-body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.readouts dd { margin: 0; font: 600 22px/1 var(--f-num); font-variant-numeric: tabular-nums; }
+.readouts dd small { font-size: 12px; color: var(--muted); margin-left: 2px; }
+.speed { display: flex; gap: 18px; align-items: center; }
+.speed .readouts { grid-template-columns: repeat(3, auto); gap: 14px; }
+.big { display: flex; flex-direction: column; align-items: center; min-width: 110px; }
+.big b { font: 600 56px/0.9 var(--f-num); font-variant-numeric: tabular-nums; color: #f2fbff; }
+.big span { font: 600 11px/1.2 var(--f-body); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+.profile { display: flex; flex-direction: column; gap: 6px; width: 380px; }
+.profile .head { display: flex; justify-content: space-between; font: 600 10px/1.2 var(--f-body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.legend { display: inline-flex; gap: 10px; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 0; }
+#profile { width: 100%; height: 92px; display: block; }
+
+.toast { position: fixed; left: 50%; top: calc(110px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); margin: 0; padding: 8px 16px; border-radius: 999px; background: var(--glass-strong); border: 1px solid var(--brass-dim); font: 600 14px/1.2 var(--f-body); transition: opacity 0.4s; pointer-events: none; text-align: center; max-width: calc(100vw - 2 * var(--g)); }
+
+.intro { position: fixed; inset: 0; display: grid; place-items: center; padding: var(--g); background: radial-gradient(ellipse at center, rgba(4, 10, 24, 0.2), rgba(4, 8, 20, 0.62)); }
+.card { width: min(520px, 100%); padding: 26px 28px 24px; text-align: center; background: var(--glass-strong); }
+.card .eyebrow { margin-bottom: 6px; }
+.card h2 { margin: 0; font: 700 38px/1.05 var(--f-display); letter-spacing: 0.06em; color: var(--brass); text-wrap: balance; }
+.card .tag { margin: 10px auto 18px; max-width: 42ch; color: #d6e6f5; font-size: 15px; line-height: 1.5; }
+.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 0 0 20px; background: var(--brass-dim); border: 1px solid var(--brass-dim); border-radius: 10px; overflow: hidden; }
+.facts div { background: rgba(8, 16, 32, 0.92); padding: 10px 6px; display: flex; flex-direction: column; gap: 2px; }
+.facts b { font: 600 24px/1 var(--f-num); font-variant-numeric: tabular-nums; color: #f2fbff; }
+.facts span { font: 600 10px/1.2 var(--f-body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.board { padding: 12px 28px; border-radius: 12px; border: 1px solid var(--brass); background: linear-gradient(180deg, #8ff0ff, #3ab8e8); color: #04223a; font: 700 14px/1 var(--f-display); letter-spacing: 0.1em; box-shadow: 0 6px 18px rgba(0,0,0,0.35); }
+.board:disabled { opacity: 0.6; cursor: progress; }
+.fine { margin: 14px 0 0; font-size: 12.5px; color: var(--muted); }
+
+@media (max-width: 1100px) { .profile { width: 300px; } }
+@media (max-width: 860px) {
+  .profile { display: none !important; }
+  .title-plate h1 { font-size: 17px; }
+  .controls .lbl-long { display: none; }
+  .controls kbd { display: none; }
+  .check { top: auto; bottom: calc(190px + env(safe-area-inset-bottom, 0px)); }
+  #perf-graph { display: none; }
+}
+@media (max-width: 560px) {
+  #gmeter { display: none; }
+  .big b { font-size: 40px; }
+  .big { min-width: 80px; }
+  .readouts dd { font-size: 18px; }
+  .cluster { gap: 8px; }
+  .cluster .panel { padding: 10px; }
+  .speed .readouts { display: none; }
+  .cluster .left { flex-direction: row; }
+  .section .bar { display: none; }
+  .card h2 { font-size: 27px; }
+  .title-plate { padding: 8px 12px; }
+  .title-plate .eyebrow { display: none; }
+  .controls { top: calc(var(--g) + 76px + env(safe-area-inset-top, 0px)); left: var(--g); right: auto; justify-content: flex-start; }
+  .controls button { padding: 7px 10px; }
+  .toast { top: calc(140px + env(safe-area-inset-top, 0px)); }
+  .perf { top: calc(var(--g) + 160px + env(safe-area-inset-top, 0px)); padding: 6px 8px; }
+  .perf-nums span:nth-child(n+3) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="First-person launch coaster ride from a garden city into orbit. Drag to look around."></canvas>
+
+<header class="title-plate panel hud">
+  <p class="eyebrow">Halcyon Spaceport · Orbital Line 1</p>
+  <h1>The Halcyon Ascent</h1>
+  <p class="section"><span id="sec">Boarding</span><span class="bar"><i id="progress"></i></span></p>
+</header>
+
+<nav class="controls hud" aria-label="Ride controls">
+  <button type="button" id="btn-cam">Front car<kbd>C</kbd></button>
+  <button type="button" id="btn-motion" aria-pressed="false" hidden>Motion look</button>
+  <button type="button" id="btn-pause" aria-pressed="false">Pause<kbd>Space</kbd></button>
+  <button type="button" id="btn-sound" aria-pressed="false">Sound off<kbd>M</kbd></button>
+  <button type="button" id="btn-quality">Quality: Auto<kbd>Q</kbd></button>
+  <button type="button" id="btn-check" aria-expanded="false" aria-controls="check"><span class="lbl-long">Design </span>check</button>
+</nav>
+
+<aside class="perf panel hud" id="perf" aria-label="Performance">
+  <div class="perf-fps"><b id="p-fps">–</b><span>fps</span></div>
+  <div class="perf-nums"><span id="p-ms">– <i>ms</i></span><span id="p-res">– <i>res</i></span><span id="p-draw">– <i>draws</i></span><span id="p-tri">– <i>tris</i></span></div>
+  <canvas id="perf-graph" aria-label="Frame time over the last two seconds"></canvas>
+</aside>
+
+<section class="check panel hud" id="check" hidden aria-label="Ride design check">
+  <h2>Rider comfort check</h2>
+  <p>Linear motors launch the train from rest to 149 km/h in about six seconds, ramping the push in and out so the fore/aft g never jumps, and the track pitches up into the climb while the motors still run, so the ride reaches 166 m on launch energy alone. Above the clouds, parabolic hills float riders at just under zero g. The track banks along the riders' heartline so sideways g goes to zero, roll rate is capped, and two trim brakes shed speed before the re-entry spiral and the city run.</p>
+  <table>
+    <thead><tr><th>Measure</th><th style="text-align:right;padding-right:10px">Ride</th><th style="text-align:right;padding-right:10px">Limit</th><th></th></tr></thead>
+    <tbody id="check-rows"></tbody>
+  </table>
+</section>
+
+<footer class="cluster hud">
+  <div class="left">
+  <div class="panel gpanel">
+    <canvas id="gmeter" aria-label="G-force meter: lateral across, vertical up"></canvas>
+    <dl class="readouts">
+      <div><dt>Vertical</dt><dd id="gv">1.00<small>g</small></dd></div>
+      <div><dt>Lateral</dt><dd id="gl">0.00<small>g</small></dd></div>
+      <div><dt>Fore / aft</dt><dd id="gf">0.00<small>g</small></dd></div>
+    </dl>
+  </div>
+  <div class="panel speed">
+    <div class="big"><b id="spd">0</b><span>km/h</span></div>
+    <dl class="readouts">
+      <div><dt id="alt-label">Altitude</dt><dd id="alt">0<small>m</small></dd></div>
+      <div><dt>Bank</dt><dd id="bank">0<small>°</small></dd></div>
+      <div><dt>Roll rate</dt><dd id="rr">0<small>°/s</small></dd></div>
+    </dl>
+  </div>
+  </div>
+  <div class="spacer"></div>
+  <div class="panel profile">
+    <div class="head"><span>Track profile</span><span class="legend"><span><i style="background:#86d08f"></i>under 2 g</span><span><i style="background:#f2b84b"></i>2–3.5 g</span><span><i style="background:#ef6b5b"></i>over 3.5 g</span></span></div>
+    <canvas id="profile" aria-label="Height profile of the whole track with the train's position"></canvas>
+  </div>
+</footer>
+
+<button type="button" class="hud-toggle" id="btn-hud" aria-pressed="false" aria-label="Hide on-screen display">Hide display</button>
+
+<p class="toast hud" id="toast" style="opacity:0"></p>
+
+<div class="intro" id="intro">
+  <div class="card panel">
+    <p class="eyebrow">Halcyon Spaceport · Orbital Line 1</p>
+    <h2>The Halcyon Ascent</h2>
+    <p class="tag">Blast off from a garden city straight up the launch tower, punch through the clouds into the black, float over zero-g hills past an asteroid belt and a ring habitat, then spiral back down round the city's great spire and glide home through a forest under glass.</p>
+    <div class="facts" id="facts">
+      <div><b id="f-height">–</b><span>Apogee</span></div>
+      <div><b id="f-speed">–</b><span>Top speed</span></div>
+      <div><b id="f-g">–</b><span>Peak g</span></div>
+      <div><b id="f-len">–</b><span>Track length</span></div>
+      <div><b id="f-time">–</b><span>Ride time</span></div>
+      <div><b id="f-lat">–</b><span>Max lateral</span></div>
+    </div>
+    <button type="button" class="board" id="board" disabled>Fuelling…</button>
+    <p class="fine">Drag or tilt your phone to look around · double-tap to recentre · <b>C</b> camera · <b>Space</b> pause · <b>Q</b> quality · <b>F</b> frame rate · <b>H</b> hide panels</p>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+// TRACK-BEGIN
+// First-person coaster track engine. Everything between TRACK-BEGIN and TRACK-END also runs standalone
+// (no THREE) so the design can be verified numerically before any 3D exists.
+
+/* ============================== RIDE CONFIG ============================== */
+const RIDE = { scale: 1, frame: 'up', startY: 0, heartline: 1.15, speeds: { lift: 6, brake: 7, drive: 5 } };
+// fore/aft is a launch coaster's limit: the motors press you into the seat-back like a rocket's first stage
+const LIMITS = { vMax: 4.5, vMin: -0.5, lat: 0.5, fwd: 1.8, rollRate: 80, decel: 0.6 };
+
+/* ============================== LAYOUT ============================== */
+// The Halcyon Ascent: an uphill linear-motor launch out of a garden city, over the top above the clouds,
+// a lap of low orbit, a re-entry spiral back down through the cloud deck and a run home between the towers.
+const LAYOUT = {
+  pu: 110, pa: 75, climb: 30, coast: 10, th: 150, pd: 52, dive: 10, po: 110,
+  nh: 2, hill: 45, ha: 16, b0: 110, turn: 260, belt: 20, sl: 100, sy: 25, b2: 10, trim: 24, hp: 10.683, hl: 360,
+  hs: 90, trim2: 29, c1: 3.052, sl2: 70, sy2: 20, c4: 15, gd: 40, ga: 7, c2: 60, tr: 213.855, c3: 50
+};
+function layoutTrack(Lp) {
+  const tt = turtle(), { run, at, probe } = tt, D = Math.PI / 180;
+  // the launch: the pad is the station. Thrust ramps up like a rocket shedding its propellant mass.
+  run(24, 0, 0, { name: 'Launch pad', kind: 'launch', zone: 'port', a0: 0.85, a1: 1.0, vmax: 60 });
+  run(Lp.pu, Lp.pa * D, 0, { name: 'Lift-off', kind: 'launch', zone: 'ascent', a0: 1.0, a1: 1.25, vmax: 60, ramp: 0.45 });
+  run(Lp.climb, 0, 0, { name: 'Max Q', kind: 'launch', zone: 'ascent', a0: 1.25, a1: 1.4, vmax: 60 });
+  run(10, 0, 0, { name: 'Engine cut-off', zone: 'ascent' });
+  run(Lp.coast, 0, 0);
+  probe.meco = at();
+  run(Lp.th, -(Lp.pa + Lp.pd) * D, 0, { name: 'Apogee', zone: 'space', ramp: 0.45 });
+  run(Lp.dive, 0, 0, { name: 'Orbital insertion', zone: 'space' });
+  run(Lp.po, Lp.pd * D, 0, { ramp: 0.42 });
+  probe.orbit = at();
+  run(20, 0, 0, { name: 'Zero-g hills', zone: 'space' });
+  run(Lp.hill, Lp.ha * D, 0, { ramp: 0.45 });
+  for (let k = 1; k < Lp.nh; k++) { run(Lp.hill * 2, -2 * Lp.ha * D, 0, { ramp: 0.45 }); run(Lp.hill * 2, 2 * Lp.ha * D, 0, { ramp: 0.45 }); }
+  run(Lp.hill * 2, -2 * Lp.ha * D, 0, { ramp: 0.45 });
+  run(Lp.hill, Lp.ha * D, 0, { ramp: 0.45 });
+  run(Lp.b0, 0, 0);
+  run(Lp.turn, 0, 180 * D, { name: 'Halo transit', zone: 'space', ramp: 0.45 });
+  run(Lp.belt, 0, 0, { name: 'Asteroid belt', zone: 'space' });
+  run(Lp.sl, 0, Lp.sy * D, { ramp: 0.5 });
+  run(Lp.sl, 0, -Lp.sy * D, { ramp: 0.5 });
+  run(Lp.b2, 0, 0);
+  run(24, 0, 0, { name: 'Retro-burn', kind: 'trim', zone: 'space', vmax: Lp.trim });
+  probe.helixStart = at();
+  run(40, -Lp.hp * D, 0, { name: 'Re-entry spiral', zone: 'reentry', ramp: 0.5 });
+  run(Lp.hl, 0, -360 * D, { ramp: 0.25 });
+  run(40, Lp.hp * D, 0, { ramp: 0.5 });
+  probe.helixEnd = at();
+  run(Lp.hs, 0, 0, { name: 'Heat shield', kind: 'trim', zone: 'city', vmax: Lp.trim2 });
+  run(Lp.c1, 0, 0, { name: 'Skyline run', zone: 'city' });
+  run(Lp.sl2, 0, -Lp.sy2 * D, { ramp: 0.5 });
+  run(Lp.sl2, 0, Lp.sy2 * D, { ramp: 0.5 });
+  run(Lp.c4, 0, 0);
+  run(Lp.gd, -Lp.ga * D, 0, { name: 'Garden dip', zone: 'city', ramp: 0.5 });
+  run(Lp.gd, Lp.ga * D, 0, { ramp: 0.5 });
+  run(Lp.gd, Lp.ga * D, 0, { ramp: 0.5 });
+  run(Lp.gd, -Lp.ga * D, 0, { ramp: 0.5 });
+  run(Lp.c2, 0, 0, { name: 'Arboretum dome', zone: 'dome' });
+  run(Lp.tr, 0, 180 * D, { name: 'Lakeside turn', zone: 'city', ramp: 0.45 });
+  run(Lp.c3, 0, 0, { name: 'Homecoming', zone: 'city' });
+  run(20, 0, 0, { name: 'Brake run', kind: 'brake', zone: 'port' });
+  probe.end = at();
+  return tt.done();
+}
+
+/* ============================== ENGINE (shared) ============================== */
+const G = 9.81, SC = RIDE.scale, DS = 0.25 * SC, HEARTLINE = RIDE.heartline * SC, START_Y = RIDE.startY;
+const RATE_SCALE = Math.sqrt(1 / SC), VSCALE = Math.sqrt(SC);   // Froude: speeds × √scale, rates × 1/√scale
+
+function turtle() {
+  const dense = [[0, START_Y, 0]], marks = [], probe = {};
+  let p = [0, START_Y, 0], yaw = 0, pitch = 0;
+  const sstep = u => u * u * (3 - 2 * u);
+  function run(len, dP, dY, o = {}) {
+    len = Math.max(0.5 * SC, len);
+    const n = Math.max(1, Math.round(len / (DS / 2))), h = len / n;
+    const shape = o.shape ?? 1, shift = o.shift || 0, rf = o.ramp;
+    const r0 = [-Math.sin(yaw), 0, Math.cos(yaw)];
+    if (o.name) marks.push({ name: o.name, i: dense.length - 1, kind: o.kind || 'free', zone: o.zone, vmax: o.vmax, a0: o.a0, a1: o.a1 });
+    for (let i = 0; i < n; i++) {
+      const u = (i + 0.5) / n;
+      const w = rf ? (u < rf ? 0.5 - 0.5 * Math.cos(Math.PI * u / rf) : u > 1 - rf ? 0.5 - 0.5 * Math.cos(Math.PI * (1 - u) / rf) : 1) / (1 - rf)
+                   : shape * (1 - Math.cos(2 * Math.PI * u)) + (1 - shape);
+      pitch += dP * w / n; yaw += dY * w / n;
+      const c = Math.cos(pitch);
+      p = [p[0] + c * Math.cos(yaw) * h, p[1] + Math.sin(pitch) * h, p[2] + c * Math.sin(yaw) * h];
+      if (shift) { const q = shift * (sstep((i + 1) / n) - sstep(i / n)); p = [p[0] + r0[0] * q, p[1], p[2] + r0[2] * q]; }  // sideways offset (loop exit)
+      dense.push(p);
+    }
+  }
+  return { run, at: () => p.slice(), probe, done: () => ({ dense, marks, pitch, yaw, p, probe }) };
+}
+
+function buildTrack(Lp = LAYOUT) {
+  const { dense, marks, pitch, yaw } = layoutTrack(Lp);
+  // Hermite connector back to the station start (the solver keeps this short and level)
+  const E = dense[dense.length - 1], dE = [Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw)];
+  const S = [0, START_Y, 0], dS = [1, 0, 0];
+  const gap = Math.hypot(S[0] - E[0], S[1] - E[1], S[2] - E[2]);
+  marks.push({ name: 'Return to pad', i: dense.length - 1, kind: 'return', zone: 'port' });
+  const nC = Math.max(4, Math.round(gap / (DS / 2)));
+  for (let q = 1; q < nC; q++) {
+    const t = q / nC, t2 = t * t, t3 = t2 * t, h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
+    dense.push([0, 1, 2].map(a => h00 * E[a] + h10 * gap * dE[a] + h01 * S[a] + h11 * gap * dS[a]));
+  }
+  // uniform arc-length resample (closed loop)
+  const cum = [0];
+  for (let i = 1; i <= dense.length; i++) { const a = dense[i - 1], b = dense[i % dense.length]; cum.push(cum[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])); }
+  const L = cum[dense.length], N = Math.floor(L / DS), ds = L / N, P = new Float64Array(N * 3);
+  for (let i = 0, j = 0; i < N; i++) {
+    const s = i * ds; while (cum[j + 1] < s) j++;
+    const a = dense[j], b = dense[(j + 1) % dense.length], f = (s - cum[j]) / (cum[j + 1] - cum[j] || 1);
+    for (let q = 0; q < 3; q++) P[i * 3 + q] = a[q] + (b[q] - a[q]) * f;
+  }
+  const sections = marks.map(m => ({ name: m.name, kind: m.kind, zone: m.zone || 'main', vmax: m.vmax, a0: m.a0, a1: m.a1, s: cum[m.i] }));
+  sections.forEach((x, k) => { x.len = (k + 1 < sections.length ? sections[k + 1].s : L) - x.s; });
+  const idx = i => ((i % N) + N) % N, get = (A, i) => { i = idx(i); return [A[i * 3], A[i * 3 + 1], A[i * 3 + 2]]; };
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const scale = (a, q) => [a[0] * q, a[1] * q, a[2] * q], add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+
+  // tangent and curvature vector
+  const T = new Float64Array(N * 3), Kv = new Float64Array(N * 3), hk = 4, hh = hk * ds;
+  for (let i = 0; i < N; i++) {
+    T.set(norm(sub(get(P, i + 2), get(P, i - 2))), i * 3);
+    const a = get(P, i + hk), b = get(P, i), c = get(P, i - hk);
+    Kv.set([(a[0] - 2 * b[0] + c[0]) / (hh * hh), (a[1] - 2 * b[1] + c[1]) / (hh * hh), (a[2] - 2 * b[2] + c[2]) / (hh * hh)], i * 3);
+  }
+
+  // speed profile: energy with rolling friction and drag; launch motors, drive tyres, chain lifts, trims and brakes
+  const secOfI = new Array(N); { let q = 0; for (let i = 0; i < N; i++) { while (q + 1 < sections.length && sections[q + 1].s <= i * ds) q++; secOfI[i] = sections[q]; } }
+  const MU = 0.011, CD = 0.00045 / SC, VLIFT = RIDE.speeds.lift * VSCALE, VBRAKE = RIDE.speeds.brake * VSCALE, VDRIVE = RIDE.speeds.drive * VSCALE;
+  const V = new Float64Array(N);
+  let v = 0.4 * VSCALE;
+  for (let i = 0; i < N; i++) {
+    V[i] = v;
+    const dy = P[idx(i + 1) * 3 + 1] - P[i * 3 + 1], sec = secOfI[i], kd = sec.kind;
+    if (kd === 'station') v = Math.min(VDRIVE, Math.sqrt(v * v + 2 * 1.0 * ds));
+    else if (kd === 'launch') {   // linear motors: the felt push into the seat-back ramps a0 → a1 g, then they hold vmax
+      const f = Math.min(1, Math.max(0, (i * ds - sec.s) / (sec.len || 1))), A = (sec.a0 + (sec.a1 - sec.a0) * f) * G;
+      const v2 = v * v + 2 * (A * ds - G * dy - MU * G * ds - CD * v * v * ds);
+      v = Math.min(sec.vmax * VSCALE, Math.sqrt(Math.max(1e-6, v2)));
+    } else if (kd === 'lift') {   // the chain only catches a train that gravity has slowed; it never brakes one
+      const v2 = v * v - 2 * (G * dy + MU * G * ds);
+      v = v <= VLIFT ? Math.min(VLIFT, Math.sqrt(v * v + 2 * 0.5 * ds)) : Math.max(VLIFT, Math.sqrt(Math.max(0, v2)));
+    } else {
+      let v2 = v * v + 2 * (-G * dy - MU * G * ds - CD * v * v * ds);
+      if (kd === 'trim' && v2 > (sec.vmax * VSCALE) ** 2) v2 = Math.max((sec.vmax * VSCALE) ** 2, v * v - 2 * 0.5 * G * ds);
+      if (kd === 'brake' || kd === 'return') {
+        if (v2 > VBRAKE * VBRAKE) v2 = Math.max(VBRAKE * VBRAKE, v * v - 2 * LIMITS.decel * 0.85 * G * ds);
+        else if (v > VDRIVE) v2 = Math.max(VDRIVE * VDRIVE, v * v - 2 * 1.5 * ds);      // ease from brake speed onto the station tyres
+        else v2 = Math.min(VDRIVE * VDRIVE, Math.max(v2, v * v + 2 * 0.6 * ds));
+      }
+      v = Math.sqrt(Math.max(1e-6, v2));
+    }
+  }
+  for (let i = N - 1; i >= 0; i--) { const rem = (N - i) * ds; V[i] = Math.min(V[i], Math.sqrt(2 * 0.9 * rem) + 0.05 * VSCALE); }   // gentle stop at the platform
+
+  // reference frame the bank angle is measured from
+  const U0 = new Float64Array(N * 3);
+  if (RIDE.frame === 'rmf') {
+    let r = norm(sub([0, 1, 0], scale(get(T, 0), get(T, 0)[1]))); U0.set(r, 0);
+    for (let i = 0; i < N - 1; i++) {
+      const x0 = get(P, i), x1 = get(P, i + 1), t0 = get(T, i), t1 = get(T, i + 1), v1 = sub(x1, x0), c1 = dot(v1, v1);
+      const rL = sub(r, scale(v1, 2 / c1 * dot(v1, r))), tL = sub(t0, scale(v1, 2 / c1 * dot(v1, t0))), v2 = sub(t1, tL), c2 = dot(v2, v2);
+      r = c2 > 1e-12 ? sub(rL, scale(v2, 2 / c2 * dot(v2, rL))) : rL;
+      r = norm(sub(r, scale(t1, dot(r, t1)))); U0.set(r, (i + 1) * 3);
+    }
+  } else for (let i = 0; i < N; i++) { const t = get(T, i); U0.set(norm(sub([0, 1, 0], scale(t, t[1]))), i * 3); }
+
+  // specific force felt by the rider: f = a − g
+  const accel = i => {
+    const vi = V[i], dv2 = (V[idx(i + 1)] ** 2 - V[idx(i - 1)] ** 2) / (4 * ds), t = get(T, i), kk = get(Kv, i);
+    return [t[0] * dv2 + kk[0] * vi * vi, t[1] * dv2 + kk[1] * vi * vi + G, t[2] * dv2 + kk[2] * vi * vi];
+  };
+  // heartline roll: bank so sideways g → 0 (only where the felt force is strong enough to point somewhere), then cap roll rate
+  const fu = new Float64Array(N), fr = new Float64Array(N);
+  for (let i = 0; i < N; i++) { const t = get(T, i), u = get(U0, i), f = accel(i); fu[i] = dot(f, u); fr[i] = dot(f, cross(t, u)); }
+  const gauss = (A, sigmaM) => {
+    const s = Math.max(1, Math.round(sigmaM / ds)), rad = s * 3, w = []; for (let q = -rad; q <= rad; q++) w.push(Math.exp(-q * q / (2 * s * s)));
+    const tot = w.reduce((a, b) => a + b, 0), out = new Float64Array(N);
+    for (let i = 0; i < N; i++) { let acc = 0; for (let q = -rad; q <= rad; q++) acc += A[Math.min(N - 1, Math.max(0, i + q))] * w[q + rad]; out[i] = acc / tot; }
+    return out;
+  };
+  const fuS = gauss(fu, 2.5 * SC), frS = gauss(fr, 2.5 * SC);
+  let phi = new Float64Array(N);
+  for (let i = 0; i < N; i++) { const mag = Math.hypot(fuS[i], frS[i]) / G, w = Math.min(1, Math.max(0, (mag - 0.1) / 0.3)); phi[i] = w * Math.atan2(frS[i] * Math.sign(fuS[i] || 1), Math.abs(fuS[i]) + 1e-6); }
+  const wMax = LIMITS.rollRate * RATE_SCALE * 0.8 * Math.PI / 180, vFloor = 0.5 * VSCALE;
+  for (let pass = 0; pass < 3; pass++) {
+    for (let i = 1; i < N; i++) { const lim = wMax * ds / Math.max(V[i], vFloor); phi[i] = Math.min(phi[i - 1] + lim, Math.max(phi[i - 1] - lim, phi[i])); }
+    for (let i = N - 2; i >= 0; i--) { const lim = wMax * ds / Math.max(V[i], vFloor); phi[i] = Math.min(phi[i + 1] + lim, Math.max(phi[i + 1] - lim, phi[i])); }
+  }
+  phi = gauss(phi, 1.2 * SC);
+
+  // final frames and the g report
+  const U = new Float64Array(N * 3), R = new Float64Array(N * 3), gV = new Float64Array(N), gL = new Float64Array(N), gF = new Float64Array(N), roll = new Float64Array(N), rollRate = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    const t = get(T, i), u0 = get(U0, i), r0 = cross(t, u0), c = Math.cos(phi[i]), s = Math.sin(phi[i]);
+    const u = norm(add(scale(u0, c), scale(r0, s))), rr = cross(t, u), f = accel(i);
+    U.set(u, i * 3); R.set(rr, i * 3);
+    gV[i] = dot(f, u) / G; gL[i] = dot(f, rr) / G; gF[i] = -dot(f, t) / G;
+  }
+  for (let i = 0; i < N; i++) {
+    const u = get(U, i), rr = get(R, i);
+    roll[i] = Math.atan2(-rr[1], u[1]) * 180 / Math.PI;                                    // bank against the horizon
+    rollRate[i] = (phi[idx(i + 1)] - phi[idx(i - 1)]) / (2 * ds) * V[i] * 180 / Math.PI;    // real-time °/s at this scale
+  }
+  let time = 0; const st = { vMax: -9, vMin: 9, lat: 0, fwd: 0, rollRate: 0, rollRateFullSize: 0, speed: 0, height: -1e9, depth: 1e9, time: 0 };
+  for (let i = 0; i < N; i++) {
+    st.vMax = Math.max(st.vMax, gV[i]); st.vMin = Math.min(st.vMin, gV[i]); st.lat = Math.max(st.lat, Math.abs(gL[i])); st.fwd = Math.max(st.fwd, Math.abs(gF[i]));
+    st.rollRate = Math.max(st.rollRate, Math.abs(rollRate[i])); st.speed = Math.max(st.speed, V[i]);
+    st.height = Math.max(st.height, P[i * 3 + 1]); st.depth = Math.min(st.depth, P[i * 3 + 1]);
+    time += ds / Math.max(V[i], 0.3 * VSCALE);
+  }
+  st.rollRateFullSize = st.rollRate / RATE_SCALE; st.time = time;
+  return { N, ds, L, P, T, U, R, V, gV, gL, gF, roll, rollRate, sections, stats: st, gap };
+}
+// TRACK-END
+
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function mulberry(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const $ = id => document.getElementById(id);
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const hash1 = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+/* ===================== track ===================== */
+const TR = buildTrack();
+const { N, ds, L } = TR;
+const HL = HEARTLINE;
+function idxAt(s) { s = ((s % L) + L) % L; const x = s / ds, i = Math.floor(x) % N; return [i, (i + 1) % N, x - Math.floor(x)]; }
+function arrAt(A, s) { const [i, j, f] = idxAt(s); return A[i] + (A[j] - A[i]) * f; }
+function frameAt(s, F) {
+  const [i, j, f] = idxAt(s);
+  const l3 = (A, out) => out.set(A[i * 3] + (A[j * 3] - A[i * 3]) * f, A[i * 3 + 1] + (A[j * 3 + 1] - A[i * 3 + 1]) * f, A[i * 3 + 2] + (A[j * 3 + 2] - A[i * 3 + 2]) * f);
+  l3(TR.P, F.p); l3(TR.T, F.t).normalize(); l3(TR.U, F.u);
+  F.u.addScaledVector(F.t, -F.u.dot(F.t)).normalize();
+  F.r.crossVectors(F.t, F.u);
+  return F;
+}
+const newFrame = () => ({ p: new THREE.Vector3(), t: new THREE.Vector3(), u: new THREE.Vector3(), r: new THREE.Vector3() });
+const P3 = (A, i) => new THREE.Vector3(A[i * 3], A[i * 3 + 1], A[i * 3 + 2]);
+const secOf = s => { let k = TR.sections[0]; for (const x of TR.sections) if (x.s <= s) k = x; return k; };
+const secS = name => { const x = TR.sections.find(q => q.name === name); if (!x) throw new Error(`No track section named "${name}"`); return x.s; };
+const zoneAt = i => secOf(i * ds).zone;
+const ZONE = new Array(N); for (let i = 0; i < N; i++) ZONE[i] = zoneAt(i);
+
+// spatial grid of heartline samples (every metre) for clearance and placement
+const GRID = 6, grid = new Map();
+const STEP1 = Math.round(1 / ds);
+for (let i = 0; i < N; i += STEP1) { const k = (Math.floor(TR.P[i * 3] / GRID) + 1000) * 4096 + Math.floor(TR.P[i * 3 + 2] / GRID) + 1000; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(i); }
+function nearSamples(x, z, r, cb) {
+  const c = Math.ceil(r / GRID), cx = Math.floor(x / GRID) + 1000, cz = Math.floor(z / GRID) + 1000;
+  for (let a = -c; a <= c; a++) for (let b = -c; b <= c; b++) { const list = grid.get((cx + a) * 4096 + cz + b); if (list) for (const i of list) cb(i); }
+}
+function trackDist(x, y, z, r = 8) { let best = 1e9; nearSamples(x, z, r, i => { const d = Math.hypot(x - TR.P[i * 3], y - TR.P[i * 3 + 1], z - TR.P[i * 3 + 2]); if (d < best) best = d; }); return best; }
+
+/* ===================== noise ===================== */
+function h3(x, y, z) { let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(z, 2147483647); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
+function vn3(x, y, z) {
+  const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z), fx = x - ix, fy = y - iy, fz = z - iz;
+  const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy), uz = fz * fz * (3 - 2 * fz);
+  const l = (a, b, t) => a + (b - a) * t;
+  return l(l(l(h3(ix, iy, iz), h3(ix + 1, iy, iz), ux), l(h3(ix, iy + 1, iz), h3(ix + 1, iy + 1, iz), ux), uy),
+           l(l(h3(ix, iy, iz + 1), h3(ix + 1, iy, iz + 1), ux), l(h3(ix, iy + 1, iz + 1), h3(ix + 1, iy + 1, iz + 1), ux), uy), uz) * 2 - 1;
+}
+function fbm3(x, y, z, o = 3) { let s = 0, a = 0.5, f = 1; for (let k = 0; k < o; k++) { s += a * vn3(x * f + k * 13.1, y * f - k * 7.7, z * f + k * 3.3); f *= 2.07; a *= 0.5; } return s; }
+
+
+/* ===================== world constants ===================== */
+const GROUND = -9;          // the city floor; the launch pad deck and city viaducts ride ~9 m above it
+const CLOUD_Y = 42;         // the cloud deck the train punches through on the way up and on re-entry
+const SUN_DIR = V3(-0.62, 0.5, 0.6).normalize();
+const PLANET_DIR = V3(0.78, 0.33, -0.53).normalize();
+const MOON_DIR = V3(0.42, 0.52, -0.74).normalize();
+const altK = y => smooth(CLOUD_Y + 6, CLOUD_Y + 46, y);    // 0 = blue city sky, 1 = black space
+
+/* ===================== renderer, sky, fog, post ===================== */
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+renderer.setSize(innerWidth, innerHeight, false);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+const HAZE_DAY = new THREE.Color('#c4d8ea'), HAZE_SPACE = new THREE.Color('#14223e');
+scene.fog = new THREE.FogExp2(HAZE_DAY.clone(), 0.0011);
+const camera = new THREE.PerspectiveCamera(74, innerWidth / innerHeight, 0.1, 4200);
+const hemi = new THREE.HemisphereLight('#cfe4ff', '#7d8f6a', 1.0);
+scene.add(hemi);
+const SUN = new THREE.DirectionalLight('#fff1dc', 2.7);
+SUN.castShadow = true; SUN.shadow.mapSize.set(1024, 1024); SUN.shadow.bias = -0.0004; SUN.shadow.normalBias = 0.04;
+Object.assign(SUN.shadow.camera, { left: -55, right: 55, top: 55, bottom: -55, near: 1, far: 400 });
+scene.add(SUN, SUN.target);
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.55, 0.45, 0.86);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+// the sky is one shader: a blue morning over the city that fades to starfield as you climb, with a ringed
+// gas giant and its moon hanging over the horizon (visible, paler, even in daylight)
+const SKY_U = { uSpace: { value: 0 }, uTime: { value: 0 }, uSun: { value: SUN_DIR }, uPlanet: { value: PLANET_DIR }, uMoon: { value: MOON_DIR } };
+const skyMat = new THREE.ShaderMaterial({
+  uniforms: SKY_U, side: THREE.BackSide, depthWrite: false, fog: false,
+  vertexShader: /* glsl */`varying vec3 vDir; void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */`
+    uniform float uSpace, uTime; uniform vec3 uSun, uPlanet, uMoon; varying vec3 vDir;
+    float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+    vec4 disk(vec3 d, vec3 P, float ar, out vec3 n) {   // a sphere of angular radius ar in direction P: (uv, r², hit)
+      vec3 X = normalize(cross(P, vec3(0.0, 1.0, 0.0))), Y = cross(X, P);
+      vec2 uv = vec2(dot(d, X), dot(d, Y)) / sin(ar); float r2 = dot(uv, uv);
+      n = normalize(uv.x * X + uv.y * Y - P * sqrt(max(0.0, 1.0 - r2)));
+      return vec4(uv, r2, step(r2, 1.0) * step(0.0, dot(d, P)));
+    }
+    void main() {
+      vec3 d = normalize(vDir); float h = d.y, sd = max(dot(d, uSun), 0.0);
+      // morning sky over the city
+      vec3 zen = vec3(0.22, 0.47, 0.86), hor = vec3(0.97, 0.86, 0.76), haze = vec3(0.77, 0.85, 0.93);
+      vec3 day = mix(hor, zen, pow(clamp(h, 0.0, 1.0), 0.42));
+      day = mix(day, haze, exp(-abs(h) * 16.0) * 0.45);
+      if (h < 0.0) day = mix(vec3(0.6, 0.7, 0.8), haze, exp(h * 8.0));
+      day += vec3(1.0, 0.82, 0.58) * (pow(sd, 6.0) * 0.28 + pow(sd, 90.0) * 0.6) + vec3(1.0, 0.95, 0.85) * smoothstep(0.9994, 0.9998, sd) * 3.0;
+      // space: a thin blue limb on the horizon, then black and stars
+      vec3 sp = mix(vec3(0.04, 0.09, 0.2), vec3(0.004, 0.006, 0.018), pow(clamp(h + 0.08, 0.0, 1.0), 0.55));
+      sp += vec3(0.25, 0.6, 1.0) * exp(-abs(h + 0.015) * 26.0) * 0.6;
+      vec3 q = d * 380.0, c = floor(q); float st = hash(c), tw = 0.65 + 0.35 * sin(uTime * 2.3 + st * 91.0);
+      float star = step(0.9963, st) * smoothstep(0.5, 0.05, length(fract(q) - 0.5)) * tw;
+      float band = exp(-pow(dot(d, normalize(vec3(0.35, 0.85, 0.4))), 2.0) * 14.0);
+      star += step(0.985, hash(floor(d * 900.0))) * band * 0.5;
+      sp += vec3(star) * mix(vec3(0.8, 0.9, 1.0), vec3(1.0, 0.85, 0.7), hash(c + 3.1)) * 1.4;
+      sp += vec3(0.3, 0.25, 0.5) * band * 0.08;
+      sp += vec3(1.0, 0.92, 0.8) * (smoothstep(0.9993, 0.9997, sd) * 8.0 + pow(sd, 40.0) * 0.25);
+      vec3 col = mix(day, sp, uSpace);
+      float show = mix(0.5, 1.0, uSpace);
+      // the moon
+      vec3 mn; vec4 m = disk(d, uMoon, 0.022, mn);
+      if (m.w > 0.0) { float lit = max(dot(mn, uSun), 0.0); vec3 mc = vec3(0.82, 0.84, 0.88) * (0.05 + 1.1 * lit) * (0.85 + 0.15 * hash(floor(d * 600.0))); col = mix(col, mc + col * (1.0 - uSpace) * 0.6, show * smoothstep(1.0, 0.92, m.z)); }
+      // the gas giant: banded, lit from the sun, with a soft blue rim and a tilted ring system
+      vec3 pn; vec4 p = disk(d, uPlanet, 0.2, pn);
+      float R = sin(0.2), b = dot(d, uPlanet), disc = b * b - (1.0 - R * R), tp = disc > 0.0 ? b - sqrt(disc) : 1e9;
+      vec3 Rn = normalize(vec3(0.18, 1.0, 0.32) + uPlanet * 0.25);
+      float tr = dot(uPlanet, Rn) / dot(d, Rn); vec3 rel = d * tr - uPlanet; float rr = length(rel) / R;
+      vec4 ring = vec4(0.0);
+      if (tr > 0.0 && rr > 1.35 && rr < 2.35) {
+        float bands = 0.55 + 0.45 * sin(rr * 46.0) * sin(rr * 13.0 + 1.3), gap = smoothstep(0.02, 0.05, abs(rr - 1.86));
+        float a = bands * gap * smoothstep(1.35, 1.45, rr) * smoothstep(2.35, 2.2, rr) * 0.75;
+        float shade = 0.35 + 0.65 * max(dot(Rn, uSun) * sign(dot(d, Rn) * -1.0) * 0.5 + 0.5, 0.0);
+        ring = vec4(vec3(0.92, 0.84, 0.72) * shade, a);
+      }
+      if (p.w > 0.0) {
+        float lat = dot(pn, normalize(Rn)) * 1.0 + 0.04 * sin(dot(pn, uPlanet.zxy) * 30.0);
+        vec3 pc = mix(vec3(0.86, 0.68, 0.5), vec3(0.56, 0.7, 0.92), 0.5 + 0.5 * sin(lat * 24.0 + sin(lat * 7.0) * 2.2));
+        pc = mix(pc, vec3(0.95, 0.9, 0.82), smoothstep(0.6, 0.95, sin(lat * 9.0 + 0.7)) * 0.35);
+        float lit = max(dot(pn, uSun), 0.0);
+        pc = pc * (0.04 + 1.15 * lit) + vec3(0.35, 0.6, 1.0) * smoothstep(0.75, 1.0, p.z) * 0.35;
+        col = mix(col, pc + col * (1.0 - uSpace) * 0.55, show * smoothstep(1.0, 0.985, p.z));
+        if (ring.a > 0.0 && tr < tp) col = mix(col, ring.rgb, ring.a * show);   // rings in front of the planet
+      } else if (ring.a > 0.0) col = mix(col, ring.rgb + col * (1.0 - uSpace) * 0.4, ring.a * show);
+      gl_FragColor = vec4(col, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+});
+const sky = new THREE.Mesh(new THREE.SphereGeometry(3800, 48, 24), skyMat);
+sky.renderOrder = -10; sky.frustumCulled = false;
+scene.add(sky);
+
+/* ===================== textures ===================== */
+function canvasTex(w, h, draw, opts = {}) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = opts.linear ? THREE.NoColorSpace : THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = renderer.capabilities.getMaxAnisotropy(); return t;
+}
+function noiseFill(g, w, h, base, amt, seed = 1) { const r = mulberry(seed); g.fillStyle = base; g.fillRect(0, 0, w, h); for (let k = 0; k < w * h / 14; k++) { g.fillStyle = r() < 0.5 ? `rgba(0,0,0,${amt * r()})` : `rgba(255,255,255,${amt * r() * 0.6})`; g.fillRect(r() * w, r() * h, 2, 2); } }
+// tileable value-noise fbm (for clouds)
+function tileNoise(size, cells, oct, seed) {
+  const r = mulberry(seed), out = new Float32Array(size * size);
+  for (let o = 0, a = 0.5, c = cells; o < oct; o++, a *= 0.5, c *= 2) {
+    const lat = []; for (let k = 0; k < c * c; k++) lat.push(r());
+    const L = (x, y) => lat[((y % c + c) % c) * c + ((x % c + c) % c)];
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const fx = x / size * c, fy = y / size * c, ix = Math.floor(fx), iy = Math.floor(fy), ux = fx - ix, uy = fy - iy;
+      const sx = ux * ux * (3 - 2 * ux), sy = uy * uy * (3 - 2 * uy);
+      out[y * size + x] += a * lerp(lerp(L(ix, iy), L(ix + 1, iy), sx), lerp(L(ix, iy + 1), L(ix + 1, iy + 1), sx), sy);
+    }
+  }
+  return out;
+}
+const T = {};
+T.cloud = (() => {
+  const S = 256, n = tileNoise(S, 4, 5, 77), d = new Uint8Array(S * S * 4);
+  // rank-normalise so a layer's `cover` threshold maps straight to the fraction of sky it leaves open
+  const order = Array.from(n.keys()).sort((a, b) => n[a] - n[b]), rank = new Float32Array(S * S); order.forEach((k, j) => { rank[k] = j / (S * S - 1); });
+  for (let k = 0; k < S * S; k++) { const v = Math.round(rank[k] * 255); d[k * 4] = d[k * 4 + 1] = d[k * 4 + 2] = v; d[k * 4 + 3] = 255; }
+  const t = new THREE.DataTexture(d, S, S); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true; return t;
+})();
+T.metal = canvasTex(256, 256, (g, w, h) => { noiseFill(g, w, h, '#e9eef2', 0.08, 6); const r = mulberry(3); for (let k = 0; k < 60; k++) { g.fillStyle = `rgba(160,175,190,${0.05 + r() * 0.06})`; g.fillRect(0, r() * h, w, 1); } });
+T.rock = canvasTex(256, 256, (g, w, h) => { noiseFill(g, w, h, '#6a625c', 0.5, 9); const r = mulberry(5); for (let k = 0; k < 90; k++) { g.fillStyle = `rgba(${r() < 0.5 ? '20,16,14' : '170,150,130'},${0.12 + r() * 0.2})`; g.beginPath(); g.arc(r() * w, r() * h, 2 + r() * 10, 0, TAU); g.fill(); } });
+// tower façades: pearl panels with ribbon windows; the alpha-free window rows glow faintly at dusk
+T.facade = canvasTex(256, 512, (g, w, h) => {
+  g.fillStyle = '#f2f4f2'; g.fillRect(0, 0, w, h); const r = mulberry(12);
+  for (let y = 0; y < h; y += 16) { g.fillStyle = `rgba(${60 + r() * 30},${110 + r() * 30},${150 + r() * 40},0.9)`; g.fillRect(0, y + 5, w, 8); g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(0, y + 5, w, 1.5); }
+  for (let x = 0; x < w; x += 32) { g.fillStyle = 'rgba(230,236,240,0.9)'; g.fillRect(x, 0, 3, h); }
+});
+T.facadeE = canvasTex(256, 512, (g, w, h) => {
+  g.fillStyle = '#000'; g.fillRect(0, 0, w, h); const r = mulberry(13);
+  for (let y = 0; y < h; y += 16) for (let x = 0; x < w; x += 32) if (r() < 0.22) { g.fillStyle = r() < 0.5 ? '#ffd9a0' : '#9fe8ff'; g.globalAlpha = 0.25 + r() * 0.35; g.fillRect(x + 3, y + 5, 29, 8); }
+  g.globalAlpha = 1;
+});
+T.windows = canvasTex(512, 64, (g, w, h) => {
+  g.fillStyle = '#0a0f18'; g.fillRect(0, 0, w, h); const r = mulberry(21);
+  for (let x = 0; x < w; x += 8) for (let y = 8; y < h - 8; y += 10) if (r() < 0.6) { g.fillStyle = r() < 0.7 ? '#bff4ff' : '#ffe2a8'; g.fillRect(x + 1, y, 5, 5); }
+});
+T.sign = canvasTex(1024, 256, () => {});
+function paintSign(g, w, h) {
+  g.clearRect(0, 0, w, h); const gr = g.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, '#071a2c'); gr.addColorStop(1, '#0b2a44');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h); g.strokeStyle = '#7fe3ff'; g.lineWidth = 6; g.strokeRect(10, 10, w - 20, h - 20);
+  g.fillStyle = '#e8fbff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '700 74px Orbitron, "Arial Black", sans-serif'; g.fillText('HALCYON', w / 2, h * 0.4);
+  g.fillStyle = '#7fe3ff'; g.font = '600 34px Orbitron, Arial, sans-serif'; g.fillText('SPACEPORT · ORBITAL LINE 1', w / 2, h * 0.74);
+}
+// the ground: a garden city painted once into a 2 km map (roads, plazas, parks, the lake)
+const MAP = { x0: -1000, z0: -1000, size: 2600, px: 2048 };
+const toMap = (x, z) => [(x - MAP.x0) / MAP.size * MAP.px, (z - MAP.z0) / MAP.size * MAP.px];
+
+/* ===================== materials ===================== */
+const GA = 0.55;
+const M = {
+  rail: new THREE.MeshStandardMaterial({ color: '#dfe6ee', metalness: 1, roughness: 0.22 }),
+  spine: new THREE.MeshStandardMaterial({ color: '#f4f6f8', map: T.metal, metalness: 0.25, roughness: 0.35 }),
+  sleeper: new THREE.MeshStandardMaterial({ color: '#b9c3cc', metalness: 0.6, roughness: 0.4 }),
+  column: new THREE.MeshStandardMaterial({ color: '#f1f3f5', map: T.metal, metalness: 0.15, roughness: 0.38 }),
+  led: new THREE.MeshStandardMaterial({ color: '#0a2a33', emissive: '#4fe0ff', emissiveIntensity: 2.2 }),
+  ledWarm: new THREE.MeshStandardMaterial({ color: '#331a0a', emissive: '#ffb45a', emissiveIntensity: 2.0 }),
+  magenta: new THREE.MeshStandardMaterial({ color: '#2a0a24', emissive: '#ff5ad8', emissiveIntensity: 2.4 }),
+  white: new THREE.MeshStandardMaterial({ color: '#f6f7f8', metalness: 0.1, roughness: 0.3 }),
+  carPaint: new THREE.MeshStandardMaterial({ color: '#aab6c2', metalness: 0.35, roughness: 0.32, envMapIntensity: 0.7 }),
+  pearl: new THREE.MeshStandardMaterial({ color: '#eef1f2', metalness: 0.2, roughness: 0.28 }),
+  chrome: new THREE.MeshStandardMaterial({ color: '#cfd8e0', metalness: 1, roughness: 0.15 }),
+  dark: new THREE.MeshStandardMaterial({ color: '#1a222c', metalness: 0.4, roughness: 0.5 }),
+  seat: new THREE.MeshStandardMaterial({ color: '#2a3442', roughness: 0.6 }),
+  glass: new THREE.MeshStandardMaterial({ color: '#bfe6ff', metalness: 0.4, roughness: 0.05, transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide }),
+  rock: new THREE.MeshStandardMaterial({ color: '#9a8e84', map: T.rock, roughness: 0.95, flatShading: true }),
+  leaf: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8, flatShading: true }),
+  trunk: new THREE.MeshStandardMaterial({ color: '#8a6a52', roughness: 0.9 }),
+  facade: new THREE.MeshStandardMaterial({ color: '#ffffff', map: T.facade, emissiveMap: T.facadeE, emissive: '#ffffff', emissiveIntensity: 0.6, metalness: 0.25, roughness: 0.35 }),
+  band: new THREE.MeshStandardMaterial({ color: '#0c2630', emissive: '#7fe8ff', emissiveIntensity: 1.6 }),
+  grass: new THREE.MeshStandardMaterial({ color: '#6fae5a', roughness: 0.9 }),
+  water: new THREE.MeshStandardMaterial({ color: '#2f6a8c', metalness: 0.9, roughness: 0.08 }),
+  sign: new THREE.MeshStandardMaterial({ map: T.sign, emissiveMap: T.sign, emissive: '#ffffff', emissiveIntensity: 0.9, roughness: 0.4 }),
+  beam: new THREE.MeshBasicMaterial({ color: '#6fe6ff', transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
+  windows: new THREE.MeshStandardMaterial({ color: '#dfe8ef', emissiveMap: T.windows, emissive: '#ffffff', emissiveIntensity: 1.2, metalness: 0.6, roughness: 0.3 }),
+};
+
+/* ===================== geometry helpers ===================== */
+// sweep a circular tube along the track at a fixed offset in the rider frame
+function sweepTube(offU, offR, radius, radial, i0, i1, step) {
+  const pos = [], nor = [], uv = [], idx = [];
+  const rings = [];
+  for (let i = i0; i < i1; i += step) rings.push(i % N);
+  rings.push(i1 % N);
+  rings.forEach((i, k) => {
+    const p = P3(TR.P, i), u = P3(TR.U, i), r = P3(TR.R, i);
+    const c = p.clone().addScaledVector(u, offU).addScaledVector(r, offR);
+    for (let a = 0; a <= radial; a++) {
+      const th = a / radial * TAU, n = u.clone().multiplyScalar(Math.cos(th)).addScaledVector(r, Math.sin(th));
+      pos.push(c.x + n.x * radius, c.y + n.y * radius, c.z + n.z * radius); nor.push(n.x, n.y, n.z); uv.push(a / radial, k * step * ds);
+    }
+  });
+  for (let k = 0; k < rings.length - 1; k++) for (let a = 0; a < radial; a++) {
+    const A = k * (radial + 1) + a, B = A + radial + 1;
+    idx.push(A, B, A + 1, B, B + 1, A + 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+// a flat strip between two offset lines in the rider frame
+function sweepStrip(aU, aR, bU, bR, i0, i1, step, vScale = 1) {
+  const pos = [], uv = [], idx = [];
+  let k = 0;
+  for (let i = i0; i <= i1; i += step, k++) {
+    const j = i % N, p = P3(TR.P, j), u = P3(TR.U, j), r = P3(TR.R, j);
+    const A = p.clone().addScaledVector(u, aU).addScaledVector(r, aR), B = p.clone().addScaledVector(u, bU).addScaledVector(r, bR);
+    pos.push(A.x, A.y, A.z, B.x, B.y, B.z); uv.push(0, (i - i0) * ds * vScale, 1, (i - i0) * ds * vScale);
+    if (k) { const o = (k - 1) * 2; idx.push(o, o + 2, o + 1, o + 1, o + 2, o + 3); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+// instanced straight beams (unit cylinder stretched between two points)
+const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 10, 1).translate(0, 0.5, 0);
+const beamGeoLo = new THREE.CylinderGeometry(1, 1, 1, 6, 1).translate(0, 0.5, 0);
+class Beams {
+  constructor() { this.list = []; }
+  add(a, b, r) { this.list.push(a.x, a.y, a.z, b.x, b.y, b.z, r); }
+  mesh(mat, geo = beamGeo, chunk = 180) {
+    const buckets = new Map(), n = this.list.length / 7;
+    for (let k = 0; k < n; k++) {
+      const o = k * 7, key = Math.floor((this.list[o] + this.list[o + 3]) / 2 / chunk) * 1000 + Math.floor((this.list[o + 2] + this.list[o + 5]) / 2 / chunk);
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(k);
+    }
+    const g = new THREE.Group();
+    const Y = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), a = new THREE.Vector3(), b = new THREE.Vector3(), d = new THREE.Vector3(), sc = new THREE.Vector3(), mat4 = new THREE.Matrix4();
+    for (const ids of buckets.values()) {
+      const m = new THREE.InstancedMesh(geo, mat, ids.length), ctr = new THREE.Vector3();
+      for (const k of ids) ctr.x += this.list[k * 7] / ids.length, ctr.y += this.list[k * 7 + 1] / ids.length, ctr.z += this.list[k * 7 + 2] / ids.length;
+      m.position.copy(ctr);
+      ids.forEach((k, j) => {
+        const o = k * 7; a.set(this.list[o], this.list[o + 1], this.list[o + 2]).sub(ctr); b.set(this.list[o + 3], this.list[o + 4], this.list[o + 5]).sub(ctr);
+        d.subVectors(b, a); const len = d.length(); q.setFromUnitVectors(Y, d.normalize());
+        m.setMatrixAt(j, mat4.compose(a, q, sc.set(this.list[o + 6], len, this.list[o + 6])));
+      });
+      m.computeBoundingSphere();
+      m.castShadow = true; m.receiveShadow = true;
+      g.add(m);
+    }
+    return g;
+  }
+}
+// Bake a group's static meshes into one mesh per material (fewer draw calls)
+function sliceGeo(g, start, count) {
+  const out = new THREE.BufferGeometry();
+  for (const [name, attr] of Object.entries(g.attributes)) out.setAttribute(name, new THREE.BufferAttribute(attr.array.slice(start * attr.itemSize, (start + count) * attr.itemSize), attr.itemSize));
+  return out;
+}
+function mergeStatic(group) {
+  group.updateMatrixWorld(true);
+  const inv = group.matrixWorld.clone().invert(), buckets = new Map(), drop = [];
+  group.traverse(o => {
+    if (!o.isMesh || o.isInstancedMesh) return;
+    drop.push(o);
+    let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const parts = Array.isArray(o.material) && g.groups.length ? g.groups.map(gr => [sliceGeo(g, gr.start, gr.count), mats[gr.materialIndex]]) : [[g, mats[0]]];
+    for (const [pg, mat] of parts) {
+      for (const name of Object.keys(pg.attributes)) if (!['position', 'normal', 'uv'].includes(name)) pg.deleteAttribute(name);
+      if (!pg.attributes.uv) pg.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(pg.attributes.position.count * 2), 2));
+      pg.clearGroups();
+      if (!buckets.has(mat)) buckets.set(mat, { list: [], shadow: false });
+      const bk = buckets.get(mat); bk.list.push(pg); bk.shadow ||= o.castShadow;
+    }
+  });
+  for (const o of drop) o.parent.remove(o);
+  for (const [mat, bk] of buckets) {
+    const m = new THREE.Mesh(mergeGeometries(bk.list), mat);
+    m.castShadow = bk.shadow; m.receiveShadow = true; group.add(m);
+  }
+  return group;
+}
+// ride envelope of every *other* pass of track: a 2.3 m tube around the riders
+const ENV = 2.3, EXCL = 9;
+function clearAt(x, y, z, iSelf) {
+  let ok = true;
+  nearSamples(x, z, ENV + 3, j => {
+    if (!ok) return;
+    if (iSelf >= 0) { let dsv = Math.abs(j - iSelf) * ds; dsv = Math.min(dsv, L - dsv); if (dsv < EXCL) return; }
+    const cx = TR.P[j * 3] - TR.U[j * 3] * 0.35, cy = TR.P[j * 3 + 1] - TR.U[j * 3 + 1] * 0.35, cz = TR.P[j * 3 + 2] - TR.U[j * 3 + 2] * 0.35;
+    if ((x - cx) ** 2 + (y - cy) ** 2 + (z - cz) ** 2 < ENV * ENV) ok = false;
+  });
+  return ok;
+}
+function segClear(a, b, iSelf, step = 0.4) { const d = b.clone().sub(a), n = Math.max(2, Math.ceil(d.length() / step)); for (let k = 0; k <= n; k++) { const q = a.clone().addScaledVector(d, k / n); if (!clearAt(q.x, q.y, q.z, iSelf)) return false; } return true; }
+// scenery check: every point of a thing stays `r` metres from every heartline sample
+function segFar(a, b, r, step = 0.4) { const d = b.clone().sub(a), n = Math.max(2, Math.ceil(d.length() / step)); for (let k = 0; k <= n; k++) { const q = a.clone().addScaledVector(d, k / n); if (trackDist(q.x, q.y, q.z, r + 6) < r) return false; } return true; }
+const ptFar = (q, r) => trackDist(q.x, q.y, q.z, r + 6) >= r;
+function instChunks(geo, mat, items, matFn, chunk = 50, tag = false) {
+  const buckets = new Map();
+  for (const it of items) { const key = Math.floor(it.p.x / chunk) * 1e6 + Math.floor(it.p.y / chunk) * 1e3 + Math.floor(it.p.z / chunk); if (!buckets.has(key)) buckets.set(key, []); buckets.get(key).push(it); }
+  const g = new THREE.Group(), m4 = new THREE.Matrix4();
+  for (const list of buckets.values()) {
+    const im = new THREE.InstancedMesh(geo, mat, list.length);
+    list.forEach((it, j) => { im.setMatrixAt(j, matFn(it, m4)); if (it.color && im.setColorAt) im.setColorAt(j, it.color); });
+    im.computeBoundingSphere(); im.castShadow = true; im.receiveShadow = true; if (tag) im.userData.structure = true; g.add(im);
+  }
+  return g;
+}
+
+
+/* ===================== placement helpers ===================== */
+function samplesBetween(a, b, pad0 = 0, pad1 = 0) { const sa = secS(a) + pad0, sb = secS(b) + pad1, out = []; for (let i = 0; i < N; i += STEP1) { const s = i * ds; if (s >= sa && s < sb) out.push(i); } return out; }
+function centroid(list) { const c = V3(0, 0, 0); for (const i of list) c.add(P3(TR.P, i)); return c.multiplyScalar(1 / list.length); }
+const sampleAt = s => ((Math.round(s / ds) % N) + N) % N;
+// plan-view distance to the nearest heartline sample (for footprints on the ground)
+function planDist(x, z, r = 12) { let best = 1e9; nearSamples(x, z, r, i => { const d = Math.hypot(x - TR.P[i * 3], z - TR.P[i * 3 + 2]); if (d < best) best = d; }); return best; }
+const inStation = (x, z) => x > -46 && x < 28 && Math.abs(z) < 16;
+
+/* ===================== track, launch rings, gates ===================== */
+const LAUNCH_U = { uS: { value: 0 }, uT: { value: 0 }, uArm: { value: 0.3 } };
+const RINGS = { list: [], glow: null, col: new THREE.Color() };
+const SUPPORT_FEET = []; let SUPPORT_STATS = null;
+const S_MECO = secS('Engine cut-off');
+function buildTrackMeshes() {
+  const g = new THREE.Group();
+  const add = (geo, mat, shadow = true) => { geo.computeBoundingSphere(); const c = geo.boundingSphere.center.clone(); geo.translate(-c.x, -c.y, -c.z); const m = new THREE.Mesh(geo, mat); m.position.copy(c); m.castShadow = shadow; m.receiveShadow = true; g.add(m); return m; };
+  for (let i0 = 0; i0 < N; i0 += 400) {
+    const i1 = Math.min(N, i0 + 400);
+    add(mergeGeometries([sweepTube(-HL, -GA, 0.075, 8, i0, i1, 3), sweepTube(-HL, GA, 0.075, 8, i0, i1, 3)]), M.rail);
+    add(sweepTube(-HL - 0.45, 0, 0.24, 8, i0, i1, 3), M.spine);
+    add(mergeGeometries([sweepTube(-HL - 0.45, -0.25, 0.035, 4, i0, i1, 6), sweepTube(-HL - 0.45, 0.25, 0.035, 4, i0, i1, 6)]), M.led, false);
+  }
+  // sleepers: rail ties with a web down to the spine
+  const sl = [], m4 = new THREE.Matrix4();
+  for (let i = 0; i < N; i += Math.round(0.9 / ds)) { const p = P3(TR.P, i), t = P3(TR.T, i), u = P3(TR.U, i), r = P3(TR.R, i); sl.push({ p: p.clone().addScaledVector(u, -HL - 0.15), t, u, r }); }
+  const CH = 60, b2 = new Map(); for (const s of sl) { const k = Math.floor(s.p.x / CH) * 1000 + Math.floor(s.p.z / CH); if (!b2.has(k)) b2.set(k, []); b2.get(k).push(s); }
+  const sg = new THREE.BoxGeometry(1, 1, 1);
+  for (const items of b2.values()) {
+    const im = new THREE.InstancedMesh(sg, M.sleeper, items.length);
+    items.forEach((s, k) => { m4.makeBasis(s.t.clone().multiplyScalar(0.18), s.u.clone().multiplyScalar(0.12), s.r.clone().multiplyScalar(1.3)); m4.setPosition(s.p); im.setMatrixAt(k, m4); });
+    im.computeBoundingSphere(); im.castShadow = im.receiveShadow = true; g.add(im);
+  }
+  // the linear-motor strip: chevrons that race forward once the launch is armed and a light pulse just ahead of the nose
+  const iL = Math.round(S_MECO / ds);
+  const stripMat = new THREE.ShaderMaterial({
+    uniforms: LAUNCH_U, side: THREE.DoubleSide,
+    vertexShader: /* glsl */`varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */`
+      uniform float uS, uT, uArm; varying vec2 vUv;
+      void main() {
+        float x = abs(vUv.x - 0.5) * 2.0, s = vUv.y;
+        float chev = step(0.6, fract(s * 0.5 - x * 0.4 - uT * (0.4 + uArm * 3.0)));
+        float edge = smoothstep(0.8, 0.95, x);
+        float wave = exp(-abs(s - uS - 3.0) * 0.3) * step(uS - 3.0, s) * step(0.5, uArm);
+        vec3 col = vec3(0.02, 0.04, 0.06) + vec3(0.2, 0.8, 1.0) * (chev * (0.3 + 1.2 * uArm) + edge * (0.5 + uArm)) + vec3(0.8, 0.97, 1.0) * wave * 4.0;
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+  add(sweepStrip(-HL - 0.02, -0.36, -HL - 0.02, 0.36, 0, iL, 2), stripMat, false);
+  // accelerator rings around the launch: a chrome collar with a glowing inner ring that chases and flares as you pass
+  const list = [];
+  for (let s = 10; s <= S_MECO + 6; s += 7) { const F = frameAt(s, newFrame()); list.push({ s, m: new THREE.Matrix4().makeBasis(F.r, F.u, F.t).setPosition(F.p.clone().addScaledVector(F.u, -0.3)) }); }
+  const glow = new THREE.InstancedMesh(new THREE.TorusGeometry(2.95, 0.08, 6, 56), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), list.length);
+  const collar = new THREE.InstancedMesh(new THREE.TorusGeometry(3.2, 0.17, 8, 56), M.chrome, list.length);
+  list.forEach((r, k) => { glow.setMatrixAt(k, r.m); collar.setMatrixAt(k, r.m); glow.setColorAt(k, RINGS.col.setRGB(0.1, 0.4, 0.6)); });
+  for (const im of [glow, collar]) { im.computeBoundingSphere(); g.add(im); }
+  collar.castShadow = true;
+  RINGS.list = list; RINGS.glow = glow;
+  // hexagonal gates strung through low orbit
+  const gm = [];
+  for (let s = secS('Zero-g hills') + 30; s < secS('Retro-burn') - 10; s += 70) { const F = frameAt(s, newFrame()); gm.push(new THREE.Matrix4().makeBasis(F.r, F.u, F.t).setPosition(F.p.clone().addScaledVector(F.u, -0.4))); }
+  const gate = new THREE.InstancedMesh(new THREE.TorusGeometry(4.5, 0.1, 6, 6), M.magenta, gm.length), frame = new THREE.InstancedMesh(new THREE.TorusGeometry(4.75, 0.28, 6, 6), M.white, gm.length);
+  gm.forEach((m, k) => { gate.setMatrixAt(k, m); frame.setMatrixAt(k, m); });
+  for (const im of [gate, frame]) { im.computeBoundingSphere(); g.add(im); }
+  return g;
+}
+function updateRings(arm, s, t, running) {
+  if (!RINGS.glow) return;
+  RINGS.list.forEach((r, k) => {
+    const pass = running ? Math.exp(-((r.s - s - 1.5) ** 2) / 24) : 0;
+    const chase = arm * (0.5 + 0.5 * Math.sin(r.s * 0.3 - t * 10));
+    const spent = running && r.s < s - 6 ? 0.35 : 1;
+    const b = (0.22 + 1.6 * chase) * spent;
+    RINGS.col.setRGB(0.2 * b + 4 * pass, 0.75 * b + 4 * pass, 1.1 * b + 4.2 * pass);
+    RINGS.glow.setColorAt(k, RINGS.col);
+  });
+  RINGS.glow.instanceColor.needsUpdate = true;
+}
+
+/* ===================== supports ===================== */
+// envelope checks (ENV/EXCL, clearAt, segClear, segFar, ptFar) come from the shared block above
+function buildSupports() {
+  // white pylons from the city floor up to the cloud deck; above it the track rides on levitation beams
+  const posts = new Beams(), braces = new Beams(), lev = new Beams(), g = new THREE.Group(), collars = [];
+  const brace = (a, b, r, i) => { if (segClear(a, b, i)) braces.add(a, b, r); };
+  const stats = { bents: 0, outriggers: 0, levitators: 0, skipped: 0 };
+  let prev = null;
+  for (let s = 3; s < L - 2;) {
+    const i = sampleAt(s);
+    const p = P3(TR.P, i), t = P3(TR.T, i), u = P3(TR.U, i), r = P3(TR.R, i);
+    const spine = p.clone().addScaledVector(u, -HL - 0.45);
+    s += spine.y > CLOUD_Y ? 14 : 7;
+    if (inStation(spine.x, spine.z) || u.y < 0.25) { prev = null; continue; }
+    if (spine.y > CLOUD_Y + 1) {
+      const a = V3(spine.x, spine.y - 0.7, spine.z), b = V3(spine.x, CLOUD_Y - 3, spine.z);
+      if (segClear(a, b, i, 1)) { lev.add(b, a, 0.28); collars.push({ p: a }); stats.levitators++; } else stats.skipped++;
+      prev = null; continue;
+    }
+    const h = spine.y - GROUND; if (h < 0.6) { prev = null; continue; }
+    const th = V3(t.x, 0, t.z); if (th.lengthSq() < 1e-4) th.set(1, 0, 0); th.normalize();
+    const rh = V3(-th.z, 0, th.x), steep = Math.abs(t.y) > 0.4;
+    const sp = 0.8 + h * (steep ? 0.3 : 0.07), rad = h > 24 ? 0.3 : 0.2;
+    const legs = [-1, 1].map(sd => ({ top: spine.clone().addScaledVector(r, sd * 0.6), base: V3(spine.x + rh.x * sd * sp, GROUND, spine.z + rh.z * sd * sp) }));
+    if (legs.every(l => segClear(l.top, l.base, i))) {
+      stats.bents++;
+      for (const l of legs) { posts.add(l.base, l.top, rad); SUPPORT_FEET.push(l.base); }
+      brace(legs[0].top, legs[1].top, 0.12, i);
+      const lv = []; for (let y = GROUND + 6; y < spine.y - 2; y += 7) { const pts = legs.map(l => l.base.clone().lerp(l.top, (y - l.base.y) / (l.top.y - l.base.y))); lv.push(pts); brace(pts[0], pts[1], 0.1, i); }
+      if (prev && h > 10) for (let k = 0; k < Math.min(prev.lv.length, lv.length); k++) for (const sd of [0, 1]) brace(prev.lv[k][sd], lv[k][sd], 0.07, i);
+      prev = { lv };
+      continue;
+    }
+    prev = null;
+    let placed = false;
+    for (const side of [1, -1]) {
+      for (const reach of [3.4, 4.6, 6]) {
+        const armA = spine.clone(), armB = V3(spine.x + rh.x * side * reach, spine.y - 0.3, spine.z + rh.z * side * reach), foot = V3(armB.x, GROUND, armB.z);
+        if (!segClear(armA, armB, i) || !segClear(armB, foot, i)) continue;
+        posts.add(foot, armB, rad + 0.06); posts.add(armA, armB, 0.16); SUPPORT_FEET.push(foot);
+        stats.outriggers++; placed = true; break;
+      }
+      if (placed) break;
+    }
+    if (!placed) stats.skipped++;
+  }
+  SUPPORT_STATS = stats;
+  const pm = posts.mesh(M.column, beamGeo, 120), bm = braces.mesh(M.column, beamGeoLo, 120);
+  for (const grp of [pm, bm]) grp.traverse(o => { if (o.isMesh) o.userData.structure = true; });
+  const lm = lev.mesh(M.beam, beamGeoLo, 200); lm.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = false; } });
+  g.add(pm, bm, lm);
+  // emitter pods under the spine where the beams hold the track up
+  const podGeo = new THREE.CylinderGeometry(0.55, 0.3, 0.35, 16), ringGeo = new THREE.TorusGeometry(0.62, 0.06, 6, 24).rotateX(Math.PI / 2);
+  g.add(instChunks(podGeo, M.white, collars, (it, m) => m.makeTranslation(it.p.x, it.p.y + 0.1, it.p.z), 200));
+  g.add(instChunks(ringGeo, M.led, collars, (it, m) => m.makeTranslation(it.p.x, it.p.y - 0.05, it.p.z), 200));
+  return g;
+}
+
+
+/* ===================== the city floor: ground map, lake, station, gantry ===================== */
+const CITY = { occupied: [], trees: [], lake: null, spire: null, dome: null, beacons: [] };
+const occupy = (x, z, r) => CITY.occupied.push([x, z, r]);
+const freeAt = (x, z, r) => CITY.occupied.every(([a, b, q]) => Math.hypot(x - a, z - b) > r + q);
+const ROAD = 160, onRoad = (x, z, pad = 0) => Math.abs(((x % ROAD) + ROAD * 1.5) % ROAD - ROAD / 2) < 8 + pad || Math.abs(((z % ROAD) + ROAD * 1.5) % ROAD - ROAD / 2) < 8 + pad;
+function defineCity() {
+  // the lake sits inside the 180° Lakeside turn: its centre is halfway between the turn's ends
+  const a = P3(TR.P, sampleAt(secS('Lakeside turn'))), b = P3(TR.P, sampleAt(secS('Homecoming')));
+  const c = a.clone().add(b).multiplyScalar(0.5), R = a.distanceTo(b) / 2;
+  CITY.lake = { x: c.x, z: c.z, r: R - 15 };
+  const sp = centroid(samplesBetween('Re-entry spiral', 'Heat shield', 40, -40));
+  CITY.spire = { x: sp.x, z: sp.z };
+  const dm = P3(TR.P, sampleAt(secS('Arboretum dome') + Lp_half('Arboretum dome')));
+  CITY.dome = { x: dm.x, z: dm.z, r: 40 };
+  occupy(CITY.lake.x, CITY.lake.z, CITY.lake.r + 6); occupy(CITY.spire.x, CITY.spire.z, 30); occupy(CITY.dome.x, CITY.dome.z, 46);
+  occupy(100, -18, 14);
+}
+function Lp_half(name) { const k = TR.sections.findIndex(q => q.name === name); return ((k + 1 < TR.sections.length ? TR.sections[k + 1].s : L) - TR.sections[k].s) / 2; }
+function buildGround() {
+  const g = new THREE.Group(), r = mulberry(31);
+  const tex = canvasTex(MAP.px, MAP.px, (c, w, h) => {
+    noiseFill(c, w, h, '#86b46c', 0.18, 4);
+    const px = MAP.px / MAP.size, X = x => (x - MAP.x0) * px, Z = z => (z - MAP.z0) * px;
+    // meadows and orchards in soft patches
+    for (let k = 0; k < 340; k++) { c.fillStyle = ['rgba(120,170,90,0.5)', 'rgba(160,196,110,0.45)', 'rgba(98,150,84,0.5)', 'rgba(214,200,140,0.25)'][k % 4]; c.beginPath(); c.ellipse(r() * w, r() * h, 10 + r() * 50, 8 + r() * 36, r() * 3, 0, TAU); c.fill(); }
+    // boulevards with planted medians
+    for (let v = Math.ceil(MAP.x0 / ROAD) * ROAD - ROAD / 2; v < MAP.x0 + MAP.size; v += ROAD) {
+      c.fillStyle = '#e4e2da'; c.fillRect(X(v - 8), 0, 16 * px, h); c.fillRect(0, Z(v - 8), w, 16 * px);
+      c.fillStyle = '#79a861'; c.fillRect(X(v - 1.6), 0, 3.2 * px, h); c.fillRect(0, Z(v - 1.6), w, 3.2 * px);
+    }
+    // plazas at the crossings
+    for (let x = Math.ceil(MAP.x0 / ROAD) * ROAD - ROAD / 2; x < MAP.x0 + MAP.size; x += ROAD) for (let z = Math.ceil(MAP.z0 / ROAD) * ROAD - ROAD / 2; z < MAP.z0 + MAP.size; z += ROAD) {
+      c.fillStyle = '#efece4'; c.beginPath(); c.arc(X(x), Z(z), 17 * px, 0, TAU); c.fill(); c.fillStyle = '#9fd0e0'; c.beginPath(); c.arc(X(x), Z(z), 5 * px, 0, TAU); c.fill();
+    }
+    // a pale greenway under the whole ride
+    c.strokeStyle = 'rgba(236,232,220,0.9)'; c.lineWidth = 7 * px; c.lineJoin = c.lineCap = 'round'; c.beginPath();
+    for (let i = 0; i < N; i += STEP1 * 4) { const x = X(TR.P[i * 3]), z = Z(TR.P[i * 3 + 2]); i ? c.lineTo(x, z) : c.moveTo(x, z); } c.closePath(); c.stroke();
+    // the lake, its beach and the station plaza
+    const lk = CITY.lake;
+    c.fillStyle = '#e8dcb8'; c.beginPath(); c.arc(X(lk.x), Z(lk.z), (lk.r + 6) * px, 0, TAU); c.fill();
+    c.fillStyle = '#2f6a8c'; c.beginPath(); c.arc(X(lk.x), Z(lk.z), lk.r * px, 0, TAU); c.fill();
+    c.fillStyle = '#ebe8e0'; c.fillRect(X(-60), Z(-30), 100 * px, 60 * px);
+    c.fillStyle = '#e8e6de'; c.beginPath(); c.arc(X(CITY.spire.x), Z(CITY.spire.z), 34 * px, 0, TAU); c.fill();
+  });
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  const half = MAP.size / 2, cx = MAP.x0 + half, cz = MAP.z0 + half;
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(half, 128).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95 }));
+  ground.position.set(cx, GROUND, cz); ground.receiveShadow = true;
+  const outer = new THREE.Mesh(new THREE.RingGeometry(half - 1, 7000, 128, 1).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#86b46c', roughness: 1 }));
+  outer.position.set(cx, GROUND, cz); outer.receiveShadow = true;
+  // the lake: a mirror with a fountain in the middle
+  const lk = CITY.lake;
+  const water = new THREE.Mesh(new THREE.CircleGeometry(lk.r, 64).rotateX(-Math.PI / 2), M.water); water.position.set(lk.x, GROUND + 0.12, lk.z); water.receiveShadow = true;
+  const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 1.6, 18, 12, 1, true).translate(0, 9, 0), new THREE.MeshBasicMaterial({ color: '#dff6ff', transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide }));
+  jet.position.set(lk.x, GROUND, lk.z);
+  const basin = new THREE.Mesh(new THREE.TorusGeometry(4, 0.4, 8, 32).rotateX(Math.PI / 2), M.pearl); basin.position.set(lk.x, GROUND + 0.3, lk.z);
+  CITY.jet = jet;
+  g.add(ground, outer, water, jet, basin);
+  return g;
+}
+function buildStation() {
+  const g = new THREE.Group();
+  const add = (geo, mat, x, y, z, shadow = true) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = shadow; m.receiveShadow = true; g.add(m); return m; };
+  const top = -HL + 0.35, x0 = -44, x1 = 26, len = x1 - x0, cx = (x0 + x1) / 2;
+  for (const sd of [-1, 1]) {
+    add(new THREE.BoxGeometry(len, top - GROUND, 7), M.pearl, cx, (top + GROUND) / 2, sd * 5.15);
+    add(new THREE.BoxGeometry(len, 0.06, 0.18), M.led, cx, top + 0.03, sd * 1.75, false);
+    add(new THREE.BoxGeometry(len, 0.4, 0.3), M.chrome, cx, top + 0.6, sd * 8.5);
+  }
+  add(new THREE.BoxGeometry(len, -HL - 1.1 - GROUND, 3.4), M.white, cx, (-HL - 1.1 + GROUND) / 2, 0);
+  // a curved shell canopy on slim columns
+  const R = 14, th = 0.78, c0 = -18, c1 = 15, yC = 7.6 - R;
+  const shell = add(new THREE.CylinderGeometry(R, R, c1 - c0, 40, 1, true, Math.PI / 2 - th, th * 2).rotateZ(Math.PI / 2), M.white, (c0 + c1) / 2, yC, 0);
+  shell.material = M.white.clone(); shell.material.side = THREE.DoubleSide;
+  for (let k = -2; k <= 2; k++) add(new THREE.BoxGeometry(c1 - c0, 0.08, 0.2), M.led, (c0 + c1) / 2, yC + R * Math.cos(k * 0.18) - 0.15, R * Math.sin(k * 0.18), false);
+  const cols = new Beams();
+  for (let x = c0 + 3; x <= c1 - 2; x += 8) for (const sd of [-1, 1]) cols.add(V3(x, top, sd * R * Math.sin(th) * 0.97), V3(x, yC + R * Math.cos(th) + 0.2, sd * R * Math.sin(th) * 0.97), 0.18);
+  // the welcome arch over the track, just ahead of the launch
+  const xs = 21;
+  for (const sd of [-1, 1]) cols.add(V3(xs, top, sd * 5.4), V3(xs, 8.2, sd * 5.4), 0.25);
+  cols.add(V3(xs, 8.2, -5.6), V3(xs, 8.2, 5.6), 0.3);
+  g.add(cols.mesh(M.chrome, beamGeo, 200));
+  const sign = add(new THREE.PlaneGeometry(9.6, 2.4), M.sign, xs - 0.1, 6.6, 0, false); sign.rotation.y = -Math.PI / 2;
+  const back = add(new THREE.BoxGeometry(0.2, 2.6, 9.9), M.white, xs + 0.05, 6.6, 0);
+  // the countdown lamps on the arch
+  CITY.lamps = [];
+  for (let k = 0; k < 5; k++) { const m = add(new THREE.SphereGeometry(0.22, 12, 8), new THREE.MeshBasicMaterial({ color: '#203038', toneMapped: false }), xs - 0.2, 4.95, -2 + k, false); CITY.lamps.push(m); }
+  void back;
+  return g;
+}
+function buildGantry() {
+  // a white lattice launch tower beside the climb, with swing arms reaching for the track and a beacon on top
+  const g = new THREE.Group(), posts = new Beams(), lat = new Beams(), gx = 100, gz = -18, w = 3.5, H = 122;
+  const C = [[-w, -w], [w, -w], [w, w], [-w, w]].map(([a, b]) => [gx + a, gz + b]);
+  for (const [x, z] of C) posts.add(V3(x, GROUND, z), V3(x, GROUND + H, z), 0.32);
+  for (let y = GROUND; y < GROUND + H; y += 7) for (let k = 0; k < 4; k++) {
+    const [ax, az] = C[k], [bx, bz] = C[(k + 1) % 4];
+    lat.add(V3(ax, y, az), V3(bx, y, bz), 0.12); lat.add(V3(ax, y, az), V3(bx, y + 7, bz), 0.08);
+  }
+  for (const y of [22, 52, 82]) {
+    const a = V3(gx, y, gz + w), b = V3(gx, y, gz + w);
+    for (let z = gz + w; z < -2; z += 0.5) { const q = V3(gx, y, z); if (!ptFar(q, 4.6)) break; b.copy(q); }
+    if (b.z - a.z > 2) { posts.add(a, b, 0.3); lat.add(a.clone().setY(y - 5), b.clone().setY(y - 0.3), 0.1); }
+  }
+  g.add(posts.mesh(M.white, beamGeo, 400), lat.mesh(M.chrome, beamGeoLo, 400));
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 5.5, 1.2, 6), M.white); cap.position.set(gx, GROUND + H + 0.6, gz);
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.3, 14, 6).translate(0, 7, 0), M.chrome); mast.position.set(gx, GROUND + H + 1.2, gz);
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.7, 12, 8), new THREE.MeshBasicMaterial({ color: '#ff4a5a', toneMapped: false })); beacon.position.set(gx, GROUND + H + 15.5, gz);
+  CITY.beacons.push(beacon.material);
+  g.add(cap, mast, beacon);
+  return g;
+}
+
+
+/* ===================== towers, the Sky Spire, skybridges, the arboretum, trees ===================== */
+const scaleUV = (geo, su, sv) => { const uv = geo.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * su, uv.getY(k) * sv); return geo; };
+const TREE_COLS = ['#5f9e4f', '#78b45a', '#4f8a46', '#8cc46a', '#f2b3c6', '#f7c9d6', '#d9c25e', '#5aa88a'].map(c => new THREE.Color(c));
+function addTree(p, s, rnd, pinkBias = 0) {
+  const k = rnd() < pinkBias ? 4 + Math.floor(rnd() * 2) : Math.floor(rnd() * TREE_COLS.length);
+  CITY.trees.push({ p, s, h: 0.8 + rnd() * 0.5, color: TREE_COLS[k].clone().multiplyScalar(0.85 + rnd() * 0.3) });
+}
+function towerInto(group, x, z, r, h, kind, rnd) {
+  const add = (geo, mat, y) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; group.add(m); return m; };
+  const rt = r * 0.78;
+  add(scaleUV(new THREE.CylinderGeometry(rt, r, h, 12, 1, true), Math.round(TAU * r / 32), h / 110), M.facade, GROUND + h / 2);
+  for (let y = 16 + rnd() * 8; y < h - 6; y += 18 + rnd() * 10) { const rr = lerp(r, rt, y / h) + 0.12; add(new THREE.CylinderGeometry(rr, rr, 0.9, 12, 1, true), M.band, GROUND + y); }
+  if (kind === 0) {   // a garden on the roof
+    add(new THREE.CylinderGeometry(rt * 1.12, rt, 1.2, 12), M.pearl, GROUND + h + 0.6);
+    add(new THREE.SphereGeometry(rt * 1.04, 12, 5, 0, TAU, 0, Math.PI / 2).scale(1, 0.4, 1), M.grass, GROUND + h + 1.1);
+    for (let k = 0; k < 4; k++) { const a = rnd() * TAU, d = rnd() * rt * 0.55; addTree(V3(x + Math.cos(a) * d, GROUND + h + 1.1 + rt * 0.3, z + Math.sin(a) * d), 0.7 + rnd() * 0.5, rnd, 0.3); }
+  } else if (kind === 1) {   // a saucer deck
+    const y = GROUND + h * (0.6 + rnd() * 0.22);
+    add(new THREE.CylinderGeometry(r * 2, r * 1.1, 3, 28), M.pearl, y);
+    add(scaleUV(new THREE.CylinderGeometry(r * 2.02, r * 2.02, 1.1, 28, 1, true), Math.round(TAU * r * 2 / 40), 1), M.windows, y + 1.1);
+    add(new THREE.ConeGeometry(rt, r * 3, 12), M.pearl, GROUND + h + r * 1.5);
+  } else {   // a needle with a beacon
+    add(new THREE.ConeGeometry(rt, h * 0.22, 12), M.pearl, GROUND + h + h * 0.11);
+  }
+}
+const towerTop = (r, h, kind) => h + (kind === 0 ? 4 : kind === 1 ? r * 3 : h * 0.22);
+const towerFoot = (r, kind) => kind === 1 ? r * 2.05 : r * 1.15;
+// the tallest version of a tower that stays clear of every pass of track (or null)
+function fitTower(x, z, r, h, kind) {
+  const rf = towerFoot(r, kind);
+  if (planDist(x, z, rf + 14) > rf + 8) return h;
+  for (const f of [1, 0.75, 0.55, 0.4]) { const hh = h * f; if (hh < 22) break; if (segFar(V3(x, GROUND, z), V3(x, GROUND + towerTop(r, hh, kind) + 4, z), rf + 6, 2.5)) return hh; }
+  return null;
+}
+// the orbital part of the ride flies over the city: towers anywhere near it stay below the cloud deck, so up
+// there you see a sea of cloud and black sky rather than rooftops; only distant towers peek through
+const SKY_PTS = [];
+for (let i = 0; i < N; i += STEP1 * 8) if (TR.P[i * 3 + 1] > CLOUD_Y) SKY_PTS.push(TR.P[i * 3], TR.P[i * 3 + 2]);
+const skyDist = (x, z) => { let b = 1e9; for (let k = 0; k < SKY_PTS.length; k += 2) b = Math.min(b, (x - SKY_PTS[k]) ** 2 + (z - SKY_PTS[k + 1]) ** 2); return Math.sqrt(b); };
+// the tallest body height whose top (crown, saucer cone or needle) stays at or under `top` metres above the ground
+const capH = (r, kind, top) => kind === 0 ? top - 4 : kind === 1 ? top - r * 3 : top / 1.22;
+const topCap = (x, z) => skyDist(x, z) < 450 ? CLOUD_Y - 3 - GROUND : 84;
+function buildTowers() {
+  const rnd = mulberry(88), chunks = new Map(), root = new THREE.Group();
+  const grp = (x, z) => { const k = Math.floor(x / 650) * 1000 + Math.floor(z / 650); if (!chunks.has(k)) chunks.set(k, new THREE.Group()); return chunks.get(k); };
+  const bridges = new THREE.Group();
+  // skybridges across the Skyline run, each between a pair of towers
+  for (const off of [20, 78, 136]) {
+    const s = secS('Skyline run') + off; if (s > secS('Garden dip')) break;
+    const F = frameAt(s, newFrame()), th = V3(F.t.x, 0, F.t.z).normalize(), rh = V3(-th.z, 0, th.x), r = 8, half = 24;
+    const ends = [-1, 1].map(sd => V3(F.p.x + rh.x * sd * half, 0, F.p.z + rh.z * sd * half));
+    const hs = ends.map(e => fitTower(e.x, e.z, r, Math.min(70 + rnd() * 30, capH(r, 2, topCap(e.x, e.z))), 2));
+    if (hs.some(h => h === null || h < 30) || !ends.every(e => freeAt(e.x, e.z, r + 6))) continue;
+    ends.forEach((e, k) => { towerInto(grp(e.x, e.z), e.x, e.z, r, hs[k], 2, rnd); occupy(e.x, e.z, r + 2); });
+    const yb = F.p.y + 9.5, len = half * 2 - r * 1.6, ang = -Math.atan2(rh.z, rh.x);
+    const tube = new THREE.Mesh(scaleUV(new THREE.CylinderGeometry(2.2, 2.2, len, 18, 1, true), 2, len / 30).rotateZ(Math.PI / 2), M.windows);
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(len, 0.5, 5).translate(0, -2.1, 0), M.pearl);
+    for (const m of [tube, deck]) { m.position.set(F.p.x, yb, F.p.z); m.rotation.y = ang; m.castShadow = true; bridges.add(m); }
+  }
+  // a block-by-block city: denser and taller towards the middle of the ride
+  const cx = 300, cz = 60;
+  for (let bx = -960; bx <= 1600; bx += ROAD) for (let bz = -960; bz <= 1600; bz += ROAD) {
+    const d = Math.hypot(bx - cx, bz - cz); if (d > 1250) continue;
+    const n = Math.round((d < 500 ? 3.2 : d < 850 ? 2.2 : 1.2) * (0.6 + rnd() * 0.7));
+    for (let k = 0; k < n; k++) {
+      const kind = rnd() < 0.4 ? 0 : rnd() < 0.55 ? 1 : 2, r = 6 + rnd() * 7, rf = towerFoot(r, kind);
+      const x = bx + (rnd() - 0.5) * Math.max(0, 140 - rf * 2), z = bz + (rnd() - 0.5) * Math.max(0, 140 - rf * 2);
+      if (inStation(x, z) || !freeAt(x, z, rf + 8)) continue;
+      const tall = d < 400 ? 70 + rnd() * 110 : d < 800 ? 45 + rnd() * 80 : 30 + rnd() * 50;
+      const hc = Math.min(tall, capH(r, kind, topCap(x, z))); if (hc < 18) continue;
+      const h = fitTower(x, z, r, hc, kind); if (h === null) continue;
+      towerInto(grp(x, z), x, z, r, h, kind, rnd); occupy(x, z, rf);
+    }
+  }
+  for (const c of chunks.values()) root.add(mergeStatic(c));
+  root.add(mergeStatic(bridges));
+  return root;
+}
+function buildSpire() {
+  // the Sky Spire: a pearl needle the re-entry spiral corkscrews around, with an observation saucer and a halo
+  const { x, z } = CITY.spire, g = new THREE.Group();
+  const prof = [[0, 0], [21, 0], [20, 5], [11, 20], [7.5, 40], [6, 120], [4.5, 160], [2.2, 186], [0.6, 208], [0, 214]].map(([r, y]) => new THREE.Vector2(r, y));
+  const add = (geo, mat, y) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
+  add(new THREE.LatheGeometry(prof, 28), M.pearl, GROUND);
+  for (let y = 30; y < 180; y += 14) add(new THREE.CylinderGeometry(6.3 - y * 0.012, 6.3 - y * 0.012, 0.8, 20, 1, true), M.band, GROUND + y);
+  // the saucer goes as wide as the spiral allows
+  let sr = 26; const sy = GROUND + 36;
+  while (sr > 12 && ![0, 1, 2, 3, 4, 5, 6, 7].every(k => ptFar(V3(x + Math.cos(k * TAU / 8) * sr, sy, z + Math.sin(k * TAU / 8) * sr), 7))) sr -= 1;
+  add(new THREE.CylinderGeometry(sr, sr * 0.55, 4, 40), M.pearl, sy);
+  add(scaleUV(new THREE.CylinderGeometry(sr * 1.01, sr * 1.01, 1.4, 40, 1, true), Math.round(TAU * sr / 40), 1), M.windows, sy + 1.6);
+  add(new THREE.SphereGeometry(sr * 0.75, 28, 8, 0, TAU, 0, Math.PI / 2).scale(1, 0.3, 1), M.glass, sy + 2);
+  add(new THREE.TorusGeometry(22, 0.5, 8, 64).rotateX(Math.PI / 2), M.led, GROUND + 140);
+  add(new THREE.TorusGeometry(15, 0.4, 8, 64).rotateX(Math.PI / 2), M.magenta, GROUND + 168);
+  const beacon = add(new THREE.SphereGeometry(1.1, 14, 10), new THREE.MeshBasicMaterial({ color: '#ff5ad8', toneMapped: false }), GROUND + 215);
+  CITY.beacons.push(beacon.material);
+  occupy(x, z, 26);
+  return g;
+}
+function buildDome() {
+  // a geodesic glasshouse the track flies straight through; faces near the track are left open
+  const { x, z, r } = CITY.dome, g = new THREE.Group(), ico = new THREE.IcosahedronGeometry(r, 7), pos = ico.attributes.position;
+  const keep = [], seen = new Set(), struts = new Beams(), key = v => `${Math.round(v.x * 10)},${Math.round(v.y * 10)},${Math.round(v.z * 10)}`;
+  for (let f = 0; f < pos.count; f += 3) {
+    const v = [0, 1, 2].map(k => V3(pos.getX(f + k) + x, pos.getY(f + k) + GROUND, pos.getZ(f + k) + z));
+    const c = v[0].clone().add(v[1]).add(v[2]).multiplyScalar(1 / 3);
+    if (c.y < GROUND + 0.3) continue;
+    if (trackDist(c.x, c.y, c.z, 14) < 6.5 || v.some(q => trackDist(q.x, q.y, q.z, 14) < 5)) continue;
+    keep.push(...v);
+    for (let k = 0; k < 3; k++) { const a = v[k], b = v[(k + 1) % 3], e = [key(a), key(b)].sort().join('|'); if (!seen.has(e)) { seen.add(e); struts.add(a, b, 0.11); } }
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(keep); geo.computeVertexNormals();
+  const glass = new THREE.Mesh(geo, M.glass); glass.renderOrder = 2; g.add(glass);
+  g.add(struts.mesh(M.white, beamGeoLo, 400));
+  const base = new THREE.Mesh(new THREE.TorusGeometry(r, 0.8, 8, 64).rotateX(Math.PI / 2), M.pearl); base.position.set(x, GROUND + 0.4, z); g.add(base);
+  const pond = new THREE.Mesh(new THREE.CircleGeometry(9, 32).rotateX(-Math.PI / 2), M.water); pond.position.set(x + 14, GROUND + 0.08, z - 10); g.add(pond);
+  const rnd = mulberry(5);
+  for (let k = 0; k < 170; k++) {
+    const a = rnd() * TAU, d = Math.sqrt(rnd()) * (r - 4), px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d, s = 0.7 + rnd() * 0.9;
+    if (Math.hypot(px - x - 14, pz - z + 10) < 10) continue;
+    const top = GROUND + s * 9; if (!segFar(V3(px, GROUND, pz), V3(px, top, pz), s * 2.4 + 2.6, 1)) continue;
+    addTree(V3(px, GROUND, pz), s, rnd, 0.35);
+  }
+  return g;
+}
+function scatterTrees() {
+  const rnd = mulberry(77), lk = CITY.lake;
+  for (let k = 0; k < 2600; k++) {
+    const x = -760 + rnd() * 2100, z = -620 + rnd() * 1500, s = 0.7 + rnd() * 0.8;
+    if (onRoad(x, z, 3) || inStation(x, z) || Math.hypot(x - lk.x, z - lk.z) < lk.r + 3 || !freeAt(x, z, 3)) continue;
+    if (planDist(x, z, 16) < 14 && !segFar(V3(x, GROUND, z), V3(x, GROUND + s * 9, z), s * 2.4 + 2.6, 1)) continue;
+    addTree(V3(x, GROUND, z), s, rnd, Math.hypot(x - lk.x, z - lk.z) < lk.r + 40 ? 0.7 : 0.15);
+  }
+  // a ring of blossom round the lake
+  for (let a = 0; a < TAU; a += 0.09) { const d = lk.r + 4 + rnd() * 3, x = lk.x + Math.cos(a) * d, z = lk.z + Math.sin(a) * d; if (planDist(x, z, 12) < 8) continue; addTree(V3(x, GROUND, z), 0.8 + rnd() * 0.4, rnd, 0.85); }
+}
+function buildTrees() {
+  const g = new THREE.Group();
+  const trunk = new THREE.CylinderGeometry(0.16, 0.26, 1, 5).translate(0, 0.5, 0), crown = new THREE.IcosahedronGeometry(1, 1);
+  const q = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3();
+  g.add(instChunks(trunk, M.trunk, CITY.trees.map(t => ({ p: t.p, s: t.s })), (it, m) => m.compose(it.p, q, sc.set(it.s, it.s * 4.2, it.s)), 500));
+  const crowns = CITY.trees.map(t => ({ p: t.p, s: t.s, h: t.h, color: t.color }));
+  g.add(instChunks(crown, M.leaf, crowns, (it, m) => m.compose(ps.copy(it.p).setY(it.p.y + it.s * 5.2), q, sc.set(it.s * 2.4, it.s * 2.6 * it.h, it.s * 2.4)), 500));
+  return g;
+}
+
+
+/* ===================== cloud deck, asteroids, the habitat ring, the space elevator ===================== */
+const CLOUD_U = { uTime: { value: 0 }, uOpacity: { value: 1 }, uCam: { value: new THREE.Vector3() }, uMap: { value: T.cloud }, uSun: { value: SUN_DIR }, uSpace: SKY_U.uSpace };
+function cloudLayer(y, scale, seed, cover) {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { ...CLOUD_U, uScale: { value: scale }, uSeed: { value: seed }, uCover: { value: cover } },
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false,
+    vertexShader: /* glsl */`varying vec3 vW; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    fragmentShader: /* glsl */`
+      uniform sampler2D uMap; uniform float uTime, uOpacity, uScale, uSeed, uCover, uSpace; uniform vec3 uCam, uSun; varying vec3 vW;
+      void main() {
+        vec2 p = vW.xz / uScale + vec2(uSeed, uSeed * 0.7), drift = vec2(uTime * 0.004, uTime * 0.0016);
+        float n = texture2D(uMap, p + drift).r * 0.62 + texture2D(uMap, p * 3.1 - drift * 1.7).r * 0.38;
+        float d = smoothstep(uCover, uCover + 0.08, n);
+        float fade = smoothstep(3600.0, 1500.0, length(vW.xz - uCam.xz));
+        float near = smoothstep(1.5, 16.0, length(vW - uCam));
+        bool above = uCam.y > vW.y;
+        float lit = smoothstep(uCover, uCover + 0.3, n);
+        vec3 top = mix(vec3(0.6, 0.66, 0.76), vec3(0.93, 0.93, 0.92), lit) * (1.0 - 0.06 * uSpace) + vec3(1.0, 0.85, 0.65) * 0.08 * max(uSun.y, 0.0);
+        vec3 bot = mix(vec3(0.66, 0.72, 0.82), vec3(0.88, 0.9, 0.95), 1.0 - d);
+        gl_FragColor = vec4(above ? top : bot, d * fade * near * uOpacity * (above ? 0.97 : 0.88));
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000).rotateX(-Math.PI / 2), mat);
+  m.position.set(400, y, 60); m.renderOrder = 1; m.frustumCulled = false;
+  return m;
+}
+function buildClouds() { const g = new THREE.Group(); g.add(cloudLayer(CLOUD_Y, 760, 0.13, 0.42), cloudLayer(CLOUD_Y + 6, 410, 0.61, 0.58)); return g; }
+
+const ROCKS = [];
+function rockGeo(seed, detail = 1) {
+  const g = new THREE.IcosahedronGeometry(1, detail), p = g.attributes.position, r = mulberry(seed), o = [r() * 20, r() * 20, r() * 20];
+  for (let k = 0; k < p.count; k++) { const v = V3(p.getX(k), p.getY(k), p.getZ(k)); v.multiplyScalar(0.62 + fbm3(v.x * 1.4 + o[0], v.y * 1.4 + o[1], v.z * 1.4 + o[2]) * 0.75); v.y *= 0.82; p.setXYZ(k, v.x, v.y, v.z); }
+  g.computeVertexNormals(); return g;
+}
+function buildAsteroids() {
+  const g = new THREE.Group(), rnd = mulberry(321), geos = [rockGeo(1), rockGeo(2), rockGeo(3)], lists = [[], [], []];
+  const sZ = secS('Zero-g hills'), sB = secS('Asteroid belt'), sR = secS('Retro-burn') + 30, F = newFrame();
+  for (let k = 0; k < 700; k++) {
+    const s = rnd() < 0.7 ? sB + rnd() * (sR - sB) : sZ + rnd() * (sB - sZ);
+    frameAt(s, F);
+    const a = rnd() * TAU, d = 12 + Math.pow(rnd(), 1.6) * 170, sc = Math.min(0.4 + Math.pow(rnd(), 3) * 9, d * 0.09);
+    const p = F.p.clone().addScaledVector(F.r, Math.cos(a) * d).addScaledVector(F.u, Math.sin(a) * d * 0.55);
+    if (p.y < CLOUD_Y + 10 + sc || !ptFar(p, sc * 1.4 + 3.5)) continue;
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 6, rnd() * 6, rnd() * 6));
+    lists[k % 3].push({ p, q, sc: V3(sc * (0.8 + rnd() * 0.5), sc * (0.7 + rnd() * 0.4), sc * (0.8 + rnd() * 0.5)) });
+  }
+  lists.forEach((l, k) => g.add(instChunks(geos[k], M.rock, l, (it, m) => m.compose(it.p, it.q, it.sc), 200)));
+  // a few big tumblers close to the track
+  const tg = rockGeo(9, 2);
+  for (let k = 0; k < 40 && ROCKS.length < 14; k++) {
+    const s = sB + 10 + rnd() * (sR - sB - 20); frameAt(s, F);
+    const side = rnd() < 0.5 ? -1 : 1, d = 9 + rnd() * 12, sc = 1.2 + rnd() * 2.2;
+    const p = F.p.clone().addScaledVector(F.r, side * d).addScaledVector(F.u, (rnd() - 0.3) * 8);
+    if (!ptFar(p, sc * 1.4 + 4)) continue;
+    const m = new THREE.Mesh(tg, M.rock); m.position.copy(p); m.scale.setScalar(sc); m.castShadow = true;
+    ROCKS.push({ m, ax: V3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).normalize(), w: 0.2 + rnd() * 0.5 }); g.add(m);
+  }
+  return g;
+}
+const HAB = { spin: null, climber: null };
+function buildHabitat() {
+  // Halcyon Station: a rotating ring habitat high above the planet, and a space elevator rising out of the far city
+  const g = new THREE.Group(), tilt = new THREE.Group(), spin = new THREE.Group();
+  tilt.position.set(520, 640, -1250); tilt.rotation.set(1.05, 0.35, 0.2); tilt.add(spin); g.add(tilt);
+  const ring = new THREE.Mesh(scaleUV(new THREE.TorusGeometry(270, 16, 14, 160), 90, 1), M.windows);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(270, 17.5, 6, 160), M.pearl); rim.scale.set(1, 1, 0.35);
+  const hub = new THREE.Mesh(new THREE.SphereGeometry(34, 24, 16), M.pearl), hubRing = new THREE.Mesh(new THREE.TorusGeometry(38, 2.2, 8, 48), M.led);
+  spin.add(ring, rim, hub, hubRing);
+  for (let k = 0; k < 6; k++) { const sp = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 240, 8).translate(0, 150, 0), M.pearl); sp.rotation.z = k * TAU / 6; spin.add(sp); }
+  HAB.spin = spin;
+  const ex = 1700, ez = 1150;
+  const base = new THREE.Mesh(new THREE.ConeGeometry(70, 150, 6), M.pearl); base.position.set(ex, GROUND + 75, ez);
+  const tether = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 3400, 6, 1, true).translate(0, 1700, 0), new THREE.MeshBasicMaterial({ color: '#7fe8ff', transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+  tether.position.set(ex, GROUND + 140, ez); tether.frustumCulled = false;
+  const climber = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 22, 8), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false, fog: false })); climber.position.set(ex, 600, ez);
+  HAB.climber = climber;
+  g.add(base, tether, climber);
+  return g;
+}
+function updateScenery(t, dt) {
+  if (HAB.spin) HAB.spin.rotation.z = t * 0.012;
+  if (HAB.climber) HAB.climber.position.y = 300 + 1300 * (0.5 - 0.5 * Math.cos(t * 0.02));
+  for (const r of ROCKS) r.m.rotateOnAxis(r.ax, r.w * dt);
+  const blink = (Math.sin(t * 3.2) > 0.6 ? 1 : 0.12);
+  for (const b of CITY.beacons) { b.userData.base ||= b.color.clone(); b.color.copy(b.userData.base).multiplyScalar(2.5 * blink); }
+  if (CITY.jet) CITY.jet.scale.y = 0.85 + 0.15 * Math.sin(t * 1.7);
+}
+
+
+/* ===================== the train ===================== */
+const CAR_GAP = 2.7, CARS = 4, train = [];
+function rrShape(w, h, r, path = new THREE.Shape()) {
+  const x = -w / 2, y = -h / 2;
+  path.moveTo(x + r, y); path.lineTo(x + w - r, y); path.quadraticCurveTo(x + w, y, x + w, y + r); path.lineTo(x + w, y + h - r); path.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  path.lineTo(x + r, y + h); path.quadraticCurveTo(x, y + h, x, y + h - r); path.lineTo(x, y + r); path.quadraticCurveTo(x, y, x + r, y);
+  return path;
+}
+function buildCart(front, last) {
+  // a pearl-white capsule tub with a cyan underglow; the lead car wears an aerodynamic nose
+  const car = new THREE.Group();
+  const add = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; car.add(m); return m; };
+  const sh = rrShape(2.3, 1.5, 0.45); sh.holes.push(rrShape(1.92, 1.16, 0.3, new THREE.Path()));
+  add(new THREE.ExtrudeGeometry(sh, { depth: 0.44, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: 2, curveSegments: 6 }).rotateX(-Math.PI / 2), M.carPaint, 0, 0.38, 0);
+  add(new THREE.BoxGeometry(2.1, 0.06, 1.3), M.dark, 0, 0.4, 0);
+  add(new THREE.BoxGeometry(2.0, 0.24, 1.32), M.dark, 0, 0.26, 0);
+  add(new THREE.BoxGeometry(1.9, 0.04, 1.26), M.led, 0, 0.13, 0);
+  for (const z of [-0.8, 0.8]) add(new THREE.BoxGeometry(1.5, 0.035, 0.02), M.led, 0, 0.7, z);
+  for (const x of [-0.68, 0.17]) {
+    add(new THREE.BoxGeometry(0.44, 0.18, 1.12), M.seat, x, 0.52, 0);
+    const back = add(new THREE.BoxGeometry(0.1, 0.62, 1.12), M.seat, x - 0.25, 0.86, 0); back.rotation.z = 0.12;
+    add(new THREE.CylinderGeometry(0.03, 0.03, 1.0, 10).rotateX(Math.PI / 2), M.chrome, x + 0.42, 0.98, 0);
+    for (const z of [-0.5, 0.5]) add(new THREE.CylinderGeometry(0.025, 0.025, 0.36, 8), M.chrome, x + 0.42, 0.8, z);
+  }
+  for (const x of [-0.75, 0.75]) for (const z of [-GA, GA]) add(new THREE.CylinderGeometry(0.14, 0.14, 0.09, 14).rotateX(Math.PI / 2), M.dark, x, 0.2, z * 1.06);
+  add(new THREE.CylinderGeometry(0.035, 0.035, 0.5, 6).rotateZ(Math.PI / 2), M.chrome, -1.38, 0.3, 0);
+  if (front) {
+    add(new THREE.SphereGeometry(1, 28, 12, 0, Math.PI).rotateY(Math.PI / 2).scale(0.95, 0.27, 0.74), M.carPaint, 1.12, 0.6, 0);
+    add(new THREE.BoxGeometry(0.04, 0.025, 0.7), M.led, 2.02, 0.52, 0);
+    add(new THREE.SphereGeometry(1, 20, 8, 0, Math.PI).rotateY(Math.PI / 2).scale(0.26, 0.12, 0.46), M.glass, 1.12, 0.86, 0);
+  }
+  if (last) for (const z of [-0.5, 0.5]) add(new THREE.BoxGeometry(0.04, 0.08, 0.3), M.magenta, -1.2, 0.62, z);
+  return car;
+}
+
+/* ===================== speed streaks, re-entry plasma ===================== */
+const FX = { streaks: null, data: [], rnd: mulberry(17), plasma: null, plasmaEl: null };
+function respawnStreak(d, init) {
+  const r = FX.rnd, a = r() * TAU, rad = 2.4 + r() * 8;
+  d.x = init ? -14 + r() * 80 : 50 + r() * 16; d.y = 1.2 + Math.sin(a) * rad; d.z = Math.cos(a) * rad; return d;
+}
+function buildEffects() {
+  const n = 240, g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 6), 3));
+  const ls = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#9fefff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false }));
+  ls.frustumCulled = false; FX.streaks = ls;
+  for (let k = 0; k < n; k++) FX.data.push(respawnStreak({}, true));
+  const pm = new THREE.MeshBasicMaterial({ color: '#ff8a3a', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false, toneMapped: false });
+  FX.plasma = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 12, 0, TAU, 0, Math.PI / 2).rotateZ(-Math.PI / 2).scale(0.7, 0.55, 1.05), pm);
+  FX.plasma.position.set(2.15, 0.55, 0); FX.plasma.frustumCulled = false;
+  const el = document.createElement('div'); el.id = 'plasma';
+  el.style.cssText = 'position:fixed;inset:0;pointer-events:none;opacity:0;z-index:1;background:radial-gradient(ellipse at 50% 55%,rgba(0,0,0,0) 45%,rgba(255,120,40,0.35) 75%,rgba(255,70,20,0.75) 100%);mix-blend-mode:screen;transition:opacity .2s';
+  document.body.appendChild(el); FX.plasmaEl = el;
+  return [ls, FX.plasma];
+}
+const streakCol = new THREE.Color(), STREAK_SPACE = new THREE.Color('#9fefff'), STREAK_HOT = new THREE.Color('#ffa060');
+function updateEffects(dt, v, launchK, heat, show) {
+  const arr = FX.streaks.geometry.attributes.position.array, len = clamp(v * 0.07, 0.3, 4.5);
+  FX.data.forEach((d, k) => {
+    d.x -= v * dt; if (d.x < -14) respawnStreak(d, false);
+    arr.set([d.x, d.y, d.z, d.x + len, d.y, d.z], k * 6);
+  });
+  FX.streaks.geometry.attributes.position.needsUpdate = true;
+  const a = show ? clamp((v - 14) / 26, 0, 1) * 0.55 + launchK * 0.35 + heat * 0.4 : 0;
+  FX.streaks.material.opacity = Math.min(0.85, a);
+  FX.streaks.material.color.copy(streakCol.copy(STREAK_SPACE).lerp(STREAK_HOT, heat)).multiplyScalar(1.6);
+  FX.plasma.material.opacity = heat * 0.35 * (0.85 + 0.15 * Math.sin(clock * 37));
+  FX.plasma.visible = heat > 0.01;
+  FX.plasmaEl.style.opacity = show ? (heat * 0.9).toFixed(3) : 0;
+}
+
+/* ===================== audio ===================== */
+const AUD = { ctx: null, on: false };
+function initAudio() {
+  if (AUD.ctx) return;
+  const ctx = new (window.AudioContext || window.webkitAudioContext)(), sr = ctx.sampleRate;
+  const noiseBuf = (brown) => { const b = ctx.createBuffer(1, sr * 2, sr), d = b.getChannelData(0); let last = 0; for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; if (brown) { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; } else d[i] = w; } return b; };
+  const src = (buf) => { const s = ctx.createBufferSource(); s.buffer = buf; s.loop = true; s.start(); return s; };
+  const master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
+  const windF = ctx.createBiquadFilter(); windF.type = 'bandpass'; windF.Q.value = 0.6;
+  const windG = ctx.createGain(); windG.gain.value = 0; src(noiseBuf(false)).connect(windF).connect(windG).connect(master);
+  const rumF = ctx.createBiquadFilter(); rumF.type = 'lowpass'; rumF.frequency.value = 140;
+  const rumG = ctx.createGain(); rumG.gain.value = 0; src(noiseBuf(true)).connect(rumF).connect(rumG).connect(master);
+  // launch: a deep roar plus the rising whine of the linear motors
+  const roarF = ctx.createBiquadFilter(); roarF.type = 'lowpass'; roarF.frequency.value = 320;
+  const roarG = ctx.createGain(); roarG.gain.value = 0; src(noiseBuf(true)).connect(roarF).connect(roarG).connect(master);
+  const whF = ctx.createBiquadFilter(); whF.type = 'bandpass'; whF.Q.value = 5; whF.frequency.value = 400;
+  const whG = ctx.createGain(); whG.gain.value = 0; whF.connect(whG).connect(master);
+  const whO = [-8, 8].map(dt => { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 50; o.detune.value = dt; o.connect(whF); o.start(); return o; });
+  // a soft major-ninth pad for orbit and the glasshouse
+  const padF = ctx.createBiquadFilter(); padF.type = 'lowpass'; padF.frequency.value = 1100;
+  const padG = ctx.createGain(); padG.gain.value = 0; padF.connect(padG).connect(master);
+  for (const f of [130.81, 196.0, 246.94, 293.66, 392.0]) for (const d of [-4, 4]) { const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f; o.detune.value = d; const g = ctx.createGain(); g.gain.value = 0.12; o.connect(g).connect(padF); o.start(); }
+  const brakeF = ctx.createBiquadFilter(); brakeF.type = 'highpass'; brakeF.frequency.value = 2200;
+  const brakeG = ctx.createGain(); brakeG.gain.value = 0; src(noiseBuf(false)).connect(brakeF).connect(brakeG).connect(master);
+  Object.assign(AUD, { ctx, master, windF, windG, rumG, roarG, whF, whG, whO, padG, brakeG, clickBuf: noiseBuf(false) });
+}
+function clack(vol) {
+  const { ctx } = AUD; if (!ctx || !AUD.on) return;
+  const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+  s.buffer = AUD.clickBuf; f.type = 'bandpass'; f.frequency.value = 3200; f.Q.value = 4;
+  const t = ctx.currentTime; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+  s.connect(f).connect(g).connect(AUD.master); s.start(t, Math.random()); s.stop(t + 0.06);
+}
+function tone(f, at, dur, vol, type = 'sine') {
+  const { ctx } = AUD; if (!ctx || !AUD.on) return;
+  const t = ctx.currentTime + at, o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(AUD.master); o.start(t); o.stop(t + dur + 0.05);
+}
+const beep = (go) => go ? (tone(1318.5, 0, 0.9, 0.2), tone(659.25, 0, 0.9, 0.12)) : tone(880, 0, 0.16, 0.16);
+function chime() { [523.25, 659.25, 783.99, 1046.5].forEach((f, k) => tone(f, k * 0.14, 1.6, 0.1)); }
+function whoosh() {
+  const { ctx } = AUD; if (!ctx || !AUD.on) return;
+  const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), t = ctx.currentTime;
+  s.buffer = AUD.clickBuf; f.type = 'bandpass'; f.Q.value = 1.2; f.frequency.setValueAtTime(300, t); f.frequency.exponentialRampToValueAtTime(2400, t + 0.6);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+  s.connect(f).connect(g).connect(AUD.master); s.start(t, Math.random()); s.stop(t + 1.3);
+}
+function updateAudio(v, accelT, kind, zone) {
+  if (!AUD.ctx) return;
+  const t = AUD.ctx.currentTime, k = 0.15, launching = kind === 'launch';
+  AUD.master.gain.setTargetAtTime(AUD.on ? 0.9 : 0, t, 0.2);
+  AUD.windF.frequency.setTargetAtTime(300 + v * 45, t, k);
+  AUD.windG.gain.setTargetAtTime(Math.min(0.5, (v / 30) ** 2 * 0.5), t, k);
+  AUD.rumG.gain.setTargetAtTime(Math.min(0.6, v / 30 * 0.45), t, k);
+  AUD.roarG.gain.setTargetAtTime(launching ? 0.75 : 0, t, launching ? 0.1 : 0.7);
+  for (const o of AUD.whO) o.frequency.setTargetAtTime(35 + v * 7, t, 0.05);
+  AUD.whF.frequency.setTargetAtTime(220 + v * 32, t, 0.05);
+  AUD.whG.gain.setTargetAtTime(launching ? 0.1 : 0, t, launching ? 0.05 : 0.5);
+  AUD.padG.gain.setTargetAtTime(zone === 'space' ? 0.06 : zone === 'dome' ? 0.04 : 0.008, t, 1.5);
+  AUD.brakeG.gain.setTargetAtTime((kind === 'brake' || kind === 'trim') && accelT < -1.0 ? 0.1 : 0, t, 0.1);
+}
+
+/* ===================== HUD helpers ===================== */
+const gColor = g => g < 2 ? '#86d08f' : g < 3.5 ? '#f2b84b' : '#ef6b5b';
+const S = TR.stats;
+function fillFacts() {
+  $('f-height').textContent = `${Math.round(S.height)} m`;
+  $('f-speed').textContent = `${Math.round(S.speed * 3.6)} km/h`;
+  $('f-g').textContent = `${S.vMax.toFixed(1)} g`;
+  $('f-len').textContent = `${Math.round(L).toLocaleString()} m`;
+  $('f-time').textContent = `${Math.floor(S.time / 60)}:${String(Math.round(S.time % 60)).padStart(2, '0')}`;
+  $('f-lat').textContent = `${S.lat.toFixed(2)} g`;
+  const rows = [
+    ['Peak vertical g', `${S.vMax.toFixed(2)} g`, `+${LIMITS.vMax.toFixed(1)} g`, S.vMax <= LIMITS.vMax],
+    ['Lowest vertical g', `${S.vMin.toFixed(2)} g`, `${LIMITS.vMin.toFixed(1)} g`, S.vMin >= LIMITS.vMin],
+    ['Peak lateral g', `${S.lat.toFixed(2)} g`, `±${LIMITS.lat.toFixed(1)} g`, S.lat <= LIMITS.lat],
+    ['Peak launch push', `${S.fwd.toFixed(2)} g`, `${LIMITS.fwd.toFixed(1)} g`, S.fwd <= LIMITS.fwd + 0.005],
+    ['Peak roll rate', `${Math.round(S.rollRateFullSize)}°/s`, `${LIMITS.rollRate}°/s`, S.rollRateFullSize <= LIMITS.rollRate + 0.5],
+    ['Brake deceleration', `${(LIMITS.decel * 0.85).toFixed(2)} g`, `${LIMITS.decel.toFixed(1)} g`, true],
+  ];
+  $('check-rows').innerHTML = rows.map(([a, b, c, ok]) => `<tr><td>${a}</td><td class="num">${b}</td><td class="lim">${c}</td><td><span class="chip ${ok ? 'ok' : 'bad'}">${ok ? 'Within limit' : 'Over limit'}</span></td></tr>`).join('');
+}
+const prof = { c: $('profile'), base: null };
+function drawProfileBase() {
+  const c = prof.c, w = c.clientWidth, h = c.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
+  if (!w) return;
+  c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+  const off = document.createElement('canvas'); off.width = c.width; off.height = c.height;
+  const g = off.getContext('2d'); g.scale(dpr, dpr);
+  let minY = 0; for (let i = 0; i < N; i++) minY = Math.min(minY, TR.P[i * 3 + 1]); minY -= 3;
+  const pad = 4, maxY = S.height + 4, X = s => pad + s / L * (w - pad * 2), Y = y => h - pad - (y - minY) / (maxY - minY) * (h - pad * 2);
+  g.strokeStyle = 'rgba(127,227,255,0.15)'; g.lineWidth = 1;
+  for (const y of [0, 50, 100, 150]) { g.beginPath(); g.moveTo(pad, Y(y) + 0.5); g.lineTo(w - pad, Y(y) + 0.5); g.stroke(); }
+  g.fillStyle = 'rgba(190,215,235,0.65)'; g.font = '500 10px Barlow, sans-serif'; g.fillText('pad level', pad + 2, Y(0) - 3);
+  g.setLineDash([4, 4]); g.strokeStyle = 'rgba(235,245,255,0.35)'; g.beginPath(); g.moveTo(pad, Y(CLOUD_Y) + 0.5); g.lineTo(w - pad, Y(CLOUD_Y) + 0.5); g.stroke(); g.setLineDash([]);
+  g.fillText('cloud deck', w - pad - 58, Y(CLOUD_Y) - 3);
+  const step = Math.max(1, Math.floor(N / 600));
+  g.beginPath(); g.moveTo(X(0), Y(minY));
+  for (let i = 0; i < N; i += step) g.lineTo(X(i * ds), Y(TR.P[i * 3 + 1]));
+  g.lineTo(X(L), Y(minY)); g.closePath();
+  const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(127,227,255,0.28)'); gr.addColorStop(1, 'rgba(127,227,255,0.02)');
+  g.fillStyle = gr; g.fill();
+  g.lineWidth = 2.2; g.lineCap = 'round';
+  for (let i = 0; i < N - step; i += step) {
+    g.strokeStyle = gColor(TR.gV[i]); g.beginPath(); g.moveTo(X(i * ds), Y(TR.P[i * 3 + 1])); g.lineTo(X((i + step) * ds), Y(TR.P[(i + step) * 3 + 1])); g.stroke();
+  }
+  prof.base = off; prof.X = X; prof.Y = Y; prof.dpr = dpr;
+}
+function drawProfile(s) {
+  const c = prof.c; if (!prof.base) return;
+  const g = c.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height); g.drawImage(prof.base, 0, 0);
+  g.setTransform(prof.dpr, 0, 0, prof.dpr, 0, 0);
+  const x = prof.X(s);
+  const yy = prof.Y(TR.P[idxAt(s)[0] * 3 + 1]);
+  g.strokeStyle = 'rgba(234,252,255,0.5)'; g.lineWidth = 1; g.beginPath(); g.moveTo(x, 2); g.lineTo(x, c.height / prof.dpr - 2); g.stroke();
+  g.fillStyle = '#eafcff'; g.beginPath(); g.arc(x, yy, 4.5, 0, TAU); g.fill();
+  g.strokeStyle = '#04223a'; g.lineWidth = 1.5; g.stroke();
+}
+const gm = { c: $('gmeter'), trail: [] };
+function drawGMeter(gl, gv) {
+  const c = gm.c, w = c.clientWidth, h = c.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
+  if (!w) return;
+  if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const X = v => w / 2 + v / 1.5 * (w / 2 - 6), Y = v => h - 8 - (v + 1) / 6 * (h - 16);
+  g.fillStyle = 'rgba(134,208,143,0.10)'; g.fillRect(X(-LIMITS.lat), Y(LIMITS.vMax), X(LIMITS.lat) - X(-LIMITS.lat), Y(LIMITS.vMin) - Y(LIMITS.vMax));
+  g.strokeStyle = 'rgba(134,208,143,0.45)'; g.lineWidth = 1; g.setLineDash([3, 3]);
+  g.strokeRect(X(-LIMITS.lat) + 0.5, Y(LIMITS.vMax) + 0.5, X(LIMITS.lat) - X(-LIMITS.lat), Y(LIMITS.vMin) - Y(LIMITS.vMax)); g.setLineDash([]);
+  g.strokeStyle = 'rgba(127,227,255,0.25)';
+  g.beginPath(); g.moveTo(X(0) + 0.5, 4); g.lineTo(X(0) + 0.5, h - 4); g.stroke();
+  for (const v of [0, 1, 2, 3, 4]) { g.beginPath(); g.moveTo(X(-0.15), Y(v) + 0.5); g.lineTo(X(0.15), Y(v) + 0.5); g.stroke(); }
+  g.fillStyle = 'rgba(190,215,235,0.8)'; g.font = '600 9.5px Barlow, sans-serif'; g.textAlign = 'left';
+  for (const v of [0, 1, 2, 3, 4]) g.fillText(`${v}g`, X(0.2), Y(v) + 3);
+  gm.trail.push([gl, gv]); if (gm.trail.length > 40) gm.trail.shift();
+  gm.trail.forEach(([a, b], k) => { g.fillStyle = `rgba(127,227,255,${k / gm.trail.length * 0.5})`; g.beginPath(); g.arc(X(a), Y(b), 2, 0, TAU); g.fill(); });
+  g.fillStyle = gColor(gv); g.beginPath(); g.arc(X(clamp(gl, -1.5, 1.5)), Y(clamp(gv, -1, 5)), 5.5, 0, TAU); g.fill();
+  g.strokeStyle = '#04101e'; g.lineWidth = 1.5; g.stroke();
+}
+let toastTimer = 0;
+function toast(msg, dur = 3) { const t = $('toast'); t.textContent = msg; t.style.opacity = 1; toastTimer = dur; }
+
+
+/* ===================== camera ===================== */
+const CAMS = ['ride', 'chase', 'orbit'], CAM_LABEL = { ride: 'Front car', chase: 'Chase view', orbit: 'Orbit view' };
+const view = { mode: 'ride', yaw: 0, pitch: 0, drag: null, idle: 0 };
+let orbit = null;
+canvas.addEventListener('pointerdown', e => { if (view.mode === 'orbit') return; view.drag = { x: e.clientX, y: e.clientY, yaw: view.yaw, pitch: view.pitch }; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', e => { if (!view.drag) return; view.yaw = clamp(view.drag.yaw - (e.clientX - view.drag.x) * 0.005, -2.9, 2.9); view.pitch = clamp(view.drag.pitch - (e.clientY - view.drag.y) * 0.005, -1.1, 1.1); view.idle = 0; });
+const endDrag = () => { view.drag = null; view.idle = 0; };
+canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('dblclick', () => { view.yaw = 0; view.pitch = 0; motion.recenter = true; });
+
+/* ===================== device motion: gyro + compass look ===================== */
+const motion = { on: false, ready: false, recenter: true, north: null, e: new THREE.Euler(), dev: new THREE.Quaternion(), ref: new THREE.Quaternion(), look: new THREE.Quaternion(), sm: new THREE.Quaternion(), raw: new THREE.Quaternion(), wake: null, last: 0 };
+const Q_FLIP = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)), AXIS_Z = V3(0, 0, 1), FWD = V3(0, 0, -1);
+const screenAngle = () => (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (window.orientation || 0);
+function onOrient(ev) {
+  if (ev.beta == null || ev.gamma == null) return;
+  motion.last = performance.now();
+  const d = Math.PI / 180;
+  motion.e.set(ev.beta * d, (ev.alpha || 0) * d, -ev.gamma * d, 'YXZ');
+  const q = motion.dev.setFromEuler(motion.e).multiply(Q_FLIP).multiply(tmpQ.setFromAxisAngle(AXIS_Z, -screenAngle() * d));
+  // gyro alpha is smooth but has an arbitrary zero; nudge it toward the compass, only while the screen faces the horizon (where heading is well defined)
+  const f0 = FWD.clone().applyQuaternion(q);
+  if (typeof ev.webkitCompassHeading === 'number' && ev.webkitCompassHeading >= 0 && Math.abs(f0.y) < 0.6) {
+    let err = -ev.webkitCompassHeading * d - Math.atan2(-f0.x, -f0.z); err -= TAU * Math.round(err / TAU);
+    if (motion.north == null) motion.north = err; else { let de = err - motion.north; de -= TAU * Math.round(de / TAU); motion.north += de * 0.02; }
+  }
+  if (motion.north != null) q.premultiply(tmpQ.setFromAxisAngle(V3(0, 1, 0), motion.north));
+  if (motion.recenter) {   // the way the phone points now becomes "straight ahead"; pitch stays tied to gravity
+    const f = FWD.clone().applyQuaternion(q);
+    if (Math.abs(f.y) < 0.95) { motion.ref.setFromAxisAngle(V3(0, 1, 0), Math.atan2(-f.x, -f.z)).invert(); motion.recenter = false; motion.sm.copy(motion.look.copy(motion.raw.copy(motion.ref).multiply(q))); }
+  }
+  motion.raw.copy(motion.ref).multiply(q);
+  motion.ready = true;
+}
+async function setMotion(on) {
+  const btn = $('btn-motion');
+  if (!on) {
+    window.removeEventListener('deviceorientation', onOrient); motion.on = false; motion.ready = false;
+    if (motion.wake) { motion.wake.release().catch(() => {}); motion.wake = null; }
+    btn.setAttribute('aria-pressed', 'false'); toast('Motion look off', 1.6); return;
+  }
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      if (await DeviceOrientationEvent.requestPermission() !== 'granted') { toast('Motion access denied. Enable it in Settings › Safari › Motion & Orientation Access.', 4); return; }
+    }
+  } catch (e) { toast('Motion access needs HTTPS and a tap on the button.', 4); return; }
+  motion.recenter = true; motion.ready = false; motion.on = true; motion.north = null;
+  window.addEventListener('deviceorientation', onOrient);
+  btn.setAttribute('aria-pressed', 'true');
+  try { if (navigator.wakeLock) motion.wake = await navigator.wakeLock.request('screen'); } catch (e) { /* optional */ }
+  setTimeout(() => { if (motion.on && !motion.ready) { setMotion(false); toast('No motion sensors found on this device.', 3); } }, 1500);
+  toast('Motion look on. Hold the phone as if looking ahead; double-tap to recentre.', 3.2);
+}
+if (typeof DeviceOrientationEvent !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)) $('btn-motion').hidden = false;
+$('btn-motion').addEventListener('click', () => setMotion(!motion.on));
+window.addEventListener('orientationchange', () => { motion.recenter = true; });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && motion.on) { motion.recenter = true; navigator.wakeLock && navigator.wakeLock.request('screen').then(w => { motion.wake = w; }).catch(() => {}); } });
+// double-tap recentring on touch (iOS Safari does not fire dblclick reliably with touch-action: none)
+let lastTap = 0;
+canvas.addEventListener('pointerup', e => { if (e.pointerType !== 'touch') return; const n = performance.now(); if (n - lastTap < 320) { view.yaw = 0; view.pitch = 0; motion.recenter = true; } lastTap = n; });
+
+const BOUNDS = new THREE.Box3();
+let envSnap = true;
+function setCam(m) {
+  envSnap = true;
+  if (!orbit) return;
+  view.mode = m; camera.up.set(0, 1, 0); $('btn-cam').firstChild.textContent = CAM_LABEL[m];
+  orbit.enabled = m === 'orbit';
+  if (m === 'chase') { frameAt(ride.s, FR); chaseLook.copy(FR.p); chasePos.copy(FR.p).add(V3(-8, 4, -3)); }
+  if (m === 'orbit') { const c = BOUNDS.getCenter(new THREE.Vector3()), sz = BOUNDS.getSize(new THREE.Vector3()).length(); orbit.target.copy(c); camera.position.copy(c).add(V3(-sz * 0.08, sz * 0.2, sz * 0.32)); orbit.update(); }
+  camera.fov = 74; camera.updateProjectionMatrix();
+  toast(m === 'ride' ? 'Front car. Drag to look around.' : m === 'chase' ? 'Chase view' : 'Overview: the whole line from above. Drag to orbit.', 2.6);
+}
+
+/* ===================== ride ===================== */
+const ride = { s: 0, v: 0, phase: 'boarding', t: 0, paused: false, laps: 0, count: -1 };
+const FR = newFrame(), basis = new THREE.Matrix4(), shake = new THREE.Euler(), lookE = new THREE.Euler();
+function placeTrain() {
+  for (let k = 0; k < train.length; k++) {
+    frameAt(ride.s - k * CAR_GAP, FR);
+    const c = FR.p.clone().addScaledVector(FR.u, -HL);
+    basis.makeBasis(FR.t, FR.u, FR.r); basis.setPosition(c);
+    train[k].matrix.copy(basis); train[k].matrixWorldNeedsUpdate = true;
+  }
+}
+const IDQ = new THREE.Quaternion(), negT = new THREE.Vector3(), camQ = new THREE.Quaternion(), lookQ = new THREE.Quaternion(), tmpQ = new THREE.Quaternion(), camBasis = new THREE.Matrix4();
+const eyeLocal = new THREE.Vector3(0.15, HL + 0.25, 0);
+const chasePos = new THREE.Vector3(), chaseLook = new THREE.Vector3();
+// how hard the motors are pushing right now (0 at rest, 1 at full thrust) — drives the FOV kick, shake and roar
+function launchLevel() {
+  if (ride.phase !== 'running') return 0;
+  const sec = secOf(ride.s); if (sec.kind !== 'launch') return 0;
+  const [i] = idxAt(ride.s); return clamp(-TR.gF[i] / 1.4, 0, 1);
+}
+function updateCamera(dt, t, launchK) {
+  if (view.mode === 'orbit') { orbit.update(); return; }
+  if (motion.on && motion.ready) motion.sm.slerp(motion.raw, 1 - Math.exp(-28 * dt)); motion.look.copy(motion.on && motion.ready ? motion.sm : IDQ);
+  if (!view.drag && !(motion.on && motion.ready)) { view.idle += dt; if (view.idle > 3) { view.yaw *= Math.exp(-1.2 * dt); view.pitch *= Math.exp(-1.2 * dt); } }
+  // the launch pins you back: the field of view stretches and the car buzzes
+  const fov = 74 + launchK * 12 + clamp((ride.v - 30) / 15, 0, 1) * 4;
+  if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt)); camera.updateProjectionMatrix(); }
+  if (view.mode === 'ride') {
+    camera.position.copy(eyeLocal).applyMatrix4(train[0].matrix);
+    frameAt(ride.s, FR);
+    camBasis.makeBasis(FR.r, FR.u, negT.copy(FR.t).negate()); camQ.setFromRotationMatrix(camBasis);
+    lookQ.setFromEuler(lookE.set(view.pitch, view.yaw, 0, 'YXZ'));
+    const amp = ride.phase === 'running' ? Math.min(1, ride.v / 30) * 0.0025 + launchK * 0.008 : 0;
+    shake.set((Math.sin(t * 41.1) + Math.sin(t * 27.7)) * amp, Math.sin(t * 33.3) * amp * 0.6, Math.sin(t * 37.9) * amp);
+    tmpQ.setFromEuler(shake); camera.quaternion.copy(camQ).multiply(lookQ).multiply(motion.look).multiply(tmpQ);
+  } else {
+    // chase: behind and above the last car, never below the city floor
+    frameAt(ride.s - (CARS - 1) * CAR_GAP - 8, FR);
+    const want = FR.p.clone().addScaledVector(FR.u, 2.6);
+    want.y = Math.max(want.y, GROUND + 1.5);
+    chasePos.lerp(want, 1 - Math.exp(-5 * dt)); frameAt(ride.s, FR); chaseLook.lerp(FR.p, 1 - Math.exp(-10 * dt));
+    camera.position.copy(chasePos); camera.up.set(0, 1, 0); camera.lookAt(chaseLook); camera.quaternion.multiply(motion.look);
+  }
+}
+// the sky, fog, light and cloud deck all follow the camera's altitude: blue city air below, black space above
+const fogTarget = new THREE.Color(), WHITE_OUT = new THREE.Color('#eef3f8'), HEMI_SKY = [new THREE.Color('#cfe4ff'), new THREE.Color('#6a7ca8')];
+function updateEnv(dt, eye) {
+  const ek = envSnap ? 1 : 1 - Math.exp(-3 * dt); envSnap = false;
+  const orbitCam = view.mode === 'orbit', k = orbitCam ? 0.25 : altK(eye.y);
+  const inCloud = orbitCam ? 0 : 1 - smooth(1.5, 9, Math.abs(eye.y - (CLOUD_Y + 3)));
+  SKY_U.uSpace.value += (k - SKY_U.uSpace.value) * ek;
+  const kk = SKY_U.uSpace.value;
+  fogTarget.copy(HAZE_DAY).lerp(HAZE_SPACE, kk).lerp(WHITE_OUT, inCloud * 0.9);
+  scene.fog.color.lerp(fogTarget, ek);
+  const dens = (orbitCam ? 0.00035 : lerp(0.0011, 0.00045, kk)) + inCloud * 0.03;
+  scene.fog.density += (dens - scene.fog.density) * ek;
+  hemi.intensity = lerp(1.0, 0.45, kk); hemi.color.copy(HEMI_SKY[0]).lerp(HEMI_SKY[1], kk);
+  SUN.intensity = lerp(2.7, 3.3, kk);
+  CLOUD_U.uOpacity.value += ((orbitCam ? 0.3 : 1) - CLOUD_U.uOpacity.value) * ek;
+  CLOUD_U.uCam.value.copy(eye);
+  sky.position.copy(eye);
+  renderer.toneMappingExposure = orbitCam ? 1.0 : lerp(0.92, 1.08, kk);
+  bloom.threshold = lerp(1.15, 0.98, kk); bloom.strength = lerp(0.35, 0.5, kk);
+}
+/* ===================== performance: counter + adaptive quality ===================== */
+const DPR_CAP = Math.min(window.devicePixelRatio || 1, 1.75);
+const QUALITY = {
+  auto: { label: 'Auto', ratio: DPR_CAP, adaptive: true, shadow: 1024, bloom: true },
+  high: { label: 'High', ratio: Math.min(window.devicePixelRatio || 1, 2), adaptive: false, shadow: 2048, bloom: true },
+  low: { label: 'Low', ratio: Math.min(window.devicePixelRatio || 1, 1) * 0.75, adaptive: false, shadow: 512, bloom: false },
+};
+const PERF = { q: 'auto', scale: 1, frames: 0, acc: 0, fps: 0, ms: 0, hist: new Float32Array(120), hi: 0, calls: 0, tris: 0, low: 0, high: 0, cool: 0 };
+renderer.info.autoReset = false;
+function applyResolution() {
+  const r = QUALITY[PERF.q].ratio * PERF.scale;
+  if (Math.abs(renderer.getPixelRatio() - r) > 0.01) { renderer.setPixelRatio(r); renderer.setSize(innerWidth, innerHeight, false); composer.setPixelRatio(r); composer.setSize(innerWidth, innerHeight); }
+}
+function setQuality(q) {
+  PERF.q = q; PERF.scale = 1; PERF.low = PERF.high = 0;
+  const Q = QUALITY[q];
+  if (SUN.shadow.mapSize.x !== Q.shadow) { SUN.shadow.mapSize.set(Q.shadow, Q.shadow); if (SUN.shadow.map) { SUN.shadow.map.dispose(); SUN.shadow.map = null; } }
+  renderer.shadowMap.type = q === 'low' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+  applyResolution(); forceRender = true;
+  $('btn-quality').firstChild.textContent = `Quality: ${Q.label}`;
+}
+function perfFrame(realDt) {
+  PERF.hist[PERF.hi++ % PERF.hist.length] = realDt * 1000;
+  PERF.frames++; PERF.acc += realDt;
+  if (PERF.acc < 0.5) return;
+  PERF.fps = PERF.frames / PERF.acc; PERF.ms = PERF.acc / PERF.frames * 1000; PERF.frames = 0; PERF.acc = 0;
+  // adaptive resolution: drop quickly when slow, climb back slowly when there is headroom
+  if (QUALITY[PERF.q].adaptive && !ride.paused) {
+    PERF.low = PERF.fps < 50 ? PERF.low + 1 : 0;
+    PERF.high = PERF.fps >= 58 ? PERF.high + 1 : 0;
+    if (PERF.low >= 2 && PERF.scale > 0.5) { PERF.scale = Math.max(0.5, PERF.scale * 0.85); PERF.low = 0; applyResolution(); }
+    else if (PERF.high >= 8 && PERF.scale < 1) { PERF.scale = Math.min(1, PERF.scale * 1.08); PERF.high = 0; applyResolution(); }
+  }
+  const fpsEl = $('p-fps');
+  fpsEl.textContent = PERF.fps < 10 ? PERF.fps.toFixed(1) : Math.round(PERF.fps); fpsEl.style.color = PERF.fps >= 55 ? 'var(--ok)' : PERF.fps >= 30 ? 'var(--warn)' : 'var(--bad)';
+  $('p-ms').innerHTML = `${PERF.ms.toFixed(1)} <i>ms</i>`;
+  $('p-res').innerHTML = `${renderer.getPixelRatio().toFixed(2)}× <i>res</i>`;
+  $('p-draw').innerHTML = `${PERF.calls.toLocaleString()} <i>draws</i>`;
+  $('p-tri').innerHTML = `${PERF.tris >= 1e6 ? (PERF.tris / 1e6).toFixed(2) + 'M' : Math.round(PERF.tris / 1000) + 'k'} <i>tris</i>`;
+  drawPerfGraph();
+  window.__perf = { fps: PERF.fps, ms: PERF.ms, calls: PERF.calls, tris: PERF.tris, ratio: renderer.getPixelRatio() };
+}
+function drawPerfGraph() {
+  const c = $('perf-graph'), w = c.clientWidth, h = c.clientHeight; if (!w) return;
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const Y = ms => h - Math.min(ms, 50) / 50 * h;
+  g.strokeStyle = 'rgba(127,227,255,0.25)'; g.lineWidth = 1;
+  for (const ms of [16.7, 33.3]) { g.beginPath(); g.moveTo(0, Math.round(Y(ms)) + 0.5); g.lineTo(w, Math.round(Y(ms)) + 0.5); g.stroke(); }
+  const n = PERF.hist.length, bw = w / n;
+  for (let k = 0; k < n; k++) {
+    const ms = PERF.hist[(PERF.hi + k) % n]; if (!ms) continue;
+    g.fillStyle = ms <= 18 ? '#86d08f' : ms <= 34 ? '#f2b84b' : '#ef6b5b';
+    g.fillRect(k * bw, Y(ms), Math.max(1, bw - 0.3), h - Y(ms));
+  }
+}
+
+
+/* ===================== main loop ===================== */
+let lastT = performance.now(), hudT = 0, clock = 0, lastSec = '', forceRender = true, lastZoneToast = '';
+const trainPos = new THREE.Vector3(), eyeW = new THREE.Vector3();
+const ZONE_TOAST = { ascent: 'Main engines at full thrust. Climbing out of Halcyon City…', space: 'Above the clouds. Welcome to low orbit.', reentry: 'De-orbit burn complete. Re-entry: hold on to something.', city: 'Welcome back to Halcyon. Gliding home between the towers.', dome: 'The Arboretum: a forest under glass.' };
+const COUNT_T = 6;   // 1 s to arm, then T−5 … T−1, then lift-off
+function startCountdown() { ride.phase = 'dispatch'; ride.t = 0; ride.count = -1; ride.s = 0; toast('Harnesses locked. Launch sequence armed.', 1.2); }
+function tick(now) {
+  const realDt = Math.max(0.0001, (now - lastT) / 1000), dt = Math.min(0.05, realDt); lastT = now;
+  perfFrame(realDt);
+  let launchK = 0;
+  if (!ride.paused) {
+    clock += dt;
+    if (ride.phase === 'running') {
+      ride.v = Math.max(arrAt(TR.V, ride.s), ride.s < 2 ? 0.5 : 0.05);
+      const prevS = ride.s; ride.s += ride.v * dt;
+      const sec = secOf(ride.s);
+      if (sec.kind !== 'launch' && Math.floor(ride.s / 6) !== Math.floor(prevS / 6) && ride.v > 4) clack(0.07);
+      const zn = sec.zone; if (zn !== lastZoneToast) { lastZoneToast = zn; if (ZONE_TOAST[zn]) toast(ZONE_TOAST[zn], 3.2); if (zn === 'space' || zn === 'reentry') whoosh(); }
+      if (ride.s >= L - 0.03) { ride.s = 0; ride.v = 0; ride.phase = 'unload'; ride.t = 0; ride.laps++; lastZoneToast = ''; chime(); toast('Welcome home. Thank you for flying the Halcyon Ascent.', 3.8); }
+    } else if (ride.phase === 'unload') { ride.t += dt; if (ride.t > 4.5) startCountdown(); }
+    else if (ride.phase === 'dispatch') {
+      ride.t += dt; const n = Math.floor(ride.t) - 1;
+      if (n >= 0 && n < 5 && n !== ride.count) { ride.count = n; toast(`T−${5 - n}`, 1); beep(false); }
+      if (ride.t >= COUNT_T) { ride.phase = 'running'; ride.count = -1; toast('Lift-off!', 2.2); beep(true); whoosh(); }
+    }
+    placeTrain();
+    launchK = launchLevel();
+    const arm = ride.phase === 'dispatch' ? smooth(1, COUNT_T, ride.t) : ride.phase === 'running' && ride.s < S_MECO + 10 ? 1 : 0;
+    LAUNCH_U.uS.value = ride.phase === 'running' && ride.s < S_MECO + 10 ? ride.s : -50; LAUNCH_U.uT.value = clock; LAUNCH_U.uArm.value = arm;
+    updateRings(arm, ride.s, clock, ride.phase === 'running');
+    if (CITY.lamps) CITY.lamps.forEach((m, k) => { const on = ride.phase === 'dispatch' ? k <= ride.count : ride.phase === 'running' && ride.s < 160; on ? (ride.phase === 'dispatch' ? m.material.color.setRGB(3, 1.2, 0.2) : m.material.color.setRGB(0.4, 3, 1.2)) : m.material.color.setRGB(0.12, 0.18, 0.22); });
+    CLOUD_U.uTime.value = clock; SKY_U.uTime.value = clock;
+    updateScenery(clock, dt);
+  }
+  trainPos.setFromMatrixPosition(train[0].matrix);
+  SUN.target.position.copy(trainPos); SUN.position.copy(trainPos).addScaledVector(SUN_DIR, 200);
+  updateCamera(dt, clock, launchK);
+  camera.getWorldPosition(eyeW);
+  updateEnv(dt, eyeW);
+  const moving = ride.phase === 'running', secNow = secOf(ride.s);
+  const heat = moving && secNow.zone === 'reentry' ? smooth(12, 28, ride.v) * smooth(CLOUD_Y - 4, CLOUD_Y + 12, trainPos.y) : 0;
+  updateEffects(ride.paused ? 0 : dt, moving ? ride.v : 0, launchK, heat, view.mode === 'ride');
+  const still = ride.paused && view.mode !== 'orbit' && !view.drag && Math.abs(view.yaw) + Math.abs(view.pitch) < 1e-3 && !forceRender;
+  if (!still) {
+    renderer.info.reset();
+    if (QUALITY[PERF.q].bloom) composer.render(); else renderer.render(scene, camera);
+    PERF.calls = renderer.info.render.calls; PERF.tris = renderer.info.render.triangles;
+  }
+  forceRender = false;
+
+  const [i] = idxAt(ride.s + eyeLocal.x);
+  const gv = moving ? TR.gV[i] : 1, gl = moving ? TR.gL[i] : 0, gf = moving ? TR.gF[i] : 0;
+  hudT += dt; toastTimer -= dt; if (toastTimer < 0 && $('toast').style.opacity !== '0') $('toast').style.opacity = 0;
+  if (hudT > 0.066) {
+    hudT = 0;
+    $('spd').textContent = Math.round((moving ? ride.v : 0) * 3.6);
+    $('gv').innerHTML = `${gv.toFixed(2)}<small>g</small>`; $('gv').style.color = gColor(gv);
+    $('gl').innerHTML = `${gl >= 0 ? '' : '−'}${Math.abs(gl).toFixed(2)}<small>g</small>`;
+    $('gf').innerHTML = `${gf >= 0 ? '' : '−'}${Math.abs(gf).toFixed(2)}<small>g</small>`;
+    $('alt').innerHTML = `${Math.round(TR.P[i * 3 + 1] - GROUND)}<small>m</small>`;
+    $('bank').innerHTML = `${Math.round(TR.roll[i])}<small>°</small>`;
+    $('rr').innerHTML = `${Math.round(moving ? Math.abs(TR.rollRate[i]) : 0)}<small>°/s</small>`;
+    const sec = moving ? secNow.name : ride.phase === 'boarding' ? 'Boarding' : ride.phase === 'unload' ? 'Unloading' : 'Countdown';
+    if (sec !== lastSec) { $('sec').textContent = sec; lastSec = sec; }
+    $('progress').style.width = `${(ride.s / L * 100).toFixed(1)}%`;
+    drawGMeter(gl, gv); drawProfile(ride.s);
+    const at = moving ? (arrAt(TR.V, ride.s + 0.5) - arrAt(TR.V, ride.s - 0.5)) * ride.v : 0;
+    updateAudio(moving ? ride.v : 0, at, moving ? secNow.kind : 'idle', secNow.zone);
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ===================== controls ===================== */
+function togglePause() { ride.paused = !ride.paused; forceRender = true; $('btn-pause').firstChild.textContent = ride.paused ? 'Resume' : 'Pause'; $('btn-pause').setAttribute('aria-pressed', String(ride.paused)); }
+function toggleSound() { initAudio(); AUD.on = !AUD.on; AUD.ctx.resume(); $('btn-sound').firstChild.textContent = AUD.on ? 'Sound on' : 'Sound off'; $('btn-sound').setAttribute('aria-pressed', String(AUD.on)); }
+$('btn-cam').addEventListener('click', () => setCam(CAMS[(CAMS.indexOf(view.mode) + 1) % CAMS.length]));
+$('btn-pause').addEventListener('click', togglePause);
+$('btn-sound').addEventListener('click', toggleSound);
+$('btn-quality').addEventListener('click', () => { const order = ['auto', 'high', 'low']; setQuality(order[(order.indexOf(PERF.q) + 1) % 3]); toast(`Quality: ${QUALITY[PERF.q].label}`, 1.6); });
+$('btn-check').addEventListener('click', () => { const c = $('check'), open = c.hidden; c.hidden = !open; $('btn-check').setAttribute('aria-expanded', String(open)); });
+function toggleHud() { const h = document.body.classList.toggle('hud-hidden'); $('btn-hud').textContent = h ? 'Show' : 'Hide display'; $('btn-hud').setAttribute('aria-pressed', String(h)); $('btn-hud').setAttribute('aria-label', h ? 'Show on-screen display' : 'Hide on-screen display'); }
+$('btn-hud').addEventListener('click', toggleHud);
+window.addEventListener('keydown', e => {
+  if (e.key === ' ') { e.preventDefault(); togglePause(); }
+  else if (e.key === 'c' || e.key === 'C') $('btn-cam').click();
+  else if (e.key === 'm' || e.key === 'M') toggleSound();
+  else if (e.key === 'h' || e.key === 'H') toggleHud();
+  else if (e.key === 'f' || e.key === 'F') document.body.classList.toggle('perf-hidden');
+  else if (e.key === 'q' || e.key === 'Q') $('btn-quality').click();
+});
+$('board').addEventListener('click', () => { $('intro').hidden = true; if (!$('btn-motion').hidden && typeof DeviceOrientationEvent.requestPermission === 'function' && !motion.on) setMotion(true); if (!AUD.ctx) toggleSound(); startCountdown(); });
+window.addEventListener('resize', () => { forceRender = true; applyResolution(); renderer.setSize(innerWidth, innerHeight, false); composer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); drawProfileBase(); });
+
+/* ===================== boot ===================== */
+const stage = async (label) => { $('board').textContent = label; await nextFrame(); };
+// reflections: a soft daytime sky baked once into an environment map, so the chrome and pearl paint have something to mirror
+function bakeEnvironment() {
+  const pm = new THREE.PMREMGenerator(renderer), tmp = new THREE.Scene();
+  const m = skyMat.clone(); m.uniforms = THREE.UniformsUtils.clone(skyMat.uniforms); m.uniforms.uSpace.value = 0.15; m.fog = false;
+  const s = new THREE.Mesh(new THREE.SphereGeometry(100, 32, 16), m); tmp.add(s);
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(100, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#5d6e5a' })); ground.position.y = -6; tmp.add(ground);
+  const rt = pm.fromScene(tmp, 0.02, 0.1, 400); scene.environment = rt.texture; scene.environmentIntensity = 0.8;
+  m.dispose(); s.geometry.dispose(); pm.dispose();
+}
+async function boot() {
+  fillFacts();
+  try { await Promise.race([document.fonts.load('700 40px Orbitron'), new Promise(r => setTimeout(r, 2500))]); } catch (e) { /* fallback */ }
+  paintSign(T.sign.image.getContext('2d'), 1024, 256); T.sign.needsUpdate = true;
+  await stage('Planning the city…');
+  defineCity();
+  scene.add(buildGround());
+  await stage('Building the spaceport…');
+  scene.add(buildStation(), buildGantry());
+  await stage('Laying the rails…');
+  scene.add(buildTrackMeshes(), buildSupports());
+  await stage('Raising the towers…');
+  scene.add(buildTowers(), buildSpire(), buildDome());
+  await stage('Planting the gardens…');
+  scatterTrees(); scene.add(buildTrees());
+  await stage('Charting the orbit…');
+  scene.add(buildClouds(), buildAsteroids(), buildHabitat());
+  await stage('Fuelling the train…');
+  for (let k = 0; k < CARS; k++) { const c = mergeStatic(buildCart(k === 0, k === CARS - 1)); c.matrixAutoUpdate = false; train.push(c); scene.add(c); }
+  train[0].add(...buildEffects());
+  bakeEnvironment();
+  orbit = new OrbitControls(camera, canvas); orbit.enabled = false; orbit.enableDamping = true; orbit.autoRotate = true; orbit.autoRotateSpeed = 0.3; orbit.maxDistance = 2600;
+  for (let i = 0; i < N; i += 20) BOUNDS.expandByPoint(P3(TR.P, i));
+  placeTrain(); chasePos.copy(P3(TR.P, 0)); chaseLook.copy(chasePos);
+  drawProfileBase();
+  window.__halcyon = { supports: SUPPORT_STATS, rings: RINGS.length, rocks: ROCKS.length, city: { lake: CITY.lake, spire: CITY.spire, dome: CITY.dome } };
+  window.__audit = { scene, TR, THREE, camera, ride, scale: 1 };
+  $('board').disabled = false; $('board').textContent = 'Board for launch';
+  const q = new URLSearchParams(location.hash.slice(1));
+  if (q.has('cam')) $('intro').hidden = true;
+  if (q.has('s')) { $('intro').hidden = true; ride.phase = 'running'; ride.s = clamp(+q.get('s') || 0, 0, L - 1); ride.v = arrAt(TR.V, ride.s); placeTrain(); lastZoneToast = secOf(ride.s).zone; }
+  setQuality(QUALITY[q.get('q')] ? q.get('q') : 'auto');
+  if (q.has('cam')) setCam(q.get('cam'));
+  if (q.has('pause')) togglePause();
+  if (q.has('yaw')) { view.yaw = clamp(+q.get('yaw') || 0, -2.9, 2.9); view.pitch = clamp(+q.get('pitch') || 0, -1.1, 1.1); view.idle = -1e9; }
+  requestAnimationFrame(t => { lastT = t; tick(t); });
+}
+boot();
+
+</script>
+</body>
+</html>
