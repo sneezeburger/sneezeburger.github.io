@@ -1954,18 +1954,22 @@ canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointerc
 canvas.addEventListener('dblclick', () => { view.yaw = 0; view.pitch = 0; motion.recenter = true; });
 
 /* ===================== device motion: gyro + compass look ===================== */
-const motion = { on: false, ready: false, recenter: true, heading: null, e: new THREE.Euler(), dev: new THREE.Quaternion(), ref: new THREE.Quaternion(), look: new THREE.Quaternion(), sm: new THREE.Quaternion(), raw: new THREE.Quaternion(), wake: null, last: 0 };
+const motion = { on: false, ready: false, recenter: true, north: null, e: new THREE.Euler(), dev: new THREE.Quaternion(), ref: new THREE.Quaternion(), look: new THREE.Quaternion(), sm: new THREE.Quaternion(), raw: new THREE.Quaternion(), wake: null, last: 0 };
 const Q_FLIP = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)), AXIS_Z = V3(0, 0, 1), FWD = V3(0, 0, -1);
 const screenAngle = () => (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (window.orientation || 0);
 function onOrient(ev) {
   if (ev.beta == null || ev.gamma == null) return;
   motion.last = performance.now();
-  // iOS reports a magnetic compass heading; use it for yaw so the view cannot drift like raw gyro alpha does
-  let alpha = ev.alpha || 0;
-  if (typeof ev.webkitCompassHeading === 'number' && ev.webkitCompassHeading >= 0) alpha = 360 - ev.webkitCompassHeading;
   const d = Math.PI / 180;
-  motion.e.set(ev.beta * d, alpha * d, -ev.gamma * d, 'YXZ');
+  motion.e.set(ev.beta * d, (ev.alpha || 0) * d, -ev.gamma * d, 'YXZ');
   const q = motion.dev.setFromEuler(motion.e).multiply(Q_FLIP).multiply(tmpQ.setFromAxisAngle(AXIS_Z, -screenAngle() * d));
+  // gyro alpha is smooth but has an arbitrary zero; nudge it toward the compass, only while the screen faces the horizon (where heading is well defined)
+  const f0 = FWD.clone().applyQuaternion(q);
+  if (typeof ev.webkitCompassHeading === 'number' && ev.webkitCompassHeading >= 0 && Math.abs(f0.y) < 0.6) {
+    let err = -ev.webkitCompassHeading * d - Math.atan2(-f0.x, -f0.z); err -= TAU * Math.round(err / TAU);
+    motion.north = motion.north == null ? err : motion.north + err * 0.02;
+  }
+  if (motion.north != null) q.premultiply(tmpQ.setFromAxisAngle(V3(0, 1, 0), motion.north));
   if (motion.recenter) {   // the way the phone points now becomes "straight ahead"; pitch stays tied to gravity
     const f = FWD.clone().applyQuaternion(q);
     if (Math.abs(f.y) < 0.95) { motion.ref.setFromAxisAngle(V3(0, 1, 0), Math.atan2(-f.x, -f.z)).invert(); motion.recenter = false; motion.sm.copy(motion.look.copy(motion.raw.copy(motion.ref).multiply(q))); }
@@ -1985,7 +1989,7 @@ async function setMotion(on) {
       if (await DeviceOrientationEvent.requestPermission() !== 'granted') { toast('Motion access denied. Enable it in Settings › Safari › Motion & Orientation Access.', 4); return; }
     }
   } catch (e) { toast('Motion access needs HTTPS and a tap on the button.', 4); return; }
-  motion.recenter = true; motion.ready = false; motion.on = true;
+  motion.recenter = true; motion.ready = false; motion.on = true; motion.north = null;
   window.addEventListener('deviceorientation', onOrient);
   btn.setAttribute('aria-pressed', 'true');
   try { if (navigator.wakeLock) motion.wake = await navigator.wakeLock.request('screen'); } catch (e) { /* optional */ }
