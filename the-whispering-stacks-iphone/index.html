@@ -1967,7 +1967,7 @@ function onOrient(ev) {
   const f0 = FWD.clone().applyQuaternion(q);
   if (typeof ev.webkitCompassHeading === 'number' && ev.webkitCompassHeading >= 0 && Math.abs(f0.y) < 0.6) {
     let err = -ev.webkitCompassHeading * d - Math.atan2(-f0.x, -f0.z); err -= TAU * Math.round(err / TAU);
-    motion.north = motion.north == null ? err : motion.north + err * 0.02;
+    if (motion.north == null) motion.north = err; else { let de = err - motion.north; de -= TAU * Math.round(de / TAU); motion.north += de * 0.02; }
   }
   if (motion.north != null) q.premultiply(tmpQ.setFromAxisAngle(V3(0, 1, 0), motion.north));
   if (motion.recenter) {   // the way the phone points now becomes "straight ahead"; pitch stays tied to gravity
