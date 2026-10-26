@@ -42,6 +42,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .hud-hidden .hud { display: none !important; }
 .hud-toggle { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); top: calc(8px + env(safe-area-inset-top, 0px)); padding: 6px 14px; border-radius: 999px; border: 1px solid var(--brass-dim); background: var(--glass); color: var(--brass); font: 600 12px/1 var(--f-num); letter-spacing: 0.04em; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .hud-hidden .hud-toggle { opacity: 0.28; }
+.controls .lbl-short { display: none; }
 body:has(#intro:not([hidden])) .hud-toggle { display: none; }
 
 .title-plate { position: fixed; top: calc(var(--g) + env(safe-area-inset-top, 0px)); left: var(--g); padding: 12px 16px 12px; max-width: calc(100vw - 2 * var(--g)); }
@@ -120,11 +121,13 @@ body:has(#intro:not([hidden])) .hud-toggle { display: none; }
   .profile { display: none !important; }
   .title-plate h1 { font-size: 17px; }
   .controls .lbl-long { display: none; }
+  .controls .lbl-short { display: inline; }
   .controls kbd { display: none; }
   .check { top: auto; bottom: calc(190px + env(safe-area-inset-bottom, 0px)); }
   #perf-graph { display: none; }
 }
 @media (max-width: 560px) {
+  .hud-toggle { left: auto; right: var(--g); transform: none; top: auto; bottom: calc(var(--g) + env(safe-area-inset-bottom, 0px)); }   /* clear of the title plate on phones */
   #gmeter { display: none; }
   .big b { font-size: 40px; }
   .big { min-width: 80px; }
@@ -161,7 +164,7 @@ body:has(#intro:not([hidden])) .hud-toggle { display: none; }
   <button type="button" id="btn-pause" aria-pressed="false">Pause<kbd>Space</kbd></button>
   <button type="button" id="btn-sound" aria-pressed="false">Sound off<kbd>M</kbd></button>
   <button type="button" id="btn-quality">Quality: Auto<kbd>Q</kbd></button>
-  <button type="button" id="btn-check" aria-expanded="false" aria-controls="check"><span class="lbl-long">Design </span>check</button>
+  <button type="button" id="btn-check" aria-expanded="false" aria-controls="check"><span class="lbl-long">Design check</span><span class="lbl-short">Specs</span></button>
 </nav>
 
 <aside class="perf panel hud" id="perf" aria-label="Performance">
@@ -254,11 +257,7 @@ const LIMITS = { vMax: 4.5, vMin: -0.5, lat: 0.5, fwd: 1.8, rollRate: 80, decel:
 /* ============================== LAYOUT ============================== */
 // The Halcyon Ascent: an uphill linear-motor launch out of a garden city, over the top above the clouds,
 // a lap of low orbit, a re-entry spiral back down through the cloud deck and a run home between the towers.
-const LAYOUT = {
-  pu: 110, pa: 75, climb: 30, coast: 10, th: 150, pd: 52, dive: 10, po: 110,
-  nh: 2, hill: 45, ha: 16, b0: 110, turn: 260, belt: 20, sl: 100, sy: 25, b2: 10, trim: 24, hp: 10.683, hl: 360,
-  hs: 90, trim2: 29, c1: 3.052, sl2: 70, sy2: 20, c4: 15, gd: 40, ga: 7, c2: 60, tr: 213.855, c3: 50
-};
+const LAYOUT = { pu: 110, pa: 75, climb: 30, coast: 10, th: 150, pd: 52, dive: 10, po: 110, nh: 2, hill: 45, ha: 16, b0: 110, turn: 322.3, belt: 35, bd: 8, bh: 7, sl: 100, sy: 25, b2: 10, hp: 8.951, hl: 360, hs: 13.5, fa: 7, hd: 9, c1: 10, sl2: 70, sy2: 20, c4: 15, gd: 40, ga: 7, c2: 60, tr: 151.7, c3: 50 };
 function layoutTrack(Lp) {
   const tt = turtle(), { run, at, probe } = tt, D = Math.PI / 180;
   // the launch: the pad is the station. Thrust ramps up like a rocket shedding its propellant mass.
@@ -277,19 +276,27 @@ function layoutTrack(Lp) {
   for (let k = 1; k < Lp.nh; k++) { run(Lp.hill * 2, -2 * Lp.ha * D, 0, { ramp: 0.45 }); run(Lp.hill * 2, 2 * Lp.ha * D, 0, { ramp: 0.45 }); }
   run(Lp.hill * 2, -2 * Lp.ha * D, 0, { ramp: 0.45 });
   run(Lp.hill, Lp.ha * D, 0, { ramp: 0.45 });
-  run(Lp.b0, 0, 0);
+  run(Lp.b0 * 0.25, Lp.fa * D, 0, { name: 'Weightless crest', zone: 'space' });   // one more floater before the turn
+  run(Lp.b0 * 0.5, -2 * Lp.fa * D, 0);
+  run(Lp.b0 * 0.25, Lp.fa * D, 0);
+  run(45, -Lp.hd * D, 0);   // a gentle drop off the crest keeps the speed up through the turn
+  run(45, Lp.hd * D, 0);
   run(Lp.turn, 0, 180 * D, { name: 'Halo transit', zone: 'space', ramp: 0.45 });
-  run(Lp.belt, 0, 0, { name: 'Asteroid belt', zone: 'space' });
+  run(Lp.belt, -Lp.bd * D, 0, { name: 'Asteroid belt', zone: 'space' });   // dip into the belt
+  run(Lp.belt, Lp.bd * D, 0);
   run(Lp.sl, 0, Lp.sy * D, { ramp: 0.5 });
+  run(30, Lp.bh * D, 0);                                                    // a hump between the slalom bends
+  run(60, -2 * Lp.bh * D, 0);
+  run(30, Lp.bh * D, 0);
   run(Lp.sl, 0, -Lp.sy * D, { ramp: 0.5 });
   run(Lp.b2, 0, 0);
-  run(24, 0, 0, { name: 'Retro-burn', kind: 'trim', zone: 'space', vmax: Lp.trim });
+  run(24, 0, 0, { name: 'Retro-burn', zone: 'space' });
   probe.helixStart = at();
   run(40, -Lp.hp * D, 0, { name: 'Re-entry spiral', zone: 'reentry', ramp: 0.5 });
   run(Lp.hl, 0, -360 * D, { ramp: 0.25 });
   run(40, Lp.hp * D, 0, { ramp: 0.5 });
   probe.helixEnd = at();
-  run(Lp.hs, 0, 0, { name: 'Heat shield', kind: 'trim', zone: 'city', vmax: Lp.trim2 });
+  run(Lp.hs, 0, 0, { name: 'Heat shield', zone: 'city' });
   run(Lp.c1, 0, 0, { name: 'Skyline run', zone: 'city' });
   run(Lp.sl2, 0, -Lp.sy2 * D, { ramp: 0.5 });
   run(Lp.sl2, 0, Lp.sy2 * D, { ramp: 0.5 });
@@ -398,7 +405,7 @@ function buildTrack(Lp = LAYOUT) {
       v = Math.sqrt(Math.max(1e-6, v2));
     }
   }
-  for (let i = N - 1; i >= 0; i--) { const rem = (N - i) * ds; V[i] = Math.min(V[i], Math.sqrt(2 * 0.9 * rem) + 0.05 * VSCALE); }   // gentle stop at the platform
+  for (let i = N - 1; i >= 0; i--) { const rem = (N - i) * ds; V[i] = Math.min(V[i], Math.sqrt(2 * 0.35 * G * rem) + 0.05 * VSCALE); }   // stop at the platform: a firm 0.35 g at the very end (a gentle 0.09 g starts braking ~300 m out on a fast finish)
 
   // reference frame the bank angle is measured from
   const U0 = new Float64Array(N * 3);
@@ -1302,7 +1309,7 @@ const HAB = { spin: null, climber: null };
 function buildHabitat() {
   // Halcyon Station: a rotating ring habitat high above the planet, and a space elevator rising out of the far city
   const g = new THREE.Group(), tilt = new THREE.Group(), spin = new THREE.Group();
-  tilt.position.set(520, 640, -1250); tilt.rotation.set(1.05, 0.35, 0.2); tilt.add(spin); g.add(tilt);
+  tilt.position.set(520, 640, -1250); tilt.rotation.set(1.05, 0.35, 0.2); tilt.add(spin); g.add(tilt); HAB.tilt = tilt;
   const ring = new THREE.Mesh(scaleUV(new THREE.TorusGeometry(270, 16, 14, 160), 90, 1), M.windows);
   const rim = new THREE.Mesh(new THREE.TorusGeometry(270, 17.5, 6, 160), M.pearl); rim.scale.set(1, 1, 0.35);
   const hub = new THREE.Mesh(new THREE.SphereGeometry(34, 24, 16), M.pearl), hubRing = new THREE.Mesh(new THREE.TorusGeometry(38, 2.2, 8, 48), M.led);
@@ -1327,6 +1334,394 @@ function updateScenery(t, dt) {
   if (CITY.jet) CITY.jet.scale.y = 0.85 + 0.15 * Math.sin(t * 1.7);
 }
 
+
+/* ===================== life: the crowd, alien flora, fauna, spacecraft, traffic ===================== [RIDE] */
+// Everything here keeps clear of the ride: static things are checked along their whole height (segFar / ptFar),
+// moving things have their whole path checked when they're placed (pathFar), and the scripted fighters that
+// escort the train in orbit are pushed away from the track every frame.
+const LIFE = { crowd: [], flocks: [], birdsL: null, birdsR: null, mantas: [], grazers: [], fish: [], shuttles: [], cruisers: [], freighter: null, cars: [], carMesh: null, carLights: null, fighters: [], hover: null, motes: null, hero: [] };
+const MATC = new Map();
+const lmat = (color, o = {}) => { const k = color + JSON.stringify(o); if (!MATC.has(k)) MATC.set(k, new THREE.MeshStandardMaterial({ color, roughness: 0.6, ...o })); return MATC.get(k); };
+const lglow = (color, k = 2.2) => lmat('#101418', { emissive: color, emissiveIntensity: k });
+const pathFar = (pts, r) => pts.every(p => ptFar(p, r));
+function mergeOwn(g) { const kids = g.children.filter(o => !o.isMesh); for (const k of kids) g.remove(k); mergeStatic(g); for (const k of kids) g.add(k); return g; }
+function part(g, geo, mat, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; }
+const capsule = (r, len) => new THREE.CapsuleGeometry(r, Math.max(0.001, len), 4, 10);
+
+/* ---------- the crowd on the launch-pad platforms: seven species, all facing the train ---------- */
+const SKIN = ['#f1cfb4', '#d8a47f', '#a9714f', '#6b4530', '#f5dcc8'], CLOTH = ['#3f6e8c', '#c45b4a', '#e2b33c', '#5a8f6a', '#7a5aa8', '#2f3e46', '#e7e2d6', '#d06aa0'];
+function arm(g, x, y, z, len, r, mat, handMat) {   // a pivot at the shoulder; the arm hangs along −y
+  const p = new THREE.Group(); p.position.set(x, y, z); g.add(p);
+  part(p, capsule(r, len), mat, 0, -len / 2 - r, 0); part(p, new THREE.SphereGeometry(r * 1.25, 8, 6), handMat, 0, -len - r * 2, 0);
+  return p;
+}
+function makeBeing(kind, rnd) {
+  const root = new THREE.Group(), body = new THREE.Group(), head = new THREE.Group(); root.add(body);
+  const c = CLOTH[(rnd() * CLOTH.length) | 0], cl = lmat(c), arms = [];
+  let hover = 0;
+  if (kind === 'human' || kind === 'child') {
+    const sk = lmat(SKIN[(rnd() * SKIN.length) | 0]), pants = lmat(CLOTH[(rnd() * CLOTH.length) | 0]);
+    for (const z of [-0.1, 0.1]) part(body, new THREE.CylinderGeometry(0.075, 0.065, 0.86, 8), pants, 0, 0.43, z);
+    part(body, capsule(0.2, 0.42), cl, 0, 1.13, 0).scale.set(0.8, 1, 1);
+    head.position.set(0, 1.58, 0); body.add(head);
+    part(head, new THREE.SphereGeometry(0.12, 14, 10), sk, 0, 0.04, 0).scale.set(1, 1.12, 1);
+    part(head, new THREE.SphereGeometry(0.128, 14, 8, 0, TAU, 0, Math.PI * 0.55), lmat(['#2b1d14', '#6b4a2e', '#d9a25b', '#111111', '#b84a2a'][(rnd() * 5) | 0]), -0.015, 0.07, 0);
+    for (const z of [-0.045, 0.045]) part(head, new THREE.SphereGeometry(0.016, 6, 4), lmat('#111'), 0.11, 0.06, z);
+    for (const sd of [-1, 1]) arms.push({ p: arm(body, 0, 1.36, sd * 0.27, 0.52, 0.055, cl, sk), sd });
+    if (kind === 'child') root.scale.setScalar(0.62);
+  } else if (kind === 'lumeni') {   // tall, slender, softly glowing
+    const sk = lmat('#cdb8ff', { emissive: '#5a3aa8', emissiveIntensity: 0.35 }), robe = lmat('#eae6ff', { roughness: 0.4 });
+    part(body, new THREE.CylinderGeometry(0.16, 0.34, 1.5, 12), robe, 0, 0.75, 0);
+    part(body, capsule(0.13, 0.55), sk, 0, 1.75, 0);
+    head.position.set(0, 2.2, 0); body.add(head);
+    part(head, new THREE.SphereGeometry(0.13, 14, 10), sk, 0, 0.1, 0).scale.set(0.85, 1.55, 0.85);
+    for (const z of [-0.045, 0.045]) part(head, new THREE.SphereGeometry(0.022, 8, 6), lglow('#9fe8ff', 3), 0.1, 0.12, z);
+    part(head, new THREE.TorusGeometry(0.1, 0.012, 6, 20), lglow('#c9a2ff', 2.5), 0, 0.36, 0, Math.PI / 2, 0, 0);
+    for (const sd of [-1, 1]) arms.push({ p: arm(body, 0, 1.95, sd * 0.2, 0.72, 0.04, sk, sk), sd });
+  } else if (kind === 'kor') {   // short, broad, four-armed
+    const sk = lmat('#7f9a6a');
+    part(body, new THREE.SphereGeometry(0.5, 16, 12), sk, 0, 0.62, 0).scale.set(0.9, 1.05, 1);
+    for (const z of [-0.2, 0.2]) part(body, new THREE.CylinderGeometry(0.12, 0.14, 0.3, 8), sk, 0, 0.15, z);
+    part(body, new THREE.CylinderGeometry(0.42, 0.46, 0.28, 16), cl, 0, 0.55, 0);
+    head.position.set(0.06, 1.1, 0); body.add(head);
+    for (const z of [-0.13, 0.13]) { part(head, new THREE.SphereGeometry(0.09, 10, 8), lmat('#fffbe8'), 0.12, 0.05, z); part(head, new THREE.SphereGeometry(0.045, 8, 6), lmat('#111'), 0.19, 0.05, z); }
+    for (const sd of [-1, 1]) for (const y of [0.85, 0.62]) arms.push({ p: arm(body, 0.05, y, sd * 0.45, 0.32, 0.06, sk, sk), sd });
+  } else if (kind === 'robot') {
+    const shell = lmat('#e8ecf0', { metalness: 0.5, roughness: 0.3 });
+    part(body, new THREE.CylinderGeometry(0.22, 0.22, 0.14, 16), M.dark, 0, 0.12, 0, Math.PI / 2, 0, 0);
+    part(body, new THREE.CylinderGeometry(0.08, 0.12, 0.45, 8), M.chrome, 0, 0.45, 0);
+    part(body, new THREE.BoxGeometry(0.42, 0.62, 0.5), shell, 0, 0.98, 0);
+    part(body, new THREE.BoxGeometry(0.02, 0.2, 0.3), lglow('#4fe0ff', 1.8), 0.22, 1.05, 0);
+    head.position.set(0, 1.45, 0); body.add(head);
+    part(head, new THREE.CylinderGeometry(0.17, 0.17, 0.22, 16), shell, 0, 0, 0);
+    part(head, new THREE.BoxGeometry(0.04, 0.06, 0.24), lglow('#4fe0ff', 3), 0.16, 0.01, 0);
+    for (const sd of [-1, 1]) arms.push({ p: arm(body, 0, 1.22, sd * 0.29, 0.48, 0.04, M.chrome, shell), sd });
+  } else if (kind === 'squid') {   // a robed cephalopod
+    const sk = lmat('#d07aa8', { roughness: 0.4 });
+    part(body, new THREE.CylinderGeometry(0.2, 0.42, 1.15, 14), cl, 0, 0.62, 0);
+    for (let k = 0; k < 6; k++) { const a = k / 6 * TAU; part(body, new THREE.TorusGeometry(0.16, 0.035, 6, 12, Math.PI), sk, Math.cos(a) * 0.36, 0.08, Math.sin(a) * 0.36, 0, -a, Math.PI / 2); }
+    head.position.set(0, 1.45, 0); body.add(head);
+    part(head, new THREE.SphereGeometry(0.3, 16, 12), sk, 0, 0.15, 0).scale.set(1, 1.3, 1);
+    for (const z of [-0.12, 0.12]) part(head, new THREE.SphereGeometry(0.06, 10, 8), lglow('#ffe46a', 1.4), 0.25, 0.08, z);
+    for (const sd of [-1, 1]) arms.push({ p: arm(body, 0, 1.12, sd * 0.24, 0.6, 0.045, sk, sk), sd });
+  } else if (kind === 'floater') {   // a drifting jellyfish being
+    hover = 1;
+    const bell = lmat('#9fefff', { emissive: '#3ab8d8', emissiveIntensity: 0.9, transparent: true, opacity: 0.6, roughness: 0.15 });
+    head.position.set(0, 2.0, 0); body.add(head);
+    part(head, new THREE.SphereGeometry(0.45, 18, 10, 0, TAU, 0, Math.PI / 2), bell, 0, 0, 0).scale.set(1, 0.8, 1);
+    part(head, new THREE.SphereGeometry(0.16, 10, 8), lglow('#c8ffff', 2.4), 0, 0.12, 0);
+    for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; part(head, new THREE.CylinderGeometry(0.012, 0.004, 1.1, 4), bell, Math.cos(a) * 0.3, -0.55, Math.sin(a) * 0.3); }
+  }
+  for (const a of arms) mergeOwn(a.p); mergeOwn(head); mergeOwn(body);
+  root.traverse(o => { if (o.isMesh) o.userData.structure = true; });
+  return { root, body, head, arms, kind, hover, ph: rnd() * 10, keen: 0.5 + rnd() * 0.5 };
+}
+function buildCrowd() {
+  const g = new THREE.Group(), rnd = mulberry(404), top = -HL + 0.35;
+  const kinds = ['human', 'human', 'child', 'lumeni', 'kor', 'robot', 'squid', 'human', 'floater', 'lumeni', 'kor', 'human', 'child', 'squid', 'robot', 'human', 'floater', 'human'];
+  kinds.forEach((kind, k) => {
+    const sd = k % 2 ? 1 : -1, x = -38 + (k / kinds.length) * 54 + (rnd() - 0.5) * 2.5, z = sd * (3.1 + rnd() * 4.2);
+    const b = makeBeing(kind, rnd);
+    b.root.position.set(x, top, z); b.root.rotation.y = sd * Math.PI / 2 + (rnd() - 0.5) * 0.5;   // face the track
+    g.add(b.root); LIFE.crowd.push(b);
+  });
+  // luggage and a hovering porter drone
+  const bags = new THREE.Group();
+  for (let k = 0; k < 10; k++) { const sd = k % 2 ? 1 : -1, w = 0.35 + rnd() * 0.25; part(bags, new THREE.BoxGeometry(w, 0.5 + rnd() * 0.3, 0.22), lmat(CLOTH[(rnd() * CLOTH.length) | 0]), -36 + rnd() * 50, top + 0.3, sd * (4 + rnd() * 3)); }
+  g.add(mergeStatic(bags));
+  return g;
+}
+
+/* ---------- alien flora: glow-bulb trees, giant mushrooms, fiddlehead ferns, lantern lilies ---------- */
+const BULB_COLS = ['#7fe8ff', '#ff7ad8', '#b48cff', '#9dff8a', '#ffd06a'].map(c => new THREE.Color(c).multiplyScalar(1.25));
+const CAP_COLS = ['#f2a7c8', '#a7d8f2', '#f2e2a7', '#c6a7f2', '#a7f2c4'].map(c => new THREE.Color(c));
+function buildFlora() {
+  const g = new THREE.Group(), rnd = mulberry(909), lk = CITY.lake, dm = CITY.dome;
+  const stalks = [], bulbs = [], stems = [], caps = [], ferns = [], lilies = [], lilyStems = [];
+  const okSpot = (x, z, r, h) => !onRoad(x, z, 2) && !inStation(x, z) && Math.hypot(x - lk.x, z - lk.z) > lk.r + 2 && freeAt(x, z, r) && segFar(V3(x, GROUND, z), V3(x, GROUND + h, z), r + 2.5, 1);
+  const nearRide = () => { for (let t = 0; t < 30; t++) { const i = ((rnd() * N) | 0); if (TR.P[i * 3 + 1] > 25) continue; const a = rnd() * TAU, d = 8 + Math.pow(rnd(), 1.5) * 160; return [TR.P[i * 3] + Math.cos(a) * d, TR.P[i * 3 + 2] + Math.sin(a) * d]; } return [rnd() * 600, rnd() * 400]; };
+  const inDome = () => { const a = rnd() * TAU, d = Math.sqrt(rnd()) * (dm.r - 3); return [dm.x + Math.cos(a) * d, dm.z + Math.sin(a) * d]; };
+  const add = (where, n, fn) => { for (let k = 0, made = 0; k < n * 6 && made < n; k++) { const [x, z] = where(); if (fn(x, z)) made++; } };
+  const bulbTree = (x, z) => {
+    const h = 5 + rnd() * 8; if (!okSpot(x, z, 2.2, h + 2)) return false;
+    const lean = (rnd() - 0.5) * 0.3, tip = V3(x + lean * h, GROUND + h, z);
+    stalks.push({ p: V3(x, GROUND, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -lean)), s: V3(1, h, 1) });
+    const col = BULB_COLS[(rnd() * BULB_COLS.length) | 0];
+    for (let b = 0; b < 3 + (rnd() * 3 | 0); b++) { const a = rnd() * TAU, d = rnd() * 1.1, s = 0.3 + rnd() * 0.4; bulbs.push({ p: tip.clone().add(V3(Math.cos(a) * d, rnd() * 1.2 - 0.3, Math.sin(a) * d)), s, color: col }); }
+    return true;
+  };
+  const mushroom = (x, z) => {
+    const h = 2 + rnd() * 5, r = h * (0.35 + rnd() * 0.25); if (!okSpot(x, z, r, h + 1)) return false;
+    stems.push({ p: V3(x, GROUND, z), s: V3(r * 0.22, h, r * 0.22) });
+    caps.push({ p: V3(x, GROUND + h, z), s: V3(r, r * 0.55, r), color: CAP_COLS[(rnd() * CAP_COLS.length) | 0] });
+    return true;
+  };
+  const fern = (x, z) => {
+    if (!okSpot(x, z, 1.2, 2.2)) return false;
+    for (let f = 0; f < 3; f++) { const a = rnd() * TAU, s = 0.7 + rnd() * 0.8; ferns.push({ p: V3(x + Math.cos(a) * 0.5, GROUND, z + Math.sin(a) * 0.5), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, a, 0)), s }); }
+    return true;
+  };
+  const lily = (x, z) => {
+    const h = 1 + rnd() * 1.6; if (!okSpot(x, z, 0.8, h + 0.6)) return false;
+    lilyStems.push({ p: V3(x, GROUND, z), s: V3(1, h, 1) });
+    lilies.push({ p: V3(x, GROUND + h, z), s: 0.35 + rnd() * 0.3, color: BULB_COLS[(rnd() * BULB_COLS.length) | 0] });
+    return true;
+  };
+  add(nearRide, 260, bulbTree); add(nearRide, 160, mushroom); add(nearRide, 220, fern); add(nearRide, 260, lily);
+  add(inDome, 40, bulbTree); add(inDome, 30, mushroom); add(inDome, 60, fern); add(inDome, 90, lily);
+  // around the lake shore
+  for (let a = 0; a < TAU; a += 0.16) { const d = lk.r + 1.5 + rnd() * 2; lily(lk.x + Math.cos(a) * d, lk.z + Math.sin(a) * d); }
+  const Y = V3(0, 1, 0), q0 = new THREE.Quaternion(), sv = V3(1, 1, 1);
+  const stalkGeo = new THREE.CylinderGeometry(0.1, 0.22, 1, 6).translate(0, 0.5, 0), bulbGeo = new THREE.IcosahedronGeometry(1, 1);
+  const bulbMat = new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false });
+  g.add(instChunks(stalkGeo, lmat('#6a8a7a'), stalks, (it, m) => m.compose(it.p, it.q, it.s), 400, true));
+  g.add(instChunks(bulbGeo, bulbMat, bulbs, (it, m) => m.compose(it.p, q0, sv.setScalar(it.s)), 400, true));
+  g.add(instChunks(new THREE.CylinderGeometry(1, 1.25, 1, 10).translate(0, 0.5, 0), lmat('#f4efe2'), stems, (it, m) => m.compose(it.p, q0, it.s), 400, true));
+  const capGeo = new THREE.SphereGeometry(1, 18, 8, 0, TAU, 0, Math.PI / 2);
+  g.add(instChunks(capGeo, lmat('#ffffff', { roughness: 0.5 }), caps, (it, m) => m.compose(it.p, q0, it.s), 400, true));
+  const fernGeo = mergeGeometries([new THREE.CylinderGeometry(0.03, 0.05, 1.2, 5).translate(0, 0.6, 0), new THREE.TorusGeometry(0.28, 0.045, 5, 14, Math.PI * 1.6).rotateY(Math.PI / 2).translate(0, 1.38, 0.0)].map(x => x.index ? x.toNonIndexed() : x));
+  g.add(instChunks(fernGeo, lmat('#3f9a6a', { flatShading: true }), ferns, (it, m) => m.compose(it.p, it.q, sv.setScalar(it.s)), 400, true));
+  g.add(instChunks(new THREE.CylinderGeometry(0.025, 0.035, 1, 5).translate(0, 0.5, 0), lmat('#4f8a5a'), lilyStems, (it, m) => m.compose(it.p, q0, it.s), 400, true));
+  g.add(instChunks(new THREE.ConeGeometry(1, 1.4, 8, 1, true).rotateX(Math.PI).translate(0, 0.7, 0), new THREE.MeshBasicMaterial({ color: '#ffffff', side: THREE.DoubleSide, toneMapped: false }), lilies, (it, m) => m.compose(it.p, q0, sv.setScalar(it.s)), 400, true));
+  g.traverse(o => { if (o.isMesh) o.userData.structure = true; });
+  LIFE.floraCount = stalks.length + stems.length + ferns.length + lilies.length;
+  return g;
+}
+
+/* ---------- fauna: bird flocks over the parks, sky-mantas above the clouds, grazers by the lake, leaping fish, dome motes ---------- */
+function buildFauna() {
+  const g = new THREE.Group(), rnd = mulberry(1212), lk = CITY.lake;
+  // bird flocks: circle centres are tried until the whole circle keeps 22 m from the track
+  const flocks = [];
+  for (let k = 0; k < 60 && flocks.length < 4; k++) {
+    const i = (rnd() * N) | 0; if (TR.P[i * 3 + 1] > 20) continue;
+    const c = V3(TR.P[i * 3] + (rnd() - 0.5) * 220, 20 + rnd() * 16, TR.P[i * 3 + 2] + (rnd() - 0.5) * 220), R = 22 + rnd() * 30;
+    const pts = []; for (let a = 0; a < TAU; a += TAU / 32) pts.push(V3(c.x + Math.cos(a) * R, c.y, c.z + Math.sin(a) * R));
+    if (!pathFar(pts, 22)) continue;
+    flocks.push({ c, R, n: 10 + (rnd() * 6 | 0), sp: (0.18 + rnd() * 0.12) * (rnd() < 0.5 ? -1 : 1), ph: rnd() * TAU });
+  }
+  LIFE.flocks = flocks;
+  const nB = flocks.reduce((a, f) => a + f.n, 0), wing = new THREE.BufferGeometry();
+  wing.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, -0.18, 0, 0.12, 0, 0, 0.7, 0.12, 0, 0.1, 0, 0, 0.7, 0, 0, 0], 3)); wing.computeVertexNormals();
+  const bm = lmat('#2a2a30', { side: THREE.DoubleSide });
+  LIFE.birdsL = new THREE.InstancedMesh(wing, bm, Math.max(1, nB)); LIFE.birdsR = new THREE.InstancedMesh(wing, bm, Math.max(1, nB));
+  for (const m of [LIFE.birdsL, LIFE.birdsR]) { m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); g.add(m); }
+  // sky-mantas: big bioluminescent gliders that circle above the cloud deck around the orbit section
+  const orbitS = samplesBetween('Zero-g hills', 'Re-entry spiral');
+  for (let k = 0; k < 40 && LIFE.mantas.length < 5; k++) {
+    const i = orbitS[(rnd() * orbitS.length) | 0], c = V3(TR.P[i * 3] + (rnd() - 0.5) * 260, TR.P[i * 3 + 1] + 25 + rnd() * 50, TR.P[i * 3 + 2] + (rnd() - 0.5) * 260), R = 70 + rnd() * 90;
+    const pts = []; for (let a = 0; a < TAU; a += TAU / 40) pts.push(V3(c.x + Math.cos(a) * R, c.y + Math.sin(a * 2) * 6, c.z + Math.sin(a) * R * 0.7));
+    if (!pathFar(pts, 40)) continue;
+    const m = new THREE.Group(), body = lmat('#3a4a6a', { roughness: 0.4 }), glow = lglow('#7fe8ff', 2.6);
+    part(m, new THREE.SphereGeometry(1, 16, 8), body).scale.set(3.2, 0.5, 2.2);
+    part(m, new THREE.CylinderGeometry(0.15, 0.02, 7, 5), body, -5.5, 0, 0, 0, 0, Math.PI / 2);
+    const wings = [];
+    for (const sd of [-1, 1]) {
+      const w = new THREE.Group(); w.position.set(0, 0, sd * 1.6); m.add(w);
+      const sh = new THREE.Shape(); sh.moveTo(2.4, 0); sh.quadraticCurveTo(0.5, sd * 4, -0.6, sd * 7.5); sh.quadraticCurveTo(-1.5, sd * 3, -2.4, 0); sh.closePath();
+      const wm = part(w, new THREE.ShapeGeometry(sh), lmat('#3a4a6a', { side: THREE.DoubleSide }), 0, 0, 0, Math.PI / 2, 0, 0);
+      for (let d = 0; d < 5; d++) part(w, new THREE.SphereGeometry(0.16, 6, 4), glow, 0.8 - d * 0.45, 0.05, sd * (1.4 + d * 1.15));
+      void wm; wings.push({ w, sd });
+    }
+    for (let d = 0; d < 6; d++) part(m, new THREE.SphereGeometry(0.13, 6, 4), glow, 2 - d * 0.8, 0.45, 0);
+    g.add(m); LIFE.mantas.push({ m, c, R, wings, sp: 0.05 + rnd() * 0.04, ph: rnd() * TAU });
+  }
+  // grazers on the meadow round the lake
+  for (let k = 0; k < 80 && LIFE.grazers.length < 7; k++) {
+    const a = rnd() * TAU, d = lk.r + 18 + rnd() * 60, x = lk.x + Math.cos(a) * d, z = lk.z + Math.sin(a) * d;
+    if (onRoad(x, z, 4) || !freeAt(x, z, 8) || planDist(x, z, 30) < 24) continue;
+    const m = new THREE.Group(), hide = lmat(['#d9b98a', '#b8a6d9', '#a6d9c4'][k % 3]);
+    part(m, new THREE.SphereGeometry(1, 14, 10), hide, 0, 1.9, 0).scale.set(1.5, 0.75, 0.75);
+    const legs = []; for (const lx of [-0.9, 0.9]) for (const lz of [-0.4, 0.4]) { const l = new THREE.Group(); l.position.set(lx, 1.6, lz); m.add(l); part(l, new THREE.CylinderGeometry(0.11, 0.08, 1.6, 6), hide, 0, -0.8, 0); legs.push(l); }
+    const neck = new THREE.Group(); neck.position.set(1.2, 2.2, 0); m.add(neck);
+    part(neck, new THREE.CylinderGeometry(0.16, 0.24, 2.2, 8), hide, 0.55, 0.95, 0, 0, 0, -0.5);
+    part(neck, new THREE.SphereGeometry(0.32, 10, 8), hide, 1.15, 1.95, 0).scale.set(1.4, 0.8, 0.8);
+    for (const z of [-0.14, 0.14]) part(neck, new THREE.SphereGeometry(0.05, 6, 4), lmat('#111'), 1.5, 2.05, z);
+    m.position.set(x, GROUND, z); m.rotation.y = rnd() * TAU; m.scale.setScalar(1.6);
+    g.add(m); LIFE.grazers.push({ m, legs, neck, home: V3(x, GROUND, z), R: 4 + rnd() * 6, sp: (0.04 + rnd() * 0.03) * (rnd() < 0.5 ? -1 : 1), ph: rnd() * TAU });
+  }
+  // fish that leap from the lake
+  const fishMat = lglow('#ff9a4a', 1.4);
+  for (let k = 0; k < 6; k++) { const f = part(g, new THREE.SphereGeometry(0.35, 10, 6), fishMat); f.scale.set(1.8, 0.7, 0.6); f.visible = false; LIFE.fish.push({ m: f, t: -rnd() * 6, dur: 1.1, a: V3(), b: V3() }); }
+  // glowing motes drifting under the dome glass, each anchored ≥ 5 m from the track
+  const dm = CITY.dome, mp = [], mc = [], anchors = [];
+  for (let k = 0; k < 900 && anchors.length < 220; k++) {
+    const a = rnd() * TAU, d = Math.sqrt(rnd()) * (dm.r - 4), p = V3(dm.x + Math.cos(a) * d, GROUND + 2 + rnd() * 18, dm.z + Math.sin(a) * d);
+    if (!ptFar(p, 5)) continue; anchors.push({ p, ph: rnd() * TAU, f: 0.3 + rnd() * 0.5 });
+    const col = BULB_COLS[(rnd() * BULB_COLS.length) | 0]; mp.push(p.x, p.y, p.z); mc.push(col.r / 1.25, col.g / 1.25, col.b / 1.25);
+  }
+  const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.Float32BufferAttribute(mp, 3)); mg.setAttribute('color', new THREE.Float32BufferAttribute(mc, 3));
+  const dot = canvasTex(32, 32, (c, w, h) => { const gr = c.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(0, 0, w, h); });
+  LIFE.motes = new THREE.Points(mg, new THREE.PointsMaterial({ size: 0.45, map: dot, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  LIFE.motes.userData.anchors = anchors; g.add(LIFE.motes);
+  return g;
+}
+
+/* ---------- spacecraft: shuttles launching from the far pads, cruisers overhead, a freighter docking at the ring,
+              a hero ship on the pad by the station, hover-car traffic, and two escorts that fly alongside in orbit ---------- */
+function shipModel(len, body, accent) {
+  const g = new THREE.Group(), k = len / 10;
+  part(g, capsule(0.9 * k, 7 * k), body, 0, 0, 0, 0, 0, Math.PI / 2).scale.set(1, 1, 0.8);
+  part(g, new THREE.ConeGeometry(0.9 * k, 2.4 * k, 12), body, 4.6 * k, 0, 0, 0, 0, -Math.PI / 2);
+  const wing = new THREE.Shape(); wing.moveTo(1.5 * k, 0); wing.lineTo(-2.6 * k, 4.2 * k); wing.lineTo(-3.4 * k, 4.2 * k); wing.lineTo(-3 * k, 0); wing.closePath();
+  for (const sd of [-1, 1]) { const w = part(g, new THREE.ExtrudeGeometry(wing, { depth: 0.12 * k, bevelEnabled: false }), body, 0, -0.1 * k, 0, sd * Math.PI / 2, 0, 0); w.scale.z = 1; if (sd < 0) w.scale.y = 1; }
+  part(g, new THREE.SphereGeometry(0.55 * k, 12, 8, 0, TAU, 0, Math.PI / 2), M.glass, 2.6 * k, 0.55 * k, 0).scale.set(1.6, 1, 1);
+  for (const z of [-0.45, 0.45]) part(g, new THREE.CylinderGeometry(0.32 * k, 0.4 * k, 0.4 * k, 10), accent, -4.2 * k, 0, z * k, 0, 0, Math.PI / 2);
+  for (let s = 0; s < 3; s++) part(g, new THREE.BoxGeometry(0.4 * k, 0.05 * k, 0.05 * k), accent, (1 - s) * 1.4 * k, 0.75 * k, 0);
+  return mergeStatic(g);
+}
+function buildCraft() {
+  const g = new THREE.Group(), rnd = mulberry(77777), plume = new THREE.MeshBasicMaterial({ color: '#ffd8a0', transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+  // shuttle pads on the city's far edge
+  for (let k = 0, tries = 0; LIFE.shuttles.length < 3 && tries < 200; tries++) {
+    const a = rnd() * TAU, d = 650 + rnd() * 400, x = 300 + Math.cos(a) * d, z = 60 + Math.sin(a) * d;
+    if (onRoad(x, z, 10) || !freeAt(x, z, 30) || planDist(x, z, 80) < 400) continue;
+    const pad = new THREE.Group();
+    part(pad, new THREE.CylinderGeometry(26, 28, 3, 24), M.pearl, 0, GROUND + 1.5, 0);
+    part(pad, new THREE.TorusGeometry(24, 0.6, 6, 40), M.led, 0, GROUND + 3.1, 0, Math.PI / 2, 0, 0);
+    part(pad, new THREE.BoxGeometry(4, 70, 4), M.column, 16, GROUND + 35, 0);
+    pad.position.set(x, 0, z); g.add(mergeStatic(pad)); occupy(x, z, 30);
+    const sh = new THREE.Group(), white = M.white;
+    part(sh, new THREE.CylinderGeometry(3, 3.4, 38, 18), white, 0, 19, 0);
+    part(sh, new THREE.ConeGeometry(3, 9, 18), white, 0, 42.5, 0);
+    for (let f = 0; f < 3; f++) { const a2 = f / 3 * TAU; part(sh, new THREE.BoxGeometry(0.5, 9, 5), M.dark, Math.cos(a2) * 3.6, 5, Math.sin(a2) * 3.6, 0, -a2, 0); }
+    part(sh, new THREE.CylinderGeometry(3.05, 3.05, 1, 18), M.led, 0, 30, 0);
+    mergeStatic(sh);
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(3.2, 34, 14, 1, true).translate(0, -17, 0), plume); fl.rotation.x = Math.PI; fl.position.y = -0.5; fl.visible = false; sh.add(fl);
+    sh.position.set(x, GROUND + 3, z); g.add(sh);
+    LIFE.shuttles.push({ m: sh, flame: fl, base: V3(x, GROUND + 3, z), period: 46 + k * 9, ph: rnd() * 46 }); k++;
+  }
+  // cruisers and liners crossing high overhead (far above anything on the ride)
+  const liner = lmat('#dfe6ee', { metalness: 0.5, roughness: 0.3 });
+  for (let k = 0; k < 4; k++) {
+    const m = shipModel(70 + rnd() * 60, liner, lglow(k % 2 ? '#ff7ad8' : '#7fe8ff', 3));
+    const y = 300 + k * 110, ang = rnd() * TAU, dir = V3(Math.cos(ang), 0, Math.sin(ang)), ctr = V3(300 + (rnd() - 0.5) * 600, y, 60 + (rnd() - 0.5) * 500);
+    m.rotation.y = -ang; g.add(m); LIFE.cruisers.push({ m, ctr, dir, span: 3600, sp: 22 + rnd() * 18, ph: rnd() * 3600 });
+  }
+  // a freighter that docks with the habitat ring's hub and pulls away again
+  const fr = shipModel(60, lmat('#c9b48e', { metalness: 0.4, roughness: 0.5 }), lglow('#ffd06a', 3)); fr.rotation.set(0, Math.PI / 2, 0);
+  const holder = new THREE.Group(); holder.add(fr); LIFE.freighter = holder; if (HAB.tilt) HAB.tilt.add(holder);
+  // the hero ship on its own pad beside the station, and a yacht hovering over the lake
+  for (let tries = 0; tries < 300 && LIFE.hero.length < 1; tries++) {
+    const x = -130 + rnd() * 110, z = (rnd() < 0.5 ? -1 : 1) * (28 + rnd() * 50);
+    if (onRoad(x, z, 6) || inStation(x, z) || !freeAt(x, z, 18) || planDist(x, z, 40) < 22) continue;
+    const ship = shipModel(26, lmat('#f4f6f8', { metalness: 0.45, roughness: 0.25 }), lglow('#4fe0ff', 3));
+    part(g, new THREE.CylinderGeometry(15, 16, 1.2, 24), M.pearl, x, GROUND + 0.6, z);
+    ship.position.set(x, GROUND + 4.2, z); ship.rotation.y = rnd() * TAU; g.add(ship); occupy(x, z, 18); LIFE.hero.push(ship);
+  }
+  { const lk = CITY.lake, p = V3(lk.x, GROUND + 26, lk.z);
+    if (ptFar(p, 22)) { const y = shipModel(18, lmat('#ffd9e8', { metalness: 0.3, roughness: 0.3 }), lglow('#ff7ad8', 3)); y.position.copy(p); g.add(y); LIFE.hover = { m: y, base: p.clone() }; } }
+  // hover-car lanes above the avenues, at the lowest height whose whole length keeps 14 m from the track
+  const lanes = [];
+  for (let k = -4; k <= 8; k++) for (const axis of ['x', 'z']) {
+    const c = k * ROAD; if (Math.abs(axis === 'x' ? c - 60 : c - 300) > 650) continue;
+    for (const y of [22, 34, 48, 66]) {
+      const pts = []; for (let u = -700; u <= 1300; u += 8) pts.push(axis === 'x' ? V3(u, y, c + 3) : V3(c + 3, y, u));
+      if (pathFar(pts, 14)) { lanes.push({ axis, c, y }); break; }
+    }
+  }
+  const nCars = Math.min(140, lanes.length * 9), carGeo = new THREE.CapsuleGeometry(0.8, 2.4, 4, 10).rotateZ(Math.PI / 2).scale(1, 0.55, 0.85);
+  const lightGeo = mergeGeometries([new THREE.BoxGeometry(0.1, 0.18, 0.9).translate(-2.02, 0, 0), new THREE.BoxGeometry(0.1, 0.12, 1.1).translate(2.02, -0.05, 0)].map(x => x.toNonIndexed()));
+  LIFE.carMesh = new THREE.InstancedMesh(carGeo, lmat('#ffffff', { metalness: 0.5, roughness: 0.3 }), Math.max(1, nCars));
+  LIFE.carLights = new THREE.InstancedMesh(lightGeo, new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), Math.max(1, nCars));
+  for (let k = 0; k < nCars; k++) {
+    const ln = lanes[k % lanes.length], dir = rnd() < 0.5 ? 1 : -1;
+    LIFE.cars.push({ ln, dir, off: rnd() * 2000, sp: 16 + rnd() * 14, lane: dir * 3 + (rnd() - 0.5), dy: (rnd() - 0.5) * 3 });
+    LIFE.carMesh.setColorAt(k, new THREE.Color().setHSL(rnd(), 0.55, 0.55));
+    LIFE.carLights.setColorAt(k, new THREE.Color(dir > 0 ? '#ff4a5a' : '#ffffff').multiplyScalar(2));
+  }
+  for (const m of [LIFE.carMesh, LIFE.carLights]) { m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); g.add(m); }
+  LIFE.lanes = lanes.length;
+  g.traverse(o => { if (o.isMesh && !o.isInstancedMesh && !LIFE.fighters.some(f => f.m === o)) o.userData.structure = true; });
+  // escorts for the orbit section
+  for (let k = 0; k < 2; k++) { const m = shipModel(9, lmat('#e8ecf0', { metalness: 0.6, roughness: 0.25 }), lglow(k ? '#ff7ad8' : '#4fe0ff', 3.5)); m.visible = false; g.add(m); LIFE.fighters.push({ m, side: k ? 1 : -1, ph: k * 0.6, pos: V3() }); }
+  return g;
+}
+
+/* ---------- animation ---------- */
+const _lm = new THREE.Matrix4(), _lw = new THREE.Matrix4(), _lq = new THREE.Quaternion(), _lp = new THREE.Vector3(), _ls = new THREE.Vector3(1, 1, 1), _lY = new THREE.Vector3(0, 1, 0), _lf = newFrame(), _lflip = new THREE.Matrix4().makeScale(-1, 1, 1);
+function updateLife(t, dt, trainPos) {
+  // the crowd: everyone watches the train; they wave while it's in the station and cheer at launch and on its return
+  const atPad = ride.phase !== 'running' || ride.s < 140 || ride.s > L - 180;
+  for (const b of LIFE.crowd) {
+    const wp = b.root.position, dx = trainPos.x - wp.x, dz = trainPos.z - wp.z;
+    let yaw = Math.atan2(-dz, dx) - b.root.rotation.y; yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw));
+    b.head.rotation.y += (clamp(yaw, -1.1, 1.1) - b.head.rotation.y) * Math.min(1, dt * 3);
+    b.head.rotation.z = clamp(Math.atan2(trainPos.y - wp.y - 1.6, Math.hypot(dx, dz)), -0.4, 0.8) * 0.8;
+    const wave = atPad ? 1 : 0;
+    b.arms.forEach((a, k) => {
+      const up = (k === 0 || (b.kind === 'kor' && k === 2) || (b.keen > 0.8 && k === 1)) ? wave : 0;
+      const target = up ? -a.sd * (2.5 + 0.35 * Math.sin(t * 7 + b.ph + k)) : -a.sd * 0.12;
+      a.p.rotation.x += (target - a.p.rotation.x) * Math.min(1, dt * 5);
+    });
+    if (b.hover) b.body.position.y = 0.25 + Math.sin(t * 1.4 + b.ph) * 0.18;
+    else b.body.scale.y = 1 + Math.sin(t * 2 + b.ph) * 0.012;
+  }
+  // bird flocks
+  let n = 0;
+  for (const f of LIFE.flocks) for (let k = 0; k < f.n; k++, n++) {
+    const a = f.ph + t * f.sp + k * 0.09, r = f.R + Math.sin(k * 1.7 + t * 0.6) * 4, y = f.c.y + Math.sin(k * 2.3 + t * 0.9) * 2.5;
+    _lp.set(f.c.x + Math.cos(a) * r, y, f.c.z + Math.sin(a) * r);
+    _lq.setFromAxisAngle(_lY, -a - Math.sign(f.sp) * Math.PI / 2); _lm.compose(_lp, _lq, _ls.setScalar(1.6));
+    const flap = Math.sin(t * 11 + k) * 0.7;
+    LIFE.birdsL.setMatrixAt(n, _lw.multiplyMatrices(_lm, new THREE.Matrix4().makeRotationX(flap)));
+    LIFE.birdsR.setMatrixAt(n, _lw.multiplyMatrices(_lm, new THREE.Matrix4().makeRotationX(Math.PI - flap)));
+  }
+  if (LIFE.birdsL) { LIFE.birdsL.instanceMatrix.needsUpdate = true; LIFE.birdsR.instanceMatrix.needsUpdate = true; }
+  // sky-mantas
+  for (const s of LIFE.mantas) {
+    const a = s.ph + t * s.sp; s.m.position.set(s.c.x + Math.cos(a) * s.R, s.c.y + Math.sin(a * 2) * 6, s.c.z + Math.sin(a) * s.R * 0.7);
+    s.m.rotation.set(0, -Math.atan2(Math.cos(a) * s.R * 0.7, -Math.sin(a) * s.R), Math.sin(a * 2) * 0.12);
+    for (const w of s.wings) w.w.rotation.x = w.sd * Math.sin(t * 1.3 + s.ph) * 0.35;
+  }
+  // grazers amble in small circles, heads dipping to graze
+  for (const z of LIFE.grazers) {
+    const a = z.ph + t * z.sp; z.m.position.set(z.home.x + Math.cos(a) * z.R, GROUND, z.home.z + Math.sin(a) * z.R);
+    z.m.rotation.y = -a - Math.sign(z.sp) * Math.PI / 2;
+    z.legs.forEach((l, k) => { l.rotation.z = Math.sin(t * 2.4 + k * Math.PI / 2 + z.ph) * 0.25; });
+    z.neck.rotation.z = -0.25 - 0.55 * (0.5 + 0.5 * Math.sin(t * 0.35 + z.ph));
+  }
+  // leaping fish
+  const lk = CITY.lake;
+  for (const f of LIFE.fish) {
+    f.t += dt;
+    if (f.t > f.dur) { if (f.t > f.dur + 2 + Math.random() * 6) { const a = Math.random() * TAU, d = Math.random() * lk.r * 0.7, h = Math.random() * TAU; f.a.set(lk.x + Math.cos(a) * d, GROUND + 0.1, lk.z + Math.sin(a) * d); f.b.copy(f.a).add(V3(Math.cos(h) * 4, 0, Math.sin(h) * 4)); f.t = 0; } f.m.visible = false; continue; }
+    const u = f.t / f.dur; f.m.visible = true; f.m.position.lerpVectors(f.a, f.b, u); f.m.position.y += Math.sin(u * Math.PI) * 3;
+    f.m.lookAt(f.b.x, f.m.position.y + Math.cos(u * Math.PI) * 3, f.b.z); f.m.rotateY(-Math.PI / 2);
+  }
+  // dome motes
+  if (LIFE.motes) { const p = LIFE.motes.geometry.attributes.position, an = LIFE.motes.userData.anchors; an.forEach((m, k) => p.setXYZ(k, m.p.x + Math.sin(t * m.f + m.ph) * 0.9, m.p.y + Math.sin(t * m.f * 1.3 + m.ph * 2) * 0.6, m.p.z + Math.cos(t * m.f * 0.8 + m.ph) * 0.9)); p.needsUpdate = true; }
+  // shuttles: sit, ignite, climb out of sight, return
+  for (const s of LIFE.shuttles) {
+    const u = (t + s.ph) % s.period, burn = u > 6 && u < 34;
+    const tt = Math.max(0, u - 8), y = s.base.y + (u < 8 ? 0 : 0.5 * 6 * tt * tt);
+    s.m.position.set(s.base.x + (u > 8 ? tt * tt * 0.35 : 0), Math.min(y, 6000), s.base.z);
+    s.m.rotation.z = -Math.min(0.5, tt * 0.02); s.flame.visible = burn; if (burn) s.flame.scale.set(1, 0.6 + Math.min(1, (u - 6) / 2) * (0.85 + 0.15 * Math.sin(t * 40)), 1);
+  }
+  for (const c of LIFE.cruisers) { const u = ((t * c.sp + c.ph) % c.span) - c.span / 2; c.m.position.copy(c.ctr).addScaledVector(c.dir, u); }
+  if (LIFE.freighter) { const u = 0.5 + 0.5 * Math.sin(t * 0.05); LIFE.freighter.children[0].position.set(0, 0, 70 + u * 420); }
+  if (LIFE.hover) { LIFE.hover.m.position.y = LIFE.hover.base.y + Math.sin(t * 0.6) * 1.2; LIFE.hover.m.rotation.y = t * 0.08; }
+  // hover cars
+  LIFE.cars.forEach((c, k) => {
+    const u = ((c.off + t * c.sp * c.dir) % 2000 + 2000) % 2000 - 700, ln = c.ln;
+    if (ln.axis === 'x') _lp.set(u, ln.y + c.dy, ln.c + c.lane); else _lp.set(ln.c + c.lane, ln.y + c.dy, u);
+    _lq.setFromAxisAngle(_lY, ln.axis === 'x' ? (c.dir > 0 ? 0 : Math.PI) : (c.dir > 0 ? -Math.PI / 2 : Math.PI / 2));
+    _lm.compose(_lp, _lq, _ls.set(1, 1, 1)); LIFE.carMesh.setMatrixAt(k, _lm); LIFE.carLights.setMatrixAt(k, _lm);
+  });
+  if (LIFE.carMesh) { LIFE.carMesh.instanceMatrix.needsUpdate = true; LIFE.carLights.instanceMatrix.needsUpdate = true; }
+  // orbit escorts: they pace the train 30–40 m off to the side, overtaking slowly, and climb away from any track
+  const inSpace = ride.phase === 'running' && secOf(ride.s).zone === 'space';
+  for (const f of LIFE.fighters) {
+    f.m.visible = inSpace; if (!inSpace) continue;
+    const lead = 25 + 35 * Math.sin(t * 0.25 + f.ph);
+    frameAt(ride.s + lead, _lf);
+    const hr = V3(_lf.r.x, 0, _lf.r.z).normalize();
+    _lp.copy(_lf.p).addScaledVector(hr, f.side * (32 + 6 * Math.sin(t * 0.4 + f.ph))).add(V3(0, 9 + 3 * Math.sin(t * 0.7 + f.ph), 0));
+    for (let k = 0; k < 12 && !ptFar(_lp, 16); k++) _lp.y += 5;
+    f.pos.lerp(_lp, f.pos.lengthSq() ? Math.min(1, dt * 2.5) : 1); f.m.position.copy(f.pos);
+    f.m.lookAt(f.pos.x + _lf.t.x, f.pos.y + _lf.t.y, f.pos.z + _lf.t.z); f.m.rotateY(-Math.PI / 2); f.m.rotateX(-f.side * 0.25);
+  }
+}
 
 /* ===================== the train ===================== */
 const CAR_GAP = 2.7, CARS = 4, train = [];
@@ -1355,9 +1750,9 @@ function buildCart(front, last) {
   for (const x of [-0.75, 0.75]) for (const z of [-GA, GA]) add(new THREE.CylinderGeometry(0.14, 0.14, 0.09, 14).rotateX(Math.PI / 2), M.dark, x, 0.2, z * 1.06);
   add(new THREE.CylinderGeometry(0.035, 0.035, 0.5, 6).rotateZ(Math.PI / 2), M.chrome, -1.38, 0.3, 0);
   if (front) {
-    add(new THREE.SphereGeometry(1, 28, 12, 0, Math.PI).rotateY(Math.PI / 2).scale(0.95, 0.27, 0.74), M.carPaint, 1.12, 0.6, 0);
-    add(new THREE.BoxGeometry(0.04, 0.025, 0.7), M.led, 2.02, 0.52, 0);
-    add(new THREE.SphereGeometry(1, 20, 8, 0, Math.PI).rotateY(Math.PI / 2).scale(0.26, 0.12, 0.46), M.glass, 1.12, 0.86, 0);
+    // a low cowl: its top sits ~0.8 m below the eye, so it reads as the car's nose without hiding the track ahead
+    add(new THREE.SphereGeometry(1, 28, 12, 0, Math.PI).rotateY(Math.PI / 2).scale(0.85, 0.16, 0.7), M.carPaint, 1.12, 0.46, 0);
+    add(new THREE.BoxGeometry(0.04, 0.025, 0.66), M.led, 1.93, 0.47, 0);
   }
   if (last) for (const z of [-0.5, 0.5]) add(new THREE.BoxGeometry(0.04, 0.08, 0.3), M.magenta, -1.2, 0.62, z);
   return car;
@@ -1378,7 +1773,7 @@ function buildEffects() {
   FX.plasma = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 12, 0, TAU, 0, Math.PI / 2).rotateZ(-Math.PI / 2).scale(0.7, 0.55, 1.05), pm);
   FX.plasma.position.set(2.15, 0.55, 0); FX.plasma.frustumCulled = false;
   const el = document.createElement('div'); el.id = 'plasma';
-  el.style.cssText = 'position:fixed;inset:0;pointer-events:none;opacity:0;z-index:1;background:radial-gradient(ellipse at 50% 55%,rgba(0,0,0,0) 45%,rgba(255,120,40,0.35) 75%,rgba(255,70,20,0.75) 100%);mix-blend-mode:screen;transition:opacity .2s';
+  el.style.cssText = 'position:fixed;inset:0;pointer-events:none;opacity:0;z-index:1;background:radial-gradient(ellipse at 50% 55%,rgba(0,0,0,0) 62%,rgba(255,120,40,0.28) 82%,rgba(255,70,20,0.6) 100%);mix-blend-mode:screen;transition:opacity .2s';
   document.body.appendChild(el); FX.plasmaEl = el;
   return [ls, FX.plasma];
 }
@@ -1393,9 +1788,9 @@ function updateEffects(dt, v, launchK, heat, show) {
   const a = show ? clamp((v - 14) / 26, 0, 1) * 0.55 + launchK * 0.35 + heat * 0.4 : 0;
   FX.streaks.material.opacity = Math.min(0.85, a);
   FX.streaks.material.color.copy(streakCol.copy(STREAK_SPACE).lerp(STREAK_HOT, heat)).multiplyScalar(1.6);
-  FX.plasma.material.opacity = heat * 0.35 * (0.85 + 0.15 * Math.sin(clock * 37));
+  FX.plasma.material.opacity = heat * 0.16 * (0.85 + 0.15 * Math.sin(clock * 37));
   FX.plasma.visible = heat > 0.01;
-  FX.plasmaEl.style.opacity = show ? (heat * 0.9).toFixed(3) : 0;
+  FX.plasmaEl.style.opacity = show ? (heat * 0.6).toFixed(3) : 0;
 }
 
 /* ===================== audio ===================== */
@@ -1781,12 +2176,12 @@ const fogTarget = new THREE.Color(), WHITE_OUT = new THREE.Color('#eef3f8'), HEM
 function updateEnv(dt, eye) {
   const ek = envSnap ? 1 : 1 - Math.exp(-3 * dt); envSnap = false;
   const orbitCam = view.mode === 'orbit', k = orbitCam ? 0.25 : altK(eye.y);
-  const inCloud = orbitCam ? 0 : 1 - smooth(1.5, 9, Math.abs(eye.y - (CLOUD_Y + 3)));
+  const inCloud = orbitCam ? 0 : 1 - smooth(1, 5, Math.abs(eye.y - (CLOUD_Y + 3)));   // a brief flash of white as the train punches through the deck
   SKY_U.uSpace.value += (k - SKY_U.uSpace.value) * ek;
   const kk = SKY_U.uSpace.value;
-  fogTarget.copy(HAZE_DAY).lerp(HAZE_SPACE, kk).lerp(WHITE_OUT, inCloud * 0.9);
+  fogTarget.copy(HAZE_DAY).lerp(HAZE_SPACE, kk).lerp(WHITE_OUT, inCloud * 0.75);
   scene.fog.color.lerp(fogTarget, ek);
-  const dens = (orbitCam ? 0.00035 : lerp(0.0011, 0.00045, kk)) + inCloud * 0.03;
+  const dens = (orbitCam ? 0.00035 : lerp(0.0011, 0.00045, kk)) + inCloud * 0.012;
   scene.fog.density += (dens - scene.fog.density) * ek;
   hemi.intensity = lerp(1.0, 0.45, kk); hemi.color.copy(HEMI_SKY[0]).lerp(HEMI_SKY[1], kk);
   SUN.intensity = lerp(2.7, 3.3, kk);
@@ -1888,6 +2283,7 @@ function tick(now) {
     if (CITY.lamps) CITY.lamps.forEach((m, k) => { const on = ride.phase === 'dispatch' ? k <= ride.count : ride.phase === 'running' && ride.s < 160; on ? (ride.phase === 'dispatch' ? m.material.color.setRGB(3, 1.2, 0.2) : m.material.color.setRGB(0.4, 3, 1.2)) : m.material.color.setRGB(0.12, 0.18, 0.22); });
     CLOUD_U.uTime.value = clock; SKY_U.uTime.value = clock;
     updateScenery(clock, dt);
+    updateLife(clock, dt, trainPos);
   }
   trainPos.setFromMatrixPosition(train[0].matrix);
   SUN.target.position.copy(trainPos); SUN.position.copy(trainPos).addScaledVector(SUN_DIR, 200);
@@ -1896,7 +2292,9 @@ function tick(now) {
   camera.getWorldPosition(eyeW);
   updateEnv(dt, eyeW);
   const moving = ride.phase === 'running', secNow = secOf(ride.s);
-  const heat = moving && secNow.zone === 'reentry' ? smooth(12, 28, ride.v) * smooth(CLOUD_Y - 4, CLOUD_Y + 12, trainPos.y) : 0;
+  // re-entry heat is a pulse: it builds as the train sinks toward the cloud deck and is gone before it punches through,
+  // so the spire stays in view for most of the spiral
+  const heat = moving && secNow.zone === 'reentry' ? smooth(12, 28, ride.v) * smooth(CLOUD_Y - 2, CLOUD_Y + 5, trainPos.y) * (1 - smooth(CLOUD_Y + 11, CLOUD_Y + 19, trainPos.y)) : 0;
   updateEffects(ride.paused ? 0 : dt, moving ? ride.v : 0, launchK, heat, view.mode === 'ride');
   const still = ride.paused && view.mode !== 'orbit' && !view.drag && Math.abs(view.yaw) + Math.abs(view.pitch) < 1e-3 && !forceRender;
   if (!still) {
@@ -1977,6 +2375,8 @@ async function boot() {
   scatterTrees(); scene.add(buildTrees());
   await stage('Charting the orbit…');
   scene.add(buildClouds(), buildAsteroids(), buildHabitat());
+  await stage('Waking the city…');
+  scene.add(buildCrowd(), buildFlora(), buildFauna(), buildCraft());
   await stage('Fuelling the train…');
   for (let k = 0; k < CARS; k++) { const c = mergeStatic(buildCart(k === 0, k === CARS - 1)); c.matrixAutoUpdate = false; train.push(c); scene.add(c); }
   train[0].add(...buildEffects(), buildAlien());
@@ -1984,13 +2384,14 @@ async function boot() {
   orbit = new OrbitControls(camera, canvas); orbit.enabled = false; orbit.enableDamping = true; orbit.autoRotate = true; orbit.autoRotateSpeed = 0.3; orbit.maxDistance = 2600;
   for (let i = 0; i < N; i += 20) BOUNDS.expandByPoint(P3(TR.P, i));
   placeTrain(); chasePos.copy(P3(TR.P, 0)); chaseLook.copy(chasePos);
+  updateLife(0, 1, P3(TR.P, 0));   // instanced flocks and traffic start at the origin (on the train) until their first update
   drawProfileBase();
-  window.__halcyon = { supports: SUPPORT_STATS, rings: RINGS.length, rocks: ROCKS.length, city: { lake: CITY.lake, spire: CITY.spire, dome: CITY.dome } };
-  window.__audit = { scene, TR, THREE, camera, ride, scale: 1 };
+  window.__halcyon = { supports: SUPPORT_STATS, rings: RINGS.length, rocks: ROCKS.length, life: { crowd: LIFE.crowd.length, flora: LIFE.floraCount, flocks: LIFE.flocks.length, mantas: LIFE.mantas.length, grazers: LIFE.grazers.length, shuttles: LIFE.shuttles.length, lanes: LIFE.lanes, hero: LIFE.hero.length, hover: !!LIFE.hover }, city: { lake: CITY.lake, spire: CITY.spire, dome: CITY.dome } };
+  window.__audit = { scene, TR, THREE, camera, ride, scale: 1, LIFE };
   $('board').disabled = false; $('board').textContent = 'Board for launch';
   const q = new URLSearchParams(location.hash.slice(1));
   if (q.has('cam')) $('intro').hidden = true;
-  if (q.has('s')) { $('intro').hidden = true; ride.phase = 'running'; ride.s = clamp(+q.get('s') || 0, 0, L - 1); ride.v = arrAt(TR.V, ride.s); placeTrain(); lastZoneToast = secOf(ride.s).zone; }
+  if (q.has('s')) { $('intro').hidden = true; ride.phase = 'running'; ride.s = clamp(+q.get('s') || 0, 0, L - 1); ride.v = arrAt(TR.V, ride.s); placeTrain(); lastZoneToast = secOf(ride.s).zone; frameAt(ride.s, FR); updateLife(0, 1, FR.p); }
   setQuality(QUALITY[q.get('q')] ? q.get('q') : 'auto');
   if (q.has('cam')) setCam(q.get('cam'));
   if (q.has('pause')) togglePause();
