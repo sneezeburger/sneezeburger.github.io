@@ -16,3 +16,6 @@
 [submodule "particle-forge"]
 	path = particle-forge
 	url = https://github.com/sneezeburger/particle-forge
+[submodule "particle-foundry"]
+	path = particle-foundry
+	url = git@github.com:sneezeburger/particle-foundry.git
